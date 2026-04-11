@@ -5,7 +5,8 @@ playwright-report
 test-results
 coverage
 dist
-docs
+docs/superpowers/
+tsconfig.tsbuildinfo
 
 workspace/*
 !workspace/.gitkeep

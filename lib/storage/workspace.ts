@@ -96,7 +96,8 @@ export async function bootstrapWorkspace(project: Project, run?: Run): Promise<v
       claims: [],
       citations: [],
       contradictions: [],
-      evidenceSummary: null
+      evidenceSummary: null,
+      advisory: null
     });
   }
 }
@@ -177,7 +178,8 @@ export async function createRunRecord(
     claims: [],
     citations: [],
     contradictions: [],
-    evidenceSummary: null
+    evidenceSummary: null,
+    advisory: null
   };
 
   await saveRunRecord(record);

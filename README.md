@@ -1,75 +1,157 @@
-# Decision Engine
+# Decision Engine (v1 RC) — a decision-first research system with CLI advisory loop
 
-Decision-first research workspace
+## What it is
 
-Messy input을 structured research, evidence, decision (`go / no_go / unclear`), PRD seed로 바꾸는 로컬 퍼스트 AI 서비스다.
+A decision-first research system that:
+- turns inputs into evidence
+- generates structured decisions
+- accumulates insights across runs
+- exports to Obsidian
+- connects to external CLI (`Codex` / `Claude`) for advisory workflows
+- exposes an MCP tool surface for AI-first operation
 
-## What it does
+## Who it is for
 
-- natural language / pasted text / URLs 입력을 받는다
-- `plan -> gather -> evidence -> decision -> PRD seed` 흐름으로 정리한다
-- 프로젝트 단위 insight board를 누적한다
-- KB promotion candidate 상태를 추천한다
+- builders using `Claude` / `Codex` CLI
+- researchers
+- solo devs
+- AI power users
 
-## Core Philosophy
+## Core Concepts
 
-> Not a research tool. A decision engine.
+- Project -> container of work
+- Run -> single research execution
+- Evidence -> structured claims + sources
+- Decision -> `go / no_go / unclear`
+- Insights -> accumulated patterns across runs
+- Promotion -> reusable knowledge candidates
+- Decision History -> timeline of decisions
+- External Advisory -> CLI-generated suggestions (read-only)
 
-## Current MVP Scope
+## Features
 
-- 프로젝트 생성
-- 런 생성/실행
-- clarify gate
-- adapter-based artifact collection
-- evidence / contradiction handling
-- decision layer
-- PRD seed
-- project insight board
-- KB promotion suggestion state
+- Decision-first research pipeline
+- Evidence + contradiction handling
+- Decision Layer (`go / no_go / unclear`)
+- Project-level insights aggregation
+- Obsidian export (`runs + insights + decision history`)
+- DuckDB analytics over `events.jsonl`, run JSON, and workspace state
+- CLI Bridge (`Codex / Claude`)
+  - `prompt_only`
+  - `cli_execute`
+- MCP tools for run/project access and analytics
 
-## Tech Stack
+## Current Shape
 
-- Next.js App Router
-- TypeScript
-- Tailwind CSS
-- Zod
-- Local JSON workspace
-- Vitest
-- Playwright
+- Headless-first: `CLI + MCP`, not a browser app
+- Local JSON is the only source of truth
+- DuckDB is a read-only analytics layer
+- Obsidian and external CLI are output / advisory layers
 
-## Getting Started
+## Architecture
+
+- Local-first JSON storage is the source of truth
+- Orchestrator pipeline:
+  - `plan -> gather -> synthesize -> evidence -> decision -> insights`
+- Bridge layer:
+  - `bundle -> invoke -> ingest`
+- Analytics layer:
+  - `events.jsonl -> DuckDB`
+  - `run/project JSON -> DuckDB`
+- MCP layer:
+  - `project/run/bundle/advisory/analytics`
+- External CLI is advisory only
+
+## Safety Model
+
+- Internal decision = source of truth
+- External CLI cannot overwrite decision
+- Advisory = append-only
+- Contradictions are explicitly tracked
+
+## Requirements
+
+- Node.js `20.x` required
+- `pnpm`
+- Optional:
+  - `codex` CLI
+  - `claude` CLI
+  - Obsidian for export
+
+## Quick Start
 
 ```bash
-nvm use 20
 pnpm install
-pnpm dev
+pnpm cli --help
 ```
 
-## Test
+## Core Entry Points
 
 ```bash
+pnpm cli --help
+pnpm mcp
 pnpm test
-pnpm build
-pnpm test:e2e
 ```
 
-`pnpm test:e2e` 는 macOS Chromium 권한 이슈로 자동 실행이 실패할 수 있다.
+## AI Read Path
 
-## Project Structure
+When an AI agent enters this repo, the shortest reliable read path is:
 
-- `app/`
-- `components/`
-- `lib/`
-- `tests/`
-- `e2e/`
-- `workspace/`
+1. `README.md`
+2. `docs/CLI_SPEC.md`
+3. `docs/SCHEMA.md`
+4. `workspace/{projectId}/project.json`
+5. `workspace/{projectId}/runs/{runId}.json`
+6. `workspace/{projectId}/runs/{runId}/bridge/run-state.json`
+7. `workspace/{projectId}/runs/{runId}/bridge/events.jsonl`
 
-## Status
+## CLI Integration
 
-MVP v1 complete
+- provider: `codex | claude`
+- mode:
+  - `prompt_only` -> copy prompt
+  - `cli_execute` -> run CLI directly
 
-## Notes
+Advisory output:
+- `external_summary`
+- `suggested_next_actions`
+- `notes`
 
-- Node 20.x required
-- local-first JSON workspace
-- adapter integrations are MVP/stub level where applicable
+## MCP Tools
+
+Core:
+- `get_project`
+- `get_run`
+- `show_run_state`
+- `export_bundle`
+- `ingest_advisory`
+
+Analytics:
+- `query_events`
+- `query_runs`
+
+Extension:
+- `analyze_hotspots`
+
+## Obsidian Export
+
+Path example:
+
+```text
+/Users/.../second-brain/DecisionEngine/
+```
+
+Exports:
+- runs
+- insights
+- decision-history
+
+## Known Limitations
+
+- No background jobs
+- CLI must be installed locally
+- macOS subprocess permissions may require manual setup
+- Current release is headless-first (`CLI + MCP`), not a web app
+- No decision overwrite
+- No merge UI
+- Some repo history still reflects the removed UI phase

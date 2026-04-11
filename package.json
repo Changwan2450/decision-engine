@@ -2,33 +2,24 @@
   "name": "decision-engine",
   "version": "0.1.0",
   "private": true,
-  "description": "Decision-first research workspace",
+  "description": "Decision Engine — headless AI-first research operating core",
   "packageManager": "pnpm@10.30.3",
   "engines": {
     "node": "20.x"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "test": "vitest run",
-    "test:e2e": "playwright test"
+    "cli": "tsx --tsconfig tsconfig.json scripts/cli.ts",
+    "mcp": "tsx --tsconfig tsconfig.json scripts/mcp.ts",
+    "test": "vitest run"
   },
   "dependencies": {
-    "next": "^16.0.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "@duckdb/node-api": "1.5.1-r.1",
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@playwright/test": "^1.56.1",
-    "@tailwindcss/postcss": "^4.1.14",
     "@types/node": "^24.7.2",
-    "@types/react": "^19.2.2",
-    "@types/react-dom": "^19.2.2",
     "@vitest/coverage-v8": "^3.2.4",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }

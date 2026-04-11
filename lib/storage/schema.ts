@@ -59,6 +59,20 @@ export const runRecordSchema = z.object({
   contradictions: z.array(contradictionSchema).default([]),
   evidenceSummary: evidenceSummarySchema
     .nullable()
+    .default(null),
+  advisory: z
+    .object({
+      externalSummary: z.string(),
+      suggestedNextActions: z.array(z.string()),
+      notes: z.array(z.string()),
+      provider: z.enum(["claude", "codex"]),
+      mode: z.enum(["prompt_only", "cli_execute"]).optional(),
+      ingestedAt: z.string().datetime(),
+      executedAt: z.string().datetime().optional(),
+      success: z.boolean().optional(),
+      schemaVersion: z.literal("cli-bridge-v1")
+    })
+    .nullable()
     .default(null)
 });
 

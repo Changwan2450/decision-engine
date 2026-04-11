@@ -2,7 +2,13 @@ import { createAgentReachAdapter } from "@/lib/adapters/agent-reach";
 import { createGeocodingAdapter } from "@/lib/adapters/geocoding";
 import { createReclipAdapter } from "@/lib/adapters/reclip";
 import type { ResearchPlan, SourceArtifact } from "@/lib/adapters/types";
+import {
+  exportDecisionHistoryToObsidian,
+  exportInsightsToObsidian,
+  exportRunToObsidian
+} from "@/lib/export/obsidian";
 import { assertRunTransition } from "@/lib/domain/runs";
+import { buildDecisionHistory } from "@/lib/orchestrator/decision-history";
 import { buildDecision } from "@/lib/orchestrator/decision";
 import { buildClarificationQuestions, shouldClarifyRun } from "@/lib/orchestrator/clarify";
 import {
@@ -147,7 +153,7 @@ export async function executeResearchRun(
     const patch = deriveProjectInsightPatch(synthesis);
     const runRecords = await listRunRecords(projectId);
     const promotionCandidates = derivePromotionCandidates(runRecords);
-    await updateProjectRecord(projectId, (projectRecord) => ({
+    const updatedProject = await updateProjectRecord(projectId, (projectRecord) => ({
       ...projectRecord,
       insights: {
         repeatedProblems: mergeUnique(
@@ -173,6 +179,15 @@ export async function executeResearchRun(
         updatedAt: now
       }
     }));
+
+    try {
+      const decisionHistory = buildDecisionHistory(updatedProject.project, runRecords);
+      await exportRunToObsidian(finalRecord, updatedProject.project);
+      await exportInsightsToObsidian(updatedProject.project, updatedProject.insights);
+      await exportDecisionHistoryToObsidian(updatedProject.project, decisionHistory);
+    } catch (error) {
+      console.error("Obsidian export failed", error);
+    }
 
     return finalRecord;
   } catch (error) {
