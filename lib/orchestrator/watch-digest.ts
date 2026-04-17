@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { SourceArtifact } from "@/lib/adapters/types";
-import type { DigestRecord, RunRecord } from "@/lib/storage/schema";
+import type { DigestRecord, InboxItemRecord, RunRecord } from "@/lib/storage/schema";
 import {
   listDigestRecords,
+  readWatchTargetRecord,
   readRunRecord,
+  saveInboxItemRecord,
   saveDigestRecord
 } from "@/lib/storage/workspace";
 
@@ -48,6 +50,7 @@ export async function buildWatchDigest(
   const previousUrls = collectArtifactUrls(previousRuns);
   const currentUrls = collectArtifactUrls(runs);
   const novelUrls = Array.from(currentUrls).filter((url) => !previousUrls.has(url));
+  const watchTarget = await readWatchTargetRecord(projectId, watchTargetId);
 
   const built: DigestRecord = {
     ...pending,
@@ -59,7 +62,79 @@ export async function buildWatchDigest(
 
   deps.onStatusChange?.("built");
   await saveDigestRecord(built);
+  await createInboxItems({
+    projectId,
+    watchTargetId,
+    digest: built,
+    title: watchTarget.title,
+    novelCount: novelUrls.length,
+    delivery: watchTarget.delivery
+  });
   return built;
+}
+
+async function createInboxItems(input: {
+  projectId: string;
+  watchTargetId: string;
+  digest: DigestRecord;
+  title: string;
+  novelCount: number;
+  delivery: {
+    digest: boolean;
+    alert: boolean;
+    inbox: boolean;
+  };
+}): Promise<void> {
+  if (input.delivery.inbox) {
+    await saveInboxItemRecord(
+      buildInboxItem({
+        projectId: input.projectId,
+        watchTargetId: input.watchTargetId,
+        digestId: input.digest.id,
+        kind: "digest",
+        title: `${input.title} digest`,
+        summary: input.digest.summary,
+        now: input.digest.updatedAt
+      })
+    );
+  }
+
+  if (input.delivery.alert && input.novelCount > 0) {
+    await saveInboxItemRecord(
+      buildInboxItem({
+        projectId: input.projectId,
+        watchTargetId: input.watchTargetId,
+        digestId: input.digest.id,
+        kind: "alert",
+        title: `${input.title} alert`,
+        summary: `${input.novelCount} novel items detected`,
+        now: input.digest.updatedAt
+      })
+    );
+  }
+}
+
+function buildInboxItem(input: {
+  projectId: string;
+  watchTargetId: string;
+  digestId: string;
+  kind: InboxItemRecord["kind"];
+  title: string;
+  summary: string;
+  now: string;
+}): InboxItemRecord {
+  return {
+    id: randomUUID(),
+    projectId: input.projectId,
+    kind: input.kind,
+    refId: input.digestId,
+    watchTargetId: input.watchTargetId,
+    status: "unread",
+    title: input.title,
+    summary: input.summary,
+    createdAt: input.now,
+    updatedAt: input.now
+  };
 }
 
 function collectArtifactUrls(runs: RunRecord[]): Set<string> {

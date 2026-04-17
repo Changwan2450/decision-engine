@@ -6,10 +6,12 @@ import { createProject, type Project } from "@/lib/domain/projects";
 import { createRun, type Run } from "@/lib/domain/runs";
 import {
   digestSchema,
+  inboxItemSchema,
   projectRecordSchema,
   runRecordSchema,
   watchTargetSchema,
   type DigestRecord,
+  type InboxItemRecord,
   type ProjectRecord,
   type RunRecord,
   type WatchTargetRecord
@@ -45,6 +47,14 @@ function digestsDir(projectId: string): string {
 
 function digestFile(projectId: string, digestId: string): string {
   return path.join(digestsDir(projectId), `${digestId}.json`);
+}
+
+function inboxDir(projectId: string): string {
+  return path.join(projectDir(projectId), "inbox");
+}
+
+function inboxFile(projectId: string, itemId: string): string {
+  return path.join(inboxDir(projectId), `${itemId}.json`);
 }
 
 async function readJsonFile<T>(filePath: string, schema: { parse: (value: unknown) => T }): Promise<T> {
@@ -87,6 +97,17 @@ export async function readWatchTargetRecord(
   return readJsonFile(watchTargetFile(projectId, watchTargetId), watchTargetSchema);
 }
 
+export async function updateWatchTargetRecord(
+  projectId: string,
+  watchTargetId: string,
+  mutate: (record: WatchTargetRecord) => WatchTargetRecord
+): Promise<WatchTargetRecord> {
+  const current = await readWatchTargetRecord(projectId, watchTargetId);
+  const next = watchTargetSchema.parse(mutate(current));
+  await saveWatchTargetRecord(next);
+  return next;
+}
+
 export async function saveDigestRecord(record: DigestRecord): Promise<void> {
   await writeJsonFile(digestFile(record.projectId, record.id), digestSchema.parse(record));
 }
@@ -96,6 +117,28 @@ export async function readDigestRecord(
   digestId: string
 ): Promise<DigestRecord> {
   return readJsonFile(digestFile(projectId, digestId), digestSchema);
+}
+
+export async function saveInboxItemRecord(record: InboxItemRecord): Promise<void> {
+  await writeJsonFile(inboxFile(record.projectId, record.id), inboxItemSchema.parse(record));
+}
+
+export async function readInboxItemRecord(
+  projectId: string,
+  itemId: string
+): Promise<InboxItemRecord> {
+  return readJsonFile(inboxFile(projectId, itemId), inboxItemSchema);
+}
+
+export async function updateInboxItemRecord(
+  projectId: string,
+  itemId: string,
+  mutate: (record: InboxItemRecord) => InboxItemRecord
+): Promise<InboxItemRecord> {
+  const current = await readInboxItemRecord(projectId, itemId);
+  const next = inboxItemSchema.parse(mutate(current));
+  await saveInboxItemRecord(next);
+  return next;
 }
 
 export async function updateRunRecord(
@@ -204,6 +247,18 @@ export async function listDigestRecords(projectId: string): Promise<DigestRecord
     entries
       .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
       .map((entry) => readDigestRecord(projectId, entry.name.replace(/\.json$/, "")))
+  );
+
+  return records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export async function listInboxItemRecords(projectId: string): Promise<InboxItemRecord[]> {
+  await mkdir(inboxDir(projectId), { recursive: true });
+  const entries = await readdir(inboxDir(projectId), { withFileTypes: true });
+  const records = await Promise.all(
+    entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+      .map((entry) => readInboxItemRecord(projectId, entry.name.replace(/\.json$/, "")))
   );
 
   return records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));

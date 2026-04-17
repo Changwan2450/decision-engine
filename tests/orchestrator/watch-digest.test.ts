@@ -23,7 +23,8 @@ describe("buildWatchDigest", () => {
       createWatchTargetRecord,
       createRunRecord,
       updateRunRecord,
-      readDigestRecord
+      readDigestRecord,
+      listInboxItemRecords
     } = await import("@/lib/storage/workspace");
     const { buildWatchDigest } = await import("@/lib/orchestrator/watch-digest");
 
@@ -109,6 +110,15 @@ describe("buildWatchDigest", () => {
     expect(digest.summary).toContain("novel");
 
     await expect(readDigestRecord(project.project.id, digest.id)).resolves.toEqual(digest);
+
+    await expect(listInboxItemRecords(project.project.id)).resolves.toMatchObject([
+      {
+        kind: "digest",
+        refId: digest.id,
+        watchTargetId: watchTarget.id,
+        status: "unread"
+      }
+    ]);
   });
 
   it("treats already-digested URLs as non-novel for later digests", async () => {
@@ -201,5 +211,78 @@ describe("buildWatchDigest", () => {
     });
 
     expect(digest.summary).toContain("0 novel");
+  });
+
+  it("creates an internal alert inbox item when alert delivery is enabled", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "watch-digest-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+
+    const {
+      createProjectRecord,
+      createWatchTargetRecord,
+      createRunRecord,
+      updateRunRecord,
+      updateWatchTargetRecord,
+      listInboxItemRecords
+    } = await import("@/lib/storage/workspace");
+    const { buildWatchDigest } = await import("@/lib/orchestrator/watch-digest");
+
+    const project = await createProjectRecord({
+      name: "Digestable",
+      description: "alert test"
+    });
+    const watchTarget = await createWatchTargetRecord(project.project.id, {
+      title: "Alerting watch",
+      urls: ["https://example.com/source"]
+    });
+
+    await updateWatchTargetRecord(project.project.id, watchTarget.id, (record) => ({
+      ...record,
+      delivery: {
+        ...record.delivery,
+        alert: true
+      }
+    }));
+
+    const run = await createRunRecord(project.project.id, {
+      title: "tick 1",
+      urls: ["https://example.com/alert"]
+    });
+    await updateRunRecord(project.project.id, run.run.id, (record) => ({
+      ...record,
+      watchContext: { watchTargetId: watchTarget.id, digestId: null },
+      artifacts: [
+        {
+          id: "artifact-1",
+          adapter: "scrapling",
+          sourceType: "web",
+          title: "Alert",
+          url: "https://example.com/alert",
+          canonicalUrl: "https://example.com/alert",
+          snippet: "Alert",
+          content: "Alert body",
+          sourcePriority: "analysis",
+          metadata: {
+            fetcher: "scrapling",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        }
+      ]
+    }));
+
+    const digest = await buildWatchDigest(project.project.id, watchTarget.id, {
+      sourceRunIds: [run.run.id],
+      now: "2026-04-18T00:00:00.000Z"
+    });
+
+    await expect(listInboxItemRecords(project.project.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "digest", refId: digest.id }),
+        expect.objectContaining({ kind: "alert", refId: digest.id })
+      ])
+    );
   });
 });

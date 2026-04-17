@@ -174,4 +174,39 @@ describe("workspace storage", () => {
       readDigestRecord(createdProject.project.id, digest.id)
     ).resolves.toEqual(digest);
   });
+
+  it("persists inbox item records under the workspace root", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "research-workspace-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+
+    const {
+      createProjectRecord,
+      saveInboxItemRecord,
+      readInboxItemRecord
+    } = await import("@/lib/storage/workspace");
+
+    const createdProject = await createProjectRecord({
+      name: "Inboxer",
+      description: "inbox storage"
+    });
+
+    const inboxItem = {
+      id: "inbox-1",
+      projectId: createdProject.project.id,
+      kind: "digest" as const,
+      refId: "digest-1",
+      watchTargetId: "watch-1",
+      status: "unread" as const,
+      title: "digest ready",
+      summary: "digest summary",
+      createdAt: "2026-04-18T00:00:00.000Z",
+      updatedAt: "2026-04-18T00:00:00.000Z"
+    };
+
+    await saveInboxItemRecord(inboxItem);
+
+    await expect(
+      readInboxItemRecord(createdProject.project.id, inboxItem.id)
+    ).resolves.toEqual(inboxItem);
+  });
 });
