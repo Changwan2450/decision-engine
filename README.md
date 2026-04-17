@@ -1,110 +1,108 @@
 # Decision Engine
 
-Decision Engine is a decision-first research OS.
+Decision Engine is a local-first research engine that turns inputs and URLs into traceable research runs, watch digests, inbox items, and promotion-ready project work.
+It runs as `CLI + MCP`, with workspace files as the source of truth.
 
-It is not a browser app and not a generic note-taking wiki. The current product surface is `CLI + MCP`, with local JSON as the source of truth and DuckDB as a read-only analytics layer.
+한국어: Decision Engine은 입력과 URL을 근거 있는 리서치 실행 결과, Watch digest, inbox item, 프로젝트 승격 후보로 바꾸는 로컬 중심 리서치 엔진이다.
+현재 제품 표면은 웹앱이 아니라 `CLI + MCP`다.
 
-## What Exists Now
+## What This Engine Already Does
 
-Two layers are implemented today.
+한국어: 지금 이 엔진이 실제로 어디까지 해주는지 먼저 보여준다.
 
-- Research layer:
-  - creates a run from normalized input
-  - gathers source artifacts through routed adapters
-  - normalizes content to markdown
-  - stores raw payloads with `rawRef`
-  - produces claims, citations, contradictions, evidence summary, and decision state
-- Watch layer:
-  - stores `watch_target`, `digest`, and `inbox_item`
-  - manually triggers a watch target into a normal research run
-  - groups watch-linked runs into a digest with simple novelty detection
-  - creates inbox items from built digests
-  - promotes a digest into a normal project run with explicit trace links
+- It routes each URL through primary and fallback adapters instead of relying on one fetch path.
+- It applies total, per-URL, and per-adapter budget control so fallback does not run blindly.
+- It preserves raw payloads and normalized markdown together, so runs keep both the original source and the cleaned working form.
+- It writes decision-oriented run state with source artifacts, claims, citations, contradictions, and evidence summaries.
+- It turns recurring interests into watch targets, watch-linked runs, digests, inbox items, and promotion-ready project work.
+- It keeps promoted project runs traceable back to the watch target, digest, inbox item, and source runs that produced them.
 
-## Implemented vs Future Work
+## Why This Is More Than A Simple Wiki Or Scraper
 
-Implemented:
+한국어: 이 저장소는 단순히 URL을 긁어 저장하거나 위키 노트를 쌓는 수준이 아니다.
+수집 -> 정규화 -> 근거 보존 -> digest -> inbox -> project 승격까지 이미 이어진다.
 
-- Research PR 1 to PR 4
-- Watch PR W1 to W5
-- Watch shipped surface: manual trigger -> digest -> inbox -> promote with traceable links
-- MCP surface for project/run access, analytics, and routed web fetching
+- It does not just fetch pages. It routes URLs through adapters with fallback and budget control.
+- It does not just save notes. It preserves raw payloads, normalized content, and structured evidence state.
+- It does not just summarize a run. It keeps claims, citations, contradictions, and decision-oriented output in the run record.
+- It does not just store watch rules. It turns watch-linked runs into digests, inbox items, and promotion-ready project work.
+- Promoted runs keep explicit origin links back to the watch target, digest, inbox item, and source runs.
 
-Not implemented yet:
+## What You Can Do Today
 
-- scheduler / cron / webhook driven watch execution
+한국어: 현재 구현된 기능만 적는다.
+
+- Run routed research over URLs with primary and fallback adapters.
+- Keep raw payloads and normalized markdown side by side.
+- Produce run records with artifacts, claims, citations, contradictions, and decision-oriented state.
+- Save watch targets and manually trigger them into normal research runs.
+- Build digests from watch-linked source runs.
+- Create inbox items for digests and optional internal alerts.
+- Promote a digest into a normal project run with explicit origin links.
+- Access project, run, analytics, and fetch surfaces through MCP tools.
+
+## What Is Not Built Yet
+
+한국어: 아래 항목은 아직 없다. 현재 기능처럼 읽히면 안 되는 것들이다.
+
+- Background scheduler, cron, or webhook-driven watch execution
 - Distill runtime
 - KB promotion automation
-- browser UI
-- watch-specific MCP expansion beyond the current Research surface
+- Browser UI
+- Watch-specific MCP expansion beyond the current shared surface
+- Rich novelty models beyond the current simple URL-based comparison
 
-## Core Model
+## Core Flows
 
-- Project: container of work and accumulated insights
-- Run: one research execution
-- Source artifact: fetched and normalized source plus metadata
-- Decision: `go | no_go | unclear`
-- Watch target: saved recurring interest definition
-- Digest: grouped output over watch-linked source runs
-- Inbox item: first Watch consumption surface
-- Project origin: trace from promoted Watch output back into a normal project run
+한국어: 이 저장소를 이해하는 가장 쉬운 방법은 Research와 Watch의 입력 -> 처리 -> 출력 흐름을 보는 것이다.
 
-## Runtime Shape
+### Research Flow
 
-- Headless-first: `CLI + MCP`
-- Local workspace JSON is the source of truth
-- QMD is the required KB search layer in front of Obsidian wiki prior
-- External CLI remains advisory only
-- `run.mode` is still Research execution depth: `quick | standard | deep`
-- Watch uses `watchContext` and `projectOrigin`; it does not add a new run mode
+한국어: Research는 입력과 URL을 받아, 수집/정규화/근거 정리를 거쳐 판단 가능한 run record를 만든다.
 
-## Research Flow
+```text
+input + urls
+  -> route each url
+  -> primary/fallback adapter execution
+  -> budget control
+  -> raw payload preservation
+  -> markdown normalization
+  -> artifacts + claims + citations + contradictions
+  -> decision-oriented run record
+```
 
-Research runs use one routed gather path.
+What you get from one research run:
 
-1. Normalize input.
-2. Read KB prior through QMD.
-3. Route each URL with `routeUrl()`.
-4. Try primary adapter, then fallback adapters within budget.
-5. Normalize fetched content to markdown and store raw payloads.
-6. Build source artifacts, claims, citations, contradictions, and decision state.
+- Routed URL handling with fallback behavior
+- Raw payloads plus normalized markdown
+- Source artifacts with fetch metadata and `rawRef`
+- Claims, citations, contradictions, and evidence summary in one run record
 
-Current Research implementation includes:
+### Watch Flow
 
-- adapter contract unification
-- `scrapling` and `agent-reach` adapters
-- router rules and adapter registry
-- total / per-url / per-adapter budgets with fallback budget guard
-- MCP `fetch_web(url)` and `gather_for_run(runId)`
-
-## Watch Flow
-
-Watch reuses the Research substrate. It is a different run creation path, not a different fetch pipeline.
-
-1. Save a `watch_target`.
-2. Manually trigger it.
-3. Create a normal run with `watchContext`.
-4. Reuse the existing Research runtime.
-5. Build a digest from `sourceRunIds`.
-6. Create inbox items from the built digest.
-7. Promote a digest into a normal project run with `projectOrigin`.
-
-Minimal example flow:
+한국어: Watch는 새로운 수집기가 아니라 기존 Research 실행을 재사용해 반복 관심사를 digest와 project work로 바꾸는 흐름이다.
 
 ```text
 watch_target
-  -> triggerWatchTarget()
-  -> runRecord.watchContext
-  -> executeResearchRun()
-  -> buildWatchDigest(sourceRunIds)
-  -> inbox_item(kind=digest)
-  -> promoteDigestToProject()
-  -> runRecord.projectOrigin
+  -> manual trigger
+  -> research run with watchContext
+  -> digest from sourceRunIds
+  -> inbox item
+  -> promote to normal project run
+  -> projectOrigin trace links
 ```
+
+What you get from the Watch loop today:
+
+- Saved recurring interests as `watch_target`
+- Manual trigger into a normal research run
+- Built digest over watch-linked source runs
+- Inbox item for digest and optional alert
+- Promoted project run that can be traced back to the watch target, digest, inbox item, and source runs
 
 ## Storage Layout
 
-Workspace paths in current use:
+한국어: 현재 상태는 모두 workspace 아래 JSON 파일로 저장된다.
 
 ```text
 workspace/{projectId}/project.json
@@ -122,6 +120,8 @@ workspace/{projectId}/raw/{...}
 
 ## MCP Tools
 
+한국어: 현재 MCP에서는 조회, 분석, 수집 보조 표면이 열려 있다.
+
 Core:
 
 - `get_project`
@@ -135,7 +135,7 @@ Analytics:
 - `query_events`
 - `query_runs`
 
-Research fetch surface:
+Fetch surface:
 
 - `fetch_web`
 - `gather_for_run`
@@ -144,48 +144,28 @@ Extension:
 
 - `analyze_hotspots`
 
-## CLI Entry Points
+## Quick Start
+
+한국어: 설치 후 테스트를 돌리고 MCP 서버를 띄우면 현재 표면을 바로 확인할 수 있다.
 
 ```bash
 pnpm install
+pnpm test
 pnpm cli --help
 pnpm mcp
-pnpm test
 ```
 
-## AI Read Path
+Minimal flow:
 
-When an AI agent enters this repo, the shortest reliable read path is:
+1. Install dependencies.
+2. Run tests to verify the workspace.
+3. Inspect the CLI surface with `pnpm cli --help`.
+4. Start MCP and inspect project or run state through the available tools.
 
-1. `README.md`
-2. `docs/CLI_SPEC.md`
-3. `docs/SCHEMA.md`
-4. `workspace/{projectId}/project.json`
-5. `workspace/{projectId}/runs/{runId}.json`
-6. `workspace/{projectId}/runs/{runId}/bridge/run-state.json`
-7. `workspace/{projectId}/runs/{runId}/bridge/events.jsonl`
+## Docs
 
-## KB Search Rules
+한국어: 아래 문서 3개가 현재 구현 상태를 이해하는 가장 짧은 경로다.
 
-- KB 검색은 항상 `QMD`를 먼저 쓴다.
-- 기본 검색:
-  - `qmd query "질문 또는 키워드" --json -n 15 --min-score 0.35 -c wiki`
-- 정밀 검색:
-  - `qmd query "..." --all --files --json -c wiki`
-- 필요한 문서 본문은 `qmd get` 또는 `qmd multi-get`으로 가져온다.
-- `wiki/` 전체를 직접 읽거나 grep해서 KB 검색을 대체하지 않는다.
-
-## Safety Model
-
-- Internal decision remains the source of truth
-- External CLI cannot overwrite a decision
-- Advisory is append-only
-- Watch promotion creates trace links but does not overwrite prior run history
-
-## Current Limits
-
-- No background scheduler
-- No Distill runtime
-- No KB promotion automation
-- No browser UI
-- CLI tools must be installed locally when used
+- `docs/SCHEMA.md` — current file contracts and Watch/Research record shapes
+- `docs/WATCH_LAYER.md` — Watch reference note, implemented vs future work
+- `docs/CLI_SPEC.md` — CLI and MCP surface details
