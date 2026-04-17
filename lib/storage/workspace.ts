@@ -5,9 +5,11 @@ import { WORKSPACE_ROOT } from "@/lib/config";
 import { createProject, type Project } from "@/lib/domain/projects";
 import { createRun, type Run } from "@/lib/domain/runs";
 import {
+  digestSchema,
   projectRecordSchema,
   runRecordSchema,
   watchTargetSchema,
+  type DigestRecord,
   type ProjectRecord,
   type RunRecord,
   type WatchTargetRecord
@@ -35,6 +37,14 @@ function watchTargetsDir(projectId: string): string {
 
 function watchTargetFile(projectId: string, watchTargetId: string): string {
   return path.join(watchTargetsDir(projectId), `${watchTargetId}.json`);
+}
+
+function digestsDir(projectId: string): string {
+  return path.join(projectDir(projectId), "digests");
+}
+
+function digestFile(projectId: string, digestId: string): string {
+  return path.join(digestsDir(projectId), `${digestId}.json`);
 }
 
 async function readJsonFile<T>(filePath: string, schema: { parse: (value: unknown) => T }): Promise<T> {
@@ -75,6 +85,17 @@ export async function readWatchTargetRecord(
   watchTargetId: string
 ): Promise<WatchTargetRecord> {
   return readJsonFile(watchTargetFile(projectId, watchTargetId), watchTargetSchema);
+}
+
+export async function saveDigestRecord(record: DigestRecord): Promise<void> {
+  await writeJsonFile(digestFile(record.projectId, record.id), digestSchema.parse(record));
+}
+
+export async function readDigestRecord(
+  projectId: string,
+  digestId: string
+): Promise<DigestRecord> {
+  return readJsonFile(digestFile(projectId, digestId), digestSchema);
 }
 
 export async function updateRunRecord(
@@ -174,6 +195,18 @@ export async function listRunRecords(projectId: string): Promise<RunRecord[]> {
   );
 
   return records.sort((a, b) => b.run.updatedAt.localeCompare(a.run.updatedAt));
+}
+
+export async function listDigestRecords(projectId: string): Promise<DigestRecord[]> {
+  await mkdir(digestsDir(projectId), { recursive: true });
+  const entries = await readdir(digestsDir(projectId), { withFileTypes: true });
+  const records = await Promise.all(
+    entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+      .map((entry) => readDigestRecord(projectId, entry.name.replace(/\.json$/, "")))
+  );
+
+  return records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 export async function findRunRecordById(

@@ -138,4 +138,40 @@ describe("workspace storage", () => {
       status: "draft"
     });
   });
+
+  it("persists digest records under the workspace root", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "research-workspace-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+
+    const {
+      createProjectRecord,
+      saveDigestRecord,
+      readDigestRecord
+    } = await import("@/lib/storage/workspace");
+
+    const createdProject = await createProjectRecord({
+      name: "Digester",
+      description: "digest storage"
+    });
+
+    const digest = {
+      id: "digest-1",
+      projectId: createdProject.project.id,
+      watchTargetId: "watch-1",
+      windowStart: "2026-04-17T00:00:00.000Z",
+      windowEnd: "2026-04-18T00:00:00.000Z",
+      sourceRunIds: ["run-1"],
+      headline: "digest headline",
+      summary: "digest summary",
+      status: "built" as const,
+      createdAt: "2026-04-18T00:00:00.000Z",
+      updatedAt: "2026-04-18T00:00:00.000Z"
+    };
+
+    await saveDigestRecord(digest);
+
+    await expect(
+      readDigestRecord(createdProject.project.id, digest.id)
+    ).resolves.toEqual(digest);
+  });
 });
