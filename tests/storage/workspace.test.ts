@@ -103,4 +103,39 @@ describe("workspace storage", () => {
       runRecordSchema.parse(createdRun)
     );
   });
+
+  it("creates and reads watch targets under the workspace root", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "research-workspace-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+
+    const {
+      createProjectRecord,
+      createWatchTargetRecord,
+      readWatchTargetRecord
+    } = await import("@/lib/storage/workspace");
+
+    const createdProject = await createProjectRecord({
+      name: "Watcher",
+      description: "watch storage"
+    });
+
+    const watchTarget = await createWatchTargetRecord(createdProject.project.id, {
+      title: "Creator market watch",
+      naturalLanguage: "track creator market",
+      urls: ["https://example.com/watch"]
+    });
+
+    await expect(
+      readWatchTargetRecord(createdProject.project.id, watchTarget.id)
+    ).resolves.toMatchObject({
+      id: watchTarget.id,
+      projectId: createdProject.project.id,
+      title: "Creator market watch",
+      query: {
+        naturalLanguage: "track creator market",
+        urls: ["https://example.com/watch"]
+      },
+      status: "draft"
+    });
+  });
 });

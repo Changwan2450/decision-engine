@@ -7,8 +7,10 @@ import { createRun, type Run } from "@/lib/domain/runs";
 import {
   projectRecordSchema,
   runRecordSchema,
+  watchTargetSchema,
   type ProjectRecord,
-  type RunRecord
+  type RunRecord,
+  type WatchTargetRecord
 } from "@/lib/storage/schema";
 
 function projectDir(projectId: string): string {
@@ -25,6 +27,14 @@ function runsDir(projectId: string): string {
 
 function runFile(projectId: string, runId: string): string {
   return path.join(runsDir(projectId), `${runId}.json`);
+}
+
+function watchTargetsDir(projectId: string): string {
+  return path.join(projectDir(projectId), "watch-targets");
+}
+
+function watchTargetFile(projectId: string, watchTargetId: string): string {
+  return path.join(watchTargetsDir(projectId), `${watchTargetId}.json`);
 }
 
 async function readJsonFile<T>(filePath: string, schema: { parse: (value: unknown) => T }): Promise<T> {
@@ -51,6 +61,20 @@ export async function saveRunRecord(record: RunRecord): Promise<void> {
 
 export async function readRunRecord(projectId: string, runId: string): Promise<RunRecord> {
   return readJsonFile(runFile(projectId, runId), runRecordSchema);
+}
+
+export async function saveWatchTargetRecord(record: WatchTargetRecord): Promise<void> {
+  await writeJsonFile(
+    watchTargetFile(record.projectId, record.id),
+    watchTargetSchema.parse(record)
+  );
+}
+
+export async function readWatchTargetRecord(
+  projectId: string,
+  watchTargetId: string
+): Promise<WatchTargetRecord> {
+  return readJsonFile(watchTargetFile(projectId, watchTargetId), watchTargetSchema);
 }
 
 export async function updateRunRecord(
@@ -204,5 +228,38 @@ export async function createRunRecord(
   };
 
   await saveRunRecord(record);
+  return record;
+}
+
+export async function createWatchTargetRecord(
+  projectId: string,
+  input: {
+    title: string;
+    naturalLanguage?: string;
+    urls?: string[];
+  }
+): Promise<WatchTargetRecord> {
+  const now = new Date().toISOString();
+  const record: WatchTargetRecord = watchTargetSchema.parse({
+    id: randomUUID(),
+    projectId,
+    title: input.title,
+    query: {
+      naturalLanguage: input.naturalLanguage,
+      urls: input.urls ?? []
+    },
+    sourceFilter: {},
+    delivery: {
+      digest: true,
+      alert: false,
+      inbox: true
+    },
+    tags: [],
+    status: "draft",
+    createdAt: now,
+    updatedAt: now
+  });
+
+  await saveWatchTargetRecord(record);
   return record;
 }
