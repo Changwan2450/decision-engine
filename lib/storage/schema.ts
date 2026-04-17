@@ -122,6 +122,7 @@ export const inboxItemSchema = z.object({
   refId: z.string().min(1),
   watchTargetId: z.string().min(1).optional(),
   status: z.enum(["unread", "read", "archived", "promoted"]),
+  promotedRunId: z.string().min(1).nullable().optional(),
   title: z.string().min(1),
   summary: z.string(),
   createdAt: z.string().datetime(),
@@ -132,6 +133,14 @@ export const watchContextSchema = z.object({
   watchTargetId: z.string().min(1),
   triggerId: z.string().min(1).optional(),
   digestId: z.string().min(1).nullable().optional()
+});
+
+export const projectOriginSchema = z.object({
+  source: z.literal("watch_digest"),
+  watchTargetId: z.string().min(1),
+  digestId: z.string().min(1),
+  inboxItemId: z.string().min(1),
+  sourceRunIds: z.array(z.string().min(1)).default([])
 });
 
 export const projectRecordSchema = z.object({
@@ -148,6 +157,7 @@ export const projectRecordSchema = z.object({
 export const runRecordSchema = z.object({
   run: runSchema,
   watchContext: watchContextSchema.nullable().default(null),
+  projectOrigin: projectOriginSchema.nullable().default(null),
   normalizedInput: normalizedRunInputSchema.nullable().default(null),
   kbContext: knowledgeContextSchema.nullable().default(null),
   decision: decisionSchema.nullable().default(null),

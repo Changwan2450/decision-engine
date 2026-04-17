@@ -84,9 +84,21 @@ describe("promoteDigestToProject", () => {
     );
     expect(promoted.run.input.pastedContent).toContain(digest.summary);
     expect(promoted.watchContext).toBeNull();
+    expect(promoted.projectOrigin).toEqual({
+      source: "watch_digest",
+      watchTargetId: watchTarget.id,
+      digestId: digest.id,
+      inboxItemId: expect.any(String),
+      sourceRunIds: [run.run.id]
+    });
 
     await expect(listInboxItemRecords(project.project.id)).resolves.toMatchObject([
-      { kind: "digest", refId: digest.id, status: "promoted" }
+      {
+        kind: "digest",
+        refId: digest.id,
+        status: "promoted",
+        promotedRunId: promoted.run.id
+      }
     ]);
   });
 });

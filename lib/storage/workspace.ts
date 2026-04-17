@@ -141,6 +141,24 @@ export async function updateInboxItemRecord(
   return next;
 }
 
+export async function updateInboxItemStatus(
+  projectId: string,
+  itemId: string,
+  status: InboxItemRecord["status"],
+  extras?: {
+    promotedRunId?: string | null;
+    now?: string;
+  }
+): Promise<InboxItemRecord> {
+  return updateInboxItemRecord(projectId, itemId, (record) => ({
+    ...record,
+    status,
+    promotedRunId:
+      extras && "promotedRunId" in extras ? extras.promotedRunId : record.promotedRunId,
+    updatedAt: extras?.now ?? new Date().toISOString()
+  }));
+}
+
 export async function updateRunRecord(
   projectId: string,
   runId: string,
@@ -281,6 +299,32 @@ export async function findRunRecordById(
   }
 
   return null;
+}
+
+export async function findInboxItemsByRefId(
+  projectId: string,
+  refId: string
+): Promise<InboxItemRecord[]> {
+  const items = await listInboxItemRecords(projectId);
+  return items.filter((item) => item.refId === refId);
+}
+
+export async function findRunsByDigestId(
+  projectId: string,
+  digestId: string
+): Promise<RunRecord[]> {
+  const runs = await listRunRecords(projectId);
+  return runs.filter((record) => record.projectOrigin?.digestId === digestId);
+}
+
+export async function findRunsBySourceRunId(
+  projectId: string,
+  sourceRunId: string
+): Promise<RunRecord[]> {
+  const runs = await listRunRecords(projectId);
+  return runs.filter((record) =>
+    record.projectOrigin?.sourceRunIds.includes(sourceRunId)
+  );
 }
 
 export async function createRunRecord(

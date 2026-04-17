@@ -209,4 +209,71 @@ describe("workspace storage", () => {
       readInboxItemRecord(createdProject.project.id, inboxItem.id)
     ).resolves.toEqual(inboxItem);
   });
+
+  it("updates inbox lifecycle and finds trace links", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "research-workspace-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+
+    const {
+      createProjectRecord,
+      saveInboxItemRecord,
+      updateInboxItemStatus,
+      createRunRecord,
+      updateRunRecord,
+      findInboxItemsByRefId,
+      findRunsByDigestId,
+      findRunsBySourceRunId
+    } = await import("@/lib/storage/workspace");
+
+    const createdProject = await createProjectRecord({
+      name: "Tracer",
+      description: "trace helpers"
+    });
+
+    const run = await createRunRecord(createdProject.project.id, {
+      title: "promoted run",
+      urls: ["https://example.com/source"]
+    });
+    await updateRunRecord(createdProject.project.id, run.run.id, (record) => ({
+      ...record,
+      projectOrigin: {
+        source: "watch_digest",
+        watchTargetId: "watch-1",
+        digestId: "digest-1",
+        inboxItemId: "inbox-1",
+        sourceRunIds: ["run-source-1", "run-source-2"]
+      }
+    }));
+
+    await saveInboxItemRecord({
+      id: "inbox-1",
+      projectId: createdProject.project.id,
+      kind: "digest",
+      refId: "digest-1",
+      watchTargetId: "watch-1",
+      status: "unread",
+      title: "digest ready",
+      summary: "digest summary",
+      createdAt: "2026-04-18T00:00:00.000Z",
+      updatedAt: "2026-04-18T00:00:00.000Z",
+      promotedRunId: null
+    });
+
+    await expect(
+      updateInboxItemStatus(createdProject.project.id, "inbox-1", "read")
+    ).resolves.toMatchObject({ status: "read" });
+    await expect(
+      updateInboxItemStatus(createdProject.project.id, "inbox-1", "archived")
+    ).resolves.toMatchObject({ status: "archived" });
+
+    await expect(
+      findInboxItemsByRefId(createdProject.project.id, "digest-1")
+    ).resolves.toMatchObject([{ id: "inbox-1" }]);
+    await expect(findRunsByDigestId(createdProject.project.id, "digest-1")).resolves.toMatchObject([
+      { run: { id: run.run.id } }
+    ]);
+    await expect(
+      findRunsBySourceRunId(createdProject.project.id, "run-source-1")
+    ).resolves.toMatchObject([{ run: { id: run.run.id } }]);
+  });
 });
