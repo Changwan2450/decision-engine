@@ -61,6 +61,79 @@ export const promotionCandidateSchema = z.object({
   reason: z.string().min(1)
 });
 
+export const watchQuerySchema = z.object({
+  naturalLanguage: z.string().optional(),
+  urls: z.array(z.string().url()).default([])
+});
+
+export const watchSourceFilterSchema = z.object({
+  includeAdapters: z.array(z.string()).default([]),
+  excludeAdapters: z.array(z.string()).default([]),
+  includeDomains: z.array(z.string()).default([]),
+  sourceTypes: z.array(z.string()).default([])
+});
+
+export const watchDeliverySchema = z.object({
+  digest: z.boolean().default(true),
+  alert: z.boolean().default(false),
+  inbox: z.boolean().default(true)
+});
+
+export const watchTargetSchema = z.object({
+  id: z.string().min(1),
+  projectId: z.string().min(1),
+  title: z.string().min(1),
+  query: watchQuerySchema,
+  sourceFilter: watchSourceFilterSchema.default({
+    includeAdapters: [],
+    excludeAdapters: [],
+    includeDomains: [],
+    sourceTypes: []
+  }),
+  delivery: watchDeliverySchema.default({
+    digest: true,
+    alert: false,
+    inbox: true
+  }),
+  tags: z.array(z.string()).default([]),
+  status: z.enum(["draft", "active", "paused", "archived"]),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime()
+});
+
+export const digestSchema = z.object({
+  id: z.string().min(1),
+  projectId: z.string().min(1),
+  watchTargetId: z.string().min(1),
+  windowStart: z.string().datetime(),
+  windowEnd: z.string().datetime(),
+  sourceRunIds: z.array(z.string().min(1)).default([]),
+  headline: z.string().min(1),
+  summary: z.string(),
+  status: z.enum(["pending", "built", "delivered", "acted_on", "ignored"]),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime()
+});
+
+export const inboxItemSchema = z.object({
+  id: z.string().min(1),
+  projectId: z.string().min(1),
+  kind: z.enum(["digest", "alert", "novelty_note"]),
+  refId: z.string().min(1),
+  watchTargetId: z.string().min(1).optional(),
+  status: z.enum(["unread", "read", "archived", "promoted"]),
+  title: z.string().min(1),
+  summary: z.string(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime()
+});
+
+export const watchContextSchema = z.object({
+  watchTargetId: z.string().min(1),
+  triggerId: z.string().min(1).optional(),
+  digestId: z.string().min(1).nullable().optional()
+});
+
 export const projectRecordSchema = z.object({
   project: projectSchema,
   insights: projectInsightSchema.default({
@@ -74,6 +147,7 @@ export const projectRecordSchema = z.object({
 
 export const runRecordSchema = z.object({
   run: runSchema,
+  watchContext: watchContextSchema.nullable().default(null),
   normalizedInput: normalizedRunInputSchema.nullable().default(null),
   kbContext: knowledgeContextSchema.nullable().default(null),
   decision: decisionSchema.nullable().default(null),
@@ -103,3 +177,6 @@ export const runRecordSchema = z.object({
 
 export type ProjectRecord = z.infer<typeof projectRecordSchema>;
 export type RunRecord = z.infer<typeof runRecordSchema>;
+export type WatchTargetRecord = z.infer<typeof watchTargetSchema>;
+export type DigestRecord = z.infer<typeof digestSchema>;
+export type InboxItemRecord = z.infer<typeof inboxItemSchema>;
