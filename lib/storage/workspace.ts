@@ -152,6 +152,25 @@ export async function listRunRecords(projectId: string): Promise<RunRecord[]> {
   return records.sort((a, b) => b.run.updatedAt.localeCompare(a.run.updatedAt));
 }
 
+export async function findRunRecordById(
+  runId: string
+): Promise<{ projectId: string; record: RunRecord } | null> {
+  const projects = await listProjectRecords();
+
+  for (const project of projects) {
+    const runs = await listRunRecords(project.project.id);
+    const match = runs.find((record) => record.run.id === runId);
+    if (match) {
+      return {
+        projectId: project.project.id,
+        record: match
+      };
+    }
+  }
+
+  return null;
+}
+
 export async function createRunRecord(
   projectId: string,
   input: {

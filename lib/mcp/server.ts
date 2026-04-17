@@ -1,9 +1,11 @@
+import { analyzeHotspots } from "@/lib/analytics/hotspot";
+import { queryEvents, queryRuns } from "@/lib/analytics/duckdb";
+import { buildFailureArtifact } from "@/lib/adapters/contract";
 import { exportRunBundle, ingestAdvisoryFromFile, writeRunStateSnapshot } from "@/lib/bridge/cli-file";
+import { sendDiscordNotifierFromFile } from "@/lib/bridge/discord-notifier";
 import { exportLinkitIngestBundle } from "@/lib/bridge/linkit-export";
 import { publishLinkitBatch } from "@/lib/bridge/linkit-publish";
-import { sendDiscordNotifierFromFile } from "@/lib/bridge/discord-notifier";
-import { queryEvents, queryRuns } from "@/lib/analytics/duckdb";
-import { analyzeHotspots } from "@/lib/analytics/hotspot";
+import { fetchWeb, gatherForRun } from "@/lib/orchestrator/run-research";
 import { readProjectRecord, readRunRecord } from "@/lib/storage/workspace";
 
 type JsonRpcId = number | string | null;
@@ -71,6 +73,29 @@ const TOOLS: ToolDefinition[] = [
         runId: { type: "string" }
       },
       required: ["projectId", "runId"]
+    }
+  },
+  {
+    name: "fetch_web",
+    description: "Fetch a single URL through the router and return one SourceArtifact. Never throws; failures return an artifact.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        url: { type: "string" },
+        opts: { type: "object" }
+      },
+      required: ["url"]
+    }
+  },
+  {
+    name: "gather_for_run",
+    description: "Gather all URLs for a run within budget and return collected artifacts. Never throws; failures return artifacts.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        runId: { type: "string" }
+      },
+      required: ["runId"]
     }
   },
   {
@@ -206,9 +231,35 @@ function toToolResult(payload: unknown) {
   };
 }
 
-async function callTool(name: string, args: Record<string, unknown> | undefined) {
+function buildMcpFailureArtifact(params: {
+  adapter: "mcp/fetch_web" | "mcp/gather_for_run";
+  url?: string;
+  errorMessage: string;
+}) {
+  return buildFailureArtifact({
+    id: `${params.adapter}-0`,
+    adapter: params.adapter,
+    fetcher: params.adapter,
+    url: params.url ?? "",
+    sourceType: "web",
+    outcome: { status: "error" },
+    errorMessage: params.errorMessage,
+    sourceLabel: "web/error"
+  });
+}
+
+async function callTool(
+  name: string,
+  args: Record<string, unknown> | undefined,
+  deps?: {
+    fetchWeb?: typeof fetchWeb;
+    gatherForRun?: typeof gatherForRun;
+  }
+) {
   const projectId = args?.projectId;
   const runId = args?.runId;
+  const fetchWebFn = deps?.fetchWeb ?? fetchWeb;
+  const gatherForRunFn = deps?.gatherForRun ?? gatherForRun;
 
   switch (name) {
     case "get_project": {
@@ -228,6 +279,39 @@ async function callTool(name: string, args: Record<string, unknown> | undefined)
         requireString(runId, "runId")
       );
       return toToolResult({ projectId, runId, snapshotPath });
+    }
+    case "fetch_web": {
+      const url = requireString(args?.url, "url");
+      try {
+        return toToolResult(await fetchWebFn(url));
+      } catch (error) {
+        return toToolResult(
+          buildMcpFailureArtifact({
+            adapter: "mcp/fetch_web",
+            url,
+            errorMessage: error instanceof Error ? error.message : String(error)
+          })
+        );
+      }
+    }
+    case "gather_for_run": {
+      const targetRunId = requireString(args?.runId, "runId");
+      try {
+        return toToolResult({
+          runId: targetRunId,
+          artifacts: await gatherForRunFn(targetRunId)
+        });
+      } catch (error) {
+        return toToolResult({
+          runId: targetRunId,
+          artifacts: [
+            buildMcpFailureArtifact({
+              adapter: "mcp/gather_for_run",
+              errorMessage: error instanceof Error ? error.message : String(error)
+            })
+          ]
+        });
+      }
     }
     case "export_bundle": {
       const bundleDir = await exportRunBundle(
@@ -293,40 +377,49 @@ async function callTool(name: string, args: Record<string, unknown> | undefined)
   }
 }
 
-export async function handleMcpRequest(request: JsonRpcRequest): Promise<JsonRpcResponse | null> {
-  const id = request.id ?? null;
+export function createMcpHandler(deps?: {
+  fetchWeb?: typeof fetchWeb;
+  gatherForRun?: typeof gatherForRun;
+}) {
+  return async function handleMcpRequest(
+    request: JsonRpcRequest
+  ): Promise<JsonRpcResponse | null> {
+    const id = request.id ?? null;
 
-  try {
-    switch (request.method) {
-      case "initialize":
-        return ok(id, {
-          protocolVersion: MCP_PROTOCOL_VERSION,
-          capabilities: {
-            tools: {}
-          },
-          serverInfo: {
-            name: "decision-engine",
-            version: "0.1.0"
-          }
-        });
-      case "notifications/initialized":
-        return null;
-      case "ping":
-        return ok(id, {});
-      case "tools/list":
-        return ok(id, { tools: TOOLS });
-      case "tools/call": {
-        const name = requireString(request.params?.name, "name");
-        const args =
-          request.params?.arguments && typeof request.params.arguments === "object"
-            ? (request.params.arguments as Record<string, unknown>)
-            : {};
-        return ok(id, await callTool(name, args));
+    try {
+      switch (request.method) {
+        case "initialize":
+          return ok(id, {
+            protocolVersion: MCP_PROTOCOL_VERSION,
+            capabilities: {
+              tools: {}
+            },
+            serverInfo: {
+              name: "decision-engine",
+              version: "0.1.0"
+            }
+          });
+        case "notifications/initialized":
+          return null;
+        case "ping":
+          return ok(id, {});
+        case "tools/list":
+          return ok(id, { tools: TOOLS });
+        case "tools/call": {
+          const name = requireString(request.params?.name, "name");
+          const args =
+            request.params?.arguments && typeof request.params.arguments === "object"
+              ? (request.params.arguments as Record<string, unknown>)
+              : {};
+          return ok(id, await callTool(name, args, deps));
+        }
+        default:
+          return fail(id, -32601, `Method not found: ${request.method}`);
       }
-      default:
-        return fail(id, -32601, `Method not found: ${request.method}`);
+    } catch (error) {
+      return fail(id, -32000, error instanceof Error ? error.message : "Unknown MCP error");
     }
-  } catch (error) {
-    return fail(id, -32000, error instanceof Error ? error.message : "Unknown MCP error");
-  }
+  };
 }
+
+export const handleMcpRequest = createMcpHandler();

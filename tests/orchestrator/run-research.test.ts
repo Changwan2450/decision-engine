@@ -2,10 +2,50 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  buildArtifact,
+  buildFailureArtifact
+} from "@/lib/adapters/contract";
+import type {
+  ResearchAdapter,
+  ResearchPlan,
+  SourceArtifact
+} from "@/lib/adapters/types";
 import { setQmdClientForTests } from "@/lib/orchestrator/kb-context";
 
 let tempRoot: string | null = null;
 let tempVault: string | null = null;
+
+function makePlan(urls: string[]): ResearchPlan {
+  return {
+    projectId: "project-1",
+    runId: "run-1",
+    title: "run title",
+    mode: "standard",
+    normalizedInput: {
+      title: "run title",
+      naturalLanguage: "",
+      pastedContent: "",
+      urls,
+      goal: "",
+      target: "",
+      comparisonAxis: ""
+    },
+    sourceTargets: ["web", "community", "video", "github"],
+    kbContext: null
+  };
+}
+
+function makeAdapter(
+  name: string,
+  exec: (plan: ResearchPlan) => Promise<SourceArtifact[]>
+): ResearchAdapter {
+  return {
+    name,
+    supports: () => true,
+    execute: exec
+  };
+}
 
 describe("executeResearchRun", () => {
   afterEach(async () => {
@@ -172,5 +212,137 @@ describe("executeResearchRun", () => {
     expect(storedProject.insights.competitorSignals).toContain(
       "릴스가 편집 자동화를 밀고 있다"
     );
+  });
+});
+
+describe("runResearch", () => {
+  it("routes URL through primary first and stops on success", async () => {
+    const { runResearch } = await import("@/lib/orchestrator/run-research");
+    const calls: string[] = [];
+
+    const artifacts = await runResearch(makePlan(["https://example.com/post"]), {
+      router: () => ({
+        primary: "agent-reach",
+        fallbacks: ["scrapling"],
+        rule: "web/generic"
+      }),
+      registry: {
+        "agent-reach": makeAdapter("agent-reach", async (plan) => {
+          calls.push(`agent-reach:${plan.normalizedInput.urls[0]}`);
+          return [
+            buildArtifact({
+              id: "a-0",
+              adapter: "agent-reach",
+              fetcher: "agent-reach",
+              sourceType: "web",
+              url: plan.normalizedInput.urls[0] ?? "",
+              title: "ok",
+              content: "body",
+              outcome: { status: "success" }
+            })
+          ];
+        }),
+        scrapling: makeAdapter("scrapling", async () => {
+          calls.push("scrapling");
+          return [];
+        })
+      }
+    });
+
+    expect(calls).toEqual(["agent-reach:https://example.com/post"]);
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0]?.adapter).toBe("agent-reach");
+    expect(artifacts[0]?.metadata.fetch_status).toBe("success");
+  });
+
+  it("includes primary failure artifact before fallback success", async () => {
+    const { runResearch } = await import("@/lib/orchestrator/run-research");
+
+    const artifacts = await runResearch(makePlan(["https://reddit.com/r/x"]), {
+      router: () => ({
+        primary: "agent-reach",
+        fallbacks: ["scrapling"],
+        rule: "community/reddit"
+      }),
+      registry: {
+        "agent-reach": makeAdapter("agent-reach", async (plan) => [
+          buildFailureArtifact({
+            id: "agent-reach-0",
+            adapter: "agent-reach",
+            fetcher: "agent-reach",
+            url: plan.normalizedInput.urls[0] ?? "",
+            sourceType: "community",
+            outcome: { status: "error" },
+            errorMessage: "primary failed"
+          })
+        ]),
+        scrapling: makeAdapter("scrapling", async (plan) => [
+          buildArtifact({
+            id: "scrapling-0",
+            adapter: "scrapling",
+            fetcher: "scrapling",
+            sourceType: "community",
+            url: plan.normalizedInput.urls[0] ?? "",
+            title: "fallback",
+            content: "ok",
+            outcome: { status: "success" }
+          })
+        ])
+      }
+    });
+
+    expect(artifacts.map((artifact) => artifact.adapter)).toEqual([
+      "agent-reach",
+      "scrapling"
+    ]);
+    expect(artifacts.map((artifact) => artifact.metadata.fetch_status)).toEqual([
+      "error",
+      "success"
+    ]);
+  });
+
+  it("records timeout and skips fallback when budget is exhausted", async () => {
+    const { runResearch } = await import("@/lib/orchestrator/run-research");
+    let nowMs = 0;
+
+    const artifacts = await runResearch(makePlan(["https://example.com/slow"]), {
+      router: () => ({
+        primary: "agent-reach",
+        fallbacks: ["scrapling"],
+        rule: "web/generic"
+      }),
+      budgets: {
+        totalMs: 100,
+        perAdapterMs: 60,
+        perUrlMs: 100,
+        fallbackBudgetRatio: 0.4
+      },
+      nowMs: () => nowMs,
+      registry: {
+        "agent-reach": makeAdapter("agent-reach", async (plan) => {
+          nowMs = 120;
+          return [
+            buildFailureArtifact({
+              id: "agent-reach-0",
+              adapter: "agent-reach",
+              fetcher: "agent-reach",
+              url: plan.normalizedInput.urls[0] ?? "",
+              sourceType: "web",
+              outcome: { status: "error" },
+              errorMessage: "too slow"
+            })
+          ];
+        }),
+        scrapling: makeAdapter("scrapling", async () => {
+          throw new Error("should not run");
+        })
+      }
+    });
+
+    expect(artifacts).toHaveLength(2);
+    expect(artifacts[0]?.metadata.fetch_status).toBe("timeout");
+    expect(artifacts[0]?.metadata.error).toContain("budget");
+    expect(artifacts[1]?.metadata.fetch_status).toBe("error");
+    expect(artifacts[1]?.metadata.error).toContain("fallback skipped");
   });
 });

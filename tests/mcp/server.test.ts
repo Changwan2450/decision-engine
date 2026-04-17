@@ -61,6 +61,8 @@ describe("mcp server", () => {
       "get_project",
       "get_run",
       "show_run_state",
+      "fetch_web",
+      "gather_for_run",
       "export_bundle",
       "export_linkit_ingest",
       "publish_linkit_batch",
@@ -104,6 +106,76 @@ describe("mcp server", () => {
     const result = (response as { result: { structuredContent: { run: { id: string } } } }).result;
 
     expect(result.structuredContent.run.id).toBe(run.run.id);
+  });
+
+  it("returns a single artifact from fetch_web and never throws", async () => {
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+
+    const handleMcpRequest = createMcpHandler({
+      fetchWeb: async () => {
+        throw new Error("network exploded");
+      }
+    });
+
+    const response = await handleMcpRequest({
+      jsonrpc: "2.0",
+      id: 31,
+      method: "tools/call",
+      params: {
+        name: "fetch_web",
+        arguments: {
+          url: "https://example.com/fail"
+        }
+      }
+    });
+
+    const result = (response as { result: { structuredContent: SourceArtifact } }).result;
+    expect(result.structuredContent.adapter).toBe("mcp/fetch_web");
+    expect(result.structuredContent.metadata.fetch_status).toBe("error");
+    expect(result.structuredContent.metadata.error).toContain("network exploded");
+  });
+
+  it("returns gathered artifacts for gather_for_run", async () => {
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+
+    const handleMcpRequest = createMcpHandler({
+      gatherForRun: async (runId) => [
+        {
+          id: "artifact-0",
+          adapter: "scrapling",
+          sourceType: "web",
+          title: `run:${runId}`,
+          url: "https://example.com/a",
+          snippet: "",
+          content: "body",
+          sourcePriority: "analysis",
+          metadata: {
+            fetcher: "scrapling",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        }
+      ]
+    });
+
+    const response = await handleMcpRequest({
+      jsonrpc: "2.0",
+      id: 32,
+      method: "tools/call",
+      params: {
+        name: "gather_for_run",
+        arguments: {
+          runId: "run-123"
+        }
+      }
+    });
+
+    const result = (response as { result: { structuredContent: { runId: string; artifacts: SourceArtifact[] } } }).result;
+    expect(result.structuredContent.runId).toBe("run-123");
+    expect(result.structuredContent.artifacts).toHaveLength(1);
+    expect(result.structuredContent.artifacts[0]?.title).toBe("run:run-123");
   });
 
   it("calls query_events and returns grouped counts", async () => {

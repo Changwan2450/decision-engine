@@ -1,17 +1,18 @@
-import { createAgentReachAdapter } from "@/lib/adapters/agent-reach";
-import { createGeocodingAdapter } from "@/lib/adapters/geocoding";
-import { createReclipAdapter } from "@/lib/adapters/reclip";
-import type { ResearchPlan, SourceArtifact } from "@/lib/adapters/types";
+import { buildFailureArtifact } from "@/lib/adapters/contract";
+import { createAdapterRegistry, type AdapterRegistry } from "@/lib/adapters/registry";
+import { routeUrl, type AdapterChain, type AdapterName } from "@/lib/adapters/router";
+import type { ResearchPlan, SourceArtifact, SourceTarget } from "@/lib/adapters/types";
+import { getResearchBudgetConfig, type ResearchBudgetConfig } from "@/lib/config";
+import { assertRunTransition } from "@/lib/domain/runs";
 import {
   exportDecisionHistoryToObsidian,
   exportInsightsToObsidian,
   exportRunToObsidian,
   syncRunToKnowledgeBase
 } from "@/lib/export/obsidian";
-import { assertRunTransition } from "@/lib/domain/runs";
-import { buildDecisionHistory } from "@/lib/orchestrator/decision-history";
-import { buildDecision } from "@/lib/orchestrator/decision";
 import { buildClarificationQuestions, shouldClarifyRun } from "@/lib/orchestrator/clarify";
+import { buildDecision } from "@/lib/orchestrator/decision";
+import { buildDecisionHistory } from "@/lib/orchestrator/decision-history";
 import {
   derivePromotionCandidates,
   deriveProjectInsightPatch,
@@ -21,23 +22,235 @@ import { buildKnowledgeArtifacts, buildKnowledgeContext } from "@/lib/orchestrat
 import { planRun } from "@/lib/orchestrator/plan-run";
 import { buildPrdSeed } from "@/lib/orchestrator/prd-seed";
 import {
-  readProjectRecord,
+  findRunRecordById,
   listRunRecords,
+  readProjectRecord,
   readRunRecord,
   updateProjectRecord,
   updateRunRecord
 } from "@/lib/storage/workspace";
 
-const adapters = [
-  createAgentReachAdapter(),
-  createReclipAdapter(),
-  createGeocodingAdapter()
-];
+type RunResearchDeps = {
+  registry?: AdapterRegistry;
+  router?: (url: string) => AdapterChain;
+  budgets?: Partial<ResearchBudgetConfig>;
+  nowMs?: () => number;
+};
 
-export async function runResearch(plan: ResearchPlan): Promise<SourceArtifact[]> {
-  const supported = adapters.filter((adapter) => adapter.supports(plan));
-  const collected = await Promise.all(supported.map((adapter) => adapter.execute(plan)));
-  return collected.flat();
+export async function runResearch(
+  plan: ResearchPlan,
+  deps?: RunResearchDeps
+): Promise<SourceArtifact[]> {
+  const registry = deps?.registry ?? createAdapterRegistry();
+  const router = deps?.router ?? routeUrl;
+  const budget = {
+    ...getResearchBudgetConfig(),
+    ...deps?.budgets
+  };
+  const nowMs = deps?.nowMs ?? (() => Date.now());
+  const totalStartedAt = nowMs();
+  let fallbackSpentMs = 0;
+  const artifacts: SourceArtifact[] = [];
+
+  for (const url of plan.normalizedInput.urls) {
+    const chain = router(url);
+    const attempts: AdapterName[] = [chain.primary, ...chain.fallbacks];
+    const urlStartedAt = nowMs();
+
+    for (const [index, adapterName] of attempts.entries()) {
+      const isFallback = index > 0;
+      const allowedMs = computeAllowedMs({
+        budget,
+        nowMs,
+        totalStartedAt,
+        urlStartedAt,
+        fallbackSpentMs,
+        isFallback
+      });
+
+      if (allowedMs <= 0) {
+        artifacts.push(
+          buildRoutingFailureArtifact({
+            adapter: adapterName,
+            url,
+            sourceType: inferSourceType(chain),
+            status: isFallback ? "error" : "timeout",
+            errorMessage: isFallback
+              ? "fallback skipped: budget exhausted"
+              : "primary skipped: budget exhausted"
+          })
+        );
+        break;
+      }
+
+      const adapter = registry[adapterName];
+      if (!adapter) {
+        artifacts.push(
+          buildRoutingFailureArtifact({
+            adapter: adapterName,
+            url,
+            sourceType: inferSourceType(chain),
+            status: "error",
+            errorMessage: `adapter not registered: ${adapterName}`
+          })
+        );
+        continue;
+      }
+
+      const attemptPlan = singleUrlPlan(plan, url);
+      if (!adapter.supports(attemptPlan)) {
+        artifacts.push(
+          buildRoutingFailureArtifact({
+            adapter: adapterName,
+            url,
+            sourceType: inferSourceType(chain),
+            status: "error",
+            errorMessage: `adapter does not support routed plan: ${adapterName}`
+          })
+        );
+        continue;
+      }
+
+      const startedAt = nowMs();
+      let attemptArtifacts: SourceArtifact[];
+      try {
+        attemptArtifacts = await adapter.execute(attemptPlan);
+      } catch (error) {
+        attemptArtifacts = [
+          buildRoutingFailureArtifact({
+            adapter: adapterName,
+            url,
+            sourceType: inferSourceType(chain),
+            status: "error",
+            errorMessage: error instanceof Error ? error.message : String(error)
+          })
+        ];
+      }
+
+      const elapsedMs = Math.max(0, nowMs() - startedAt);
+      if (isFallback) fallbackSpentMs += elapsedMs;
+
+      if (elapsedMs > allowedMs) {
+        artifacts.push(
+          buildRoutingFailureArtifact({
+            adapter: adapterName,
+            url,
+            sourceType: inferSourceType(chain),
+            status: "timeout",
+            errorMessage: `budget exceeded after ${elapsedMs}ms (limit ${allowedMs}ms)`
+          })
+        );
+        continue;
+      }
+
+      if (attemptArtifacts.length === 0) {
+        artifacts.push(
+          buildRoutingFailureArtifact({
+            adapter: adapterName,
+            url,
+            sourceType: inferSourceType(chain),
+            status: "error",
+            errorMessage: "adapter returned no artifacts"
+          })
+        );
+        continue;
+      }
+
+      artifacts.push(...attemptArtifacts);
+
+      if (attemptArtifacts.some(isUsableArtifact)) {
+        break;
+      }
+    }
+  }
+
+  return artifacts;
+}
+
+export async function fetchWeb(
+  url: string,
+  deps?: RunResearchDeps
+): Promise<SourceArtifact> {
+  try {
+    const artifacts = await runResearch(
+      {
+        projectId: "mcp",
+        runId: "fetch-web",
+        title: url,
+        mode: "standard",
+        normalizedInput: {
+          title: url,
+          naturalLanguage: "",
+          pastedContent: "",
+          urls: [url],
+          goal: "",
+          target: "",
+          comparisonAxis: ""
+        },
+        sourceTargets: ["web", "community", "video", "github", "pdf"],
+        kbContext: null
+      },
+      deps
+    );
+    return selectRepresentativeArtifact(artifacts, url);
+  } catch (error) {
+    return buildFailureArtifact({
+      id: "mcp-fetch-web-0",
+      adapter: "mcp/fetch_web",
+      fetcher: "mcp/fetch_web",
+      url,
+      sourceType: "web",
+      outcome: { status: "error" },
+      errorMessage: error instanceof Error ? error.message : String(error),
+      sourceLabel: "web/error"
+    });
+  }
+}
+
+export async function gatherForRun(
+  runId: string,
+  deps?: RunResearchDeps
+): Promise<SourceArtifact[]> {
+  try {
+    const found = await findRunRecordById(runId);
+    if (!found) {
+      return [
+        buildFailureArtifact({
+          id: "gather-for-run-0",
+          adapter: "mcp/gather_for_run",
+          fetcher: "mcp/gather_for_run",
+          url: "",
+          sourceType: "web",
+          outcome: { status: "error" },
+          errorMessage: `run not found: ${runId}`,
+          sourceLabel: "web/error"
+        })
+      ];
+    }
+
+    const planned = planRun(found.record, found.record.kbContext);
+    const plan: ResearchPlan = found.record.normalizedInput
+      ? {
+          ...planned,
+          normalizedInput: found.record.normalizedInput
+        }
+      : planned;
+
+    return runResearch(plan, deps);
+  } catch (error) {
+    return [
+      buildFailureArtifact({
+        id: "gather-for-run-0",
+        adapter: "mcp/gather_for_run",
+        fetcher: "mcp/gather_for_run",
+        url: "",
+        sourceType: "web",
+        outcome: { status: "error" },
+        errorMessage: error instanceof Error ? error.message : String(error),
+        sourceLabel: "web/error"
+      })
+    ];
+  }
 }
 
 function isRecencySensitive(plan: ResearchPlan): boolean {
@@ -56,6 +269,90 @@ function isRecencySensitive(plan: ResearchPlan): boolean {
 
 function mergeUnique(left: string[], right: string[]): string[] {
   return Array.from(new Set([...left, ...right]));
+}
+
+function singleUrlPlan(plan: ResearchPlan, url: string): ResearchPlan {
+  return {
+    ...plan,
+    normalizedInput: {
+      ...plan.normalizedInput,
+      urls: [url]
+    }
+  };
+}
+
+function computeAllowedMs(args: {
+  budget: ResearchBudgetConfig;
+  nowMs: () => number;
+  totalStartedAt: number;
+  urlStartedAt: number;
+  fallbackSpentMs: number;
+  isFallback: boolean;
+}): number {
+  const totalRemaining =
+    args.budget.totalMs - Math.max(0, args.nowMs() - args.totalStartedAt);
+  const perUrlRemaining =
+    args.budget.perUrlMs - Math.max(0, args.nowMs() - args.urlStartedAt);
+  const fallbackRemaining = args.isFallback
+    ? args.budget.totalMs * args.budget.fallbackBudgetRatio - args.fallbackSpentMs
+    : Number.POSITIVE_INFINITY;
+
+  return Math.floor(
+    Math.min(args.budget.perAdapterMs, totalRemaining, perUrlRemaining, fallbackRemaining)
+  );
+}
+
+function inferSourceType(chain: AdapterChain): SourceTarget {
+  if (chain.rule.startsWith("video/")) return "video";
+  if (chain.rule === "github") return "github";
+  if (chain.rule.startsWith("community/")) return "community";
+  if (chain.rule.startsWith("pdf/")) return "pdf";
+  return "web";
+}
+
+function buildRoutingFailureArtifact(params: {
+  adapter: string;
+  url: string;
+  sourceType: SourceTarget;
+  status: "error" | "timeout";
+  errorMessage: string;
+}): SourceArtifact {
+  return buildFailureArtifact({
+    id: `${params.adapter}-0`,
+    adapter: params.adapter,
+    fetcher: params.adapter,
+    url: params.url,
+    sourceType: params.sourceType,
+    outcome: { status: params.status },
+    errorMessage: params.errorMessage,
+    sourceLabel: `${params.sourceType}/${params.status}`
+  });
+}
+
+function isUsableArtifact(artifact: SourceArtifact): boolean {
+  return (
+    artifact.metadata.fetch_status === "success" ||
+    artifact.metadata.fetch_status === "partial"
+  );
+}
+
+function selectRepresentativeArtifact(
+  artifacts: SourceArtifact[],
+  url: string
+): SourceArtifact {
+  const best = artifacts.find(isUsableArtifact) ?? artifacts.at(-1);
+  if (best) return best;
+
+  return buildFailureArtifact({
+    id: "mcp-fetch-web-0",
+    adapter: "mcp/fetch_web",
+    fetcher: "mcp/fetch_web",
+    url,
+    sourceType: "web",
+    outcome: { status: "error" },
+    errorMessage: "no artifacts gathered",
+    sourceLabel: "web/error"
+  });
 }
 
 export async function executeResearchRun(
