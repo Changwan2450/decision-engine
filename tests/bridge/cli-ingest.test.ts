@@ -19,6 +19,7 @@ const runRecord: RunRecord = {
     updatedAt: "2026-04-09T10:00:00.000Z"
   },
   normalizedInput: null,
+  kbContext: null,
   decision: {
     value: "go",
     why: "충분한 근거",

@@ -121,6 +121,7 @@ Purpose:
 
 Relevant sections:
 - `normalizedInput`
+- `kbContext` (`QMD` 검색 결과 기반 prior)
 - `artifacts`
 - `claims`
 - `citations`

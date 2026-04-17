@@ -13,7 +13,8 @@ const videoPlan: ResearchPlan = {
     pastedContent: "",
     urls: ["https://www.youtube.com/watch?v=abc123xyz00"]
   },
-  sourceTargets: ["web", "community", "video"]
+  sourceTargets: ["web", "community", "video"],
+  kbContext: null
 };
 
 describe("reclip adapter", () => {

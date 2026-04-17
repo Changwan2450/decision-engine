@@ -20,6 +20,30 @@ export const normalizedRunInputSchema = z.object({
   comparisonAxis: z.string().optional()
 });
 
+export const knowledgeContextNoteSchema = z.object({
+  title: z.string().min(1),
+  path: z.string().min(1),
+  summary: z.string(),
+  reusableClaims: z.array(z.string()).default([])
+});
+
+export const knowledgeContextSchema = z.object({
+  operatorNotes: z.array(knowledgeContextNoteSchema).default([]),
+  wikiNotes: z.array(knowledgeContextNoteSchema).default([]),
+  priorDecisions: z.array(
+    z.object({
+      runId: z.string().min(1),
+      title: z.string().min(1),
+      decision: z.enum(["go", "no_go", "unclear"]),
+      why: z.string().min(1),
+      createdAt: z.string().datetime()
+    })
+  ).default([]),
+  queryExpansion: z.array(z.string()).default([]),
+  duplicateWarnings: z.array(z.string()).default([]),
+  freshEvidenceFocus: z.array(z.string()).default([])
+});
+
 export const projectInsightSchema = z.object({
   repeatedProblems: z.array(z.string()).default([]),
   repeatedPatterns: z.array(z.string()).default([]),
@@ -51,6 +75,7 @@ export const projectRecordSchema = z.object({
 export const runRecordSchema = z.object({
   run: runSchema,
   normalizedInput: normalizedRunInputSchema.nullable().default(null),
+  kbContext: knowledgeContextSchema.nullable().default(null),
   decision: decisionSchema.nullable().default(null),
   prdSeed: prdSeedSchema.nullable().default(null),
   artifacts: z.array(sourceArtifactSchema).default([]),

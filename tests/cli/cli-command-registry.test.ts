@@ -11,6 +11,9 @@ describe("cli command registry", () => {
       "create-run",
       "run-research",
       "export-run-bundle",
+      "export-linkit-ingest",
+      "publish-linkit-batch",
+      "send-discord-notifier",
       "execute-external",
       "ingest-advisory",
       "show-run",
@@ -24,6 +27,9 @@ describe("cli command registry", () => {
     expect(usage).toContain("show-run");
     expect(usage).toContain("show-project");
     expect(usage).toContain("export-run-bundle");
+    expect(usage).toContain("export-linkit-ingest");
+    expect(usage).toContain("publish-linkit-batch");
+    expect(usage).toContain("send-discord-notifier");
     expect(usage).not.toContain("show-run-state");
   });
 });

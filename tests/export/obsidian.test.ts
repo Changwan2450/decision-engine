@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -37,6 +37,7 @@ describe("obsidian export", () => {
           updatedAt: "2026-04-09T00:00:00.000Z"
         },
         normalizedInput: null,
+        kbContext: null,
         decision: {
           value: "go",
           confidence: "high",
@@ -137,6 +138,7 @@ describe("obsidian export", () => {
               updatedAt: "2026-04-09T00:00:00.000Z"
             },
             normalizedInput: null,
+            kbContext: null,
             decision: {
               value: "go",
               confidence: "high",
@@ -169,5 +171,121 @@ describe("obsidian export", () => {
 
     expect(historyMarkdown).toContain("# Decision History");
     expect(historyMarkdown).toContain("run: run-1");
+  });
+
+  it("skips kb sync for low-value decided runs", async () => {
+    tempVault = await mkdtemp(path.join(os.tmpdir(), "obsidian-export-"));
+    process.env.OBSIDIAN_VAULT_PATH = tempVault;
+    await mkdir(path.join(tempVault, "scripts"), { recursive: true });
+    await writeFile(
+      path.join(tempVault, "scripts", "kb_gate.py"),
+      "from pathlib import Path\nimport sys\nroot = Path(sys.argv[sys.argv.index('--root') + 1])\n(root / 'script-calls.log').write_text('kb_gate.py\\n', encoding='utf-8')\n",
+      "utf8"
+    );
+    await writeFile(
+      path.join(tempVault, "scripts", "kb_absorb.py"),
+      "from pathlib import Path\nimport sys\nroot = Path(sys.argv[sys.argv.index('--root') + 1])\n(root / 'script-calls.log').write_text('kb_absorb.py\\n', encoding='utf-8')\n",
+      "utf8"
+    );
+
+    const { shouldSyncRunToKnowledgeBase, syncRunToKnowledgeBase } = await import(
+      "@/lib/export/obsidian"
+    );
+
+    const run = {
+      run: {
+        id: "run-low-value",
+        projectId: "project-1",
+        title: "generic scan",
+        mode: "standard",
+        status: "decided",
+        clarificationQuestions: [],
+        input: { naturalLanguage: "", pastedContent: "", urls: [] },
+        createdAt: "2026-04-09T00:00:00.000Z",
+        updatedAt: "2026-04-09T00:00:00.000Z"
+      },
+      normalizedInput: null,
+      kbContext: null,
+      decision: {
+        value: "go" as const,
+        confidence: "medium" as const,
+        why: "single weak signal",
+        blockingUnknowns: [],
+        nextActions: []
+      },
+      prdSeed: null,
+      artifacts: [
+        {
+          id: "artifact-1",
+          adapter: "agent-reach",
+          sourceType: "web" as const,
+          title: "Generic note",
+          url: "https://example.com/generic",
+          snippet: "generic",
+          content: "",
+          sourcePriority: "analysis" as const,
+          metadata: {}
+        }
+      ],
+      claims: [
+        {
+          id: "claim-1",
+          artifactId: "artifact-1",
+          text: "A generic claim",
+          topicKey: "generic",
+          stance: "support" as const,
+          citationIds: ["citation-1"]
+        }
+      ],
+      citations: [
+        {
+          id: "citation-1",
+          artifactId: "artifact-1",
+          url: "https://example.com/generic",
+          title: "Generic source",
+          priority: "analysis" as const
+        }
+      ],
+      contradictions: [],
+      evidenceSummary: {
+        shouldRemainUnclear: false,
+        reasons: [],
+        highestPrioritySeen: "analysis" as const,
+        claimCount: 1,
+        contradictionCount: 0
+      },
+      advisory: null
+    };
+
+    expect(shouldSyncRunToKnowledgeBase(run)).toBe(false);
+
+    await syncRunToKnowledgeBase(
+      run,
+      {
+        id: "project-1",
+        name: "Decision Engine",
+        description: "desc",
+        createdAt: "2026-04-09T00:00:00.000Z",
+        updatedAt: "2026-04-09T00:00:00.000Z"
+      },
+      {
+        repeatedProblems: [],
+        repeatedPatterns: [],
+        competitorSignals: [],
+        contradictionIds: []
+      }
+    );
+
+    await expect(
+      stat(
+        path.join(
+          tempVault,
+          "intake",
+          "pending",
+          "decision-engine-Decision Engine-run-low-value.md"
+        )
+      )
+    ).rejects.toThrow();
+    await expect(stat(path.join(tempVault, "script-calls.log"))).rejects.toThrow();
   });
 });

@@ -6,6 +6,9 @@ import {
   ingestAdvisoryFromFile,
   writeAdvisoryResult
 } from "@/lib/bridge/cli-file";
+import { exportLinkitIngestBundle } from "@/lib/bridge/linkit-export";
+import { publishLinkitBatch } from "@/lib/bridge/linkit-publish";
+import { sendDiscordNotifierFromFile } from "@/lib/bridge/discord-notifier";
 import {
   createProjectRecord,
   createRunRecord,
@@ -35,7 +38,7 @@ import type { SourceArtifact, SourcePriority, SourceTarget } from "@/lib/adapter
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { WORKSPACE_ROOT } from "@/lib/config";
+import { DISCORD_WEBHOOK_URL, WORKSPACE_ROOT } from "@/lib/config";
 import { spawn } from "node:child_process";
 
 const args = process.argv.slice(2);
@@ -46,6 +49,9 @@ export const AI_FIRST_COMMANDS = [
   "create-run",
   "run-research",
   "export-run-bundle",
+  "export-linkit-ingest",
+  "publish-linkit-batch",
+  "send-discord-notifier",
   "execute-external",
   "ingest-advisory",
   "show-run",
@@ -298,6 +304,43 @@ async function cmdExportRunBundle() {
   console.log(JSON.stringify({ projectId, runId, bundleDir: dir }, null, 2));
 }
 
+async function cmdExportLinkitIngest() {
+  const projectId = requireArg("--project");
+  const runId = requireArg("--run");
+  const result = await exportLinkitIngestBundle(projectId, runId);
+  console.log(JSON.stringify(result, null, 2));
+}
+
+async function cmdPublishLinkitBatch() {
+  const projectId = requireArg("--project");
+  const runId = requireArg("--run");
+  const apiBaseUrl = requireArg("--api-base-url");
+  const siteUrl = requireArg("--site-url");
+  const actorEmail = requireArg("--actor-email");
+  const result = await publishLinkitBatch(projectId, runId, {
+    apiBaseUrl,
+    siteUrl,
+    actorEmail,
+  });
+  console.log(JSON.stringify(result, null, 2));
+}
+
+async function cmdSendDiscordNotifier() {
+  const projectId = requireArg("--project");
+  const runId = requireArg("--run");
+  const webhookUrl = getArg("--webhook-url") ?? DISCORD_WEBHOOK_URL;
+
+  if (!webhookUrl) {
+    console.error("Missing required argument: --webhook-url or DISCORD_WEBHOOK_URL");
+    process.exit(1);
+  }
+
+  const result = await sendDiscordNotifierFromFile(projectId, runId, {
+    webhookUrl,
+  });
+  console.log(JSON.stringify(result, null, 2));
+}
+
 async function cmdExecuteExternal() {
   const projectId = requireArg("--project");
   const runId = requireArg("--run");
@@ -417,6 +460,9 @@ AI-driven research (Claude/Codex as primary actor):
 
 External advisory:
   export-run-bundle   --project <id> --run <id>
+  export-linkit-ingest --project <id> --run <id>
+  publish-linkit-batch --project <id> --run <id> --api-base-url <url> --site-url <url> --actor-email <email>
+  send-discord-notifier --project <id> --run <id> [--webhook-url <url>]
   execute-external    --project <id> --run <id> [--provider claude|codex]
   ingest-advisory     --project <id> --run <id> [--provider claude|codex]
 `;
@@ -434,6 +480,9 @@ export function createCommands(): Record<string, () => Promise<void>> {
   "synthesize-run": cmdSynthesizeRun,
   "export-obsidian": cmdExportObsidian,
   "export-run-bundle": cmdExportRunBundle,
+  "export-linkit-ingest": cmdExportLinkitIngest,
+  "publish-linkit-batch": cmdPublishLinkitBatch,
+  "send-discord-notifier": cmdSendDiscordNotifier,
   "execute-external": cmdExecuteExternal,
   "ingest-advisory": cmdIngestAdvisory,
   "show-run": cmdShowRun,

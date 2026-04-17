@@ -1,6 +1,6 @@
 import { normalizeRunInputs } from "@/lib/orchestrator/clarify";
 import type { RunRecord } from "@/lib/storage/schema";
-import type { ResearchPlan, SourceTarget } from "@/lib/adapters/types";
+import type { KnowledgeContext, ResearchPlan, SourceTarget } from "@/lib/adapters/types";
 
 function inferSourceTargets(record: RunRecord): SourceTarget[] {
   const targets: SourceTarget[] = ["web", "community"];
@@ -12,7 +12,7 @@ function inferSourceTargets(record: RunRecord): SourceTarget[] {
   return Array.from(new Set(targets));
 }
 
-export function planRun(record: RunRecord): ResearchPlan {
+export function planRun(record: RunRecord, kbContext: KnowledgeContext | null = null): ResearchPlan {
   const normalizedInput = normalizeRunInputs({
     title: record.run.title,
     naturalLanguage: record.run.input.naturalLanguage,
@@ -26,7 +26,8 @@ export function planRun(record: RunRecord): ResearchPlan {
     title: record.run.title,
     mode: record.run.mode,
     normalizedInput,
-    sourceTargets: inferSourceTargets(record)
+    sourceTargets: inferSourceTargets(record),
+    kbContext
   };
 }
 

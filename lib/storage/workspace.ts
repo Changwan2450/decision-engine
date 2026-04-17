@@ -90,6 +90,7 @@ export async function bootstrapWorkspace(project: Project, run?: Run): Promise<v
     await saveRunRecord({
       run,
       normalizedInput: null,
+      kbContext: null,
       decision: null,
       prdSeed: null,
       artifacts: [],
@@ -172,6 +173,7 @@ export async function createRunRecord(
       now
     }),
     normalizedInput: null,
+    kbContext: null,
     decision: null,
     prdSeed: null,
     artifacts: [],

@@ -32,6 +32,7 @@ function makeRunRecord(input: {
       pastedContent: "",
       urls: []
     },
+    kbContext: null,
     decision: {
       value: "go",
       why: "근거 충분",

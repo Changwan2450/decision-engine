@@ -1,4 +1,7 @@
 import { exportRunBundle, ingestAdvisoryFromFile, writeRunStateSnapshot } from "@/lib/bridge/cli-file";
+import { exportLinkitIngestBundle } from "@/lib/bridge/linkit-export";
+import { publishLinkitBatch } from "@/lib/bridge/linkit-publish";
+import { sendDiscordNotifierFromFile } from "@/lib/bridge/discord-notifier";
 import { queryEvents, queryRuns } from "@/lib/analytics/duckdb";
 import { analyzeHotspots } from "@/lib/analytics/hotspot";
 import { readProjectRecord, readRunRecord } from "@/lib/storage/workspace";
@@ -80,6 +83,46 @@ const TOOLS: ToolDefinition[] = [
         runId: { type: "string" }
       },
       required: ["projectId", "runId"]
+    }
+  },
+  {
+    name: "export_linkit_ingest",
+    description: "Export digest.txt, normalized-items.json, and linkit-ready-items.json for a run.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        runId: { type: "string" }
+      },
+      required: ["projectId", "runId"]
+    }
+  },
+  {
+    name: "publish_linkit_batch",
+    description: "Publish linkit-ready items to Linkit and write discord-notifier.json.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        runId: { type: "string" },
+        apiBaseUrl: { type: "string" },
+        siteUrl: { type: "string" },
+        actorEmail: { type: "string" }
+      },
+      required: ["projectId", "runId", "apiBaseUrl", "siteUrl", "actorEmail"]
+    }
+  },
+  {
+    name: "send_discord_notifier",
+    description: "Send discord-notifier.json through a Discord webhook.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        runId: { type: "string" },
+        webhookUrl: { type: "string" }
+      },
+      required: ["projectId", "runId", "webhookUrl"]
     }
   },
   {
@@ -192,6 +235,35 @@ async function callTool(name: string, args: Record<string, unknown> | undefined)
         requireString(runId, "runId")
       );
       return toToolResult({ projectId, runId, bundleDir });
+    }
+    case "export_linkit_ingest": {
+      const result = await exportLinkitIngestBundle(
+        requireString(projectId, "projectId"),
+        requireString(runId, "runId")
+      );
+      return toToolResult(result);
+    }
+    case "publish_linkit_batch": {
+      const result = await publishLinkitBatch(
+        requireString(projectId, "projectId"),
+        requireString(runId, "runId"),
+        {
+          apiBaseUrl: requireString(args?.apiBaseUrl, "apiBaseUrl"),
+          siteUrl: requireString(args?.siteUrl, "siteUrl"),
+          actorEmail: requireString(args?.actorEmail, "actorEmail")
+        }
+      );
+      return toToolResult(result);
+    }
+    case "send_discord_notifier": {
+      const result = await sendDiscordNotifierFromFile(
+        requireString(projectId, "projectId"),
+        requireString(runId, "runId"),
+        {
+          webhookUrl: requireString(args?.webhookUrl, "webhookUrl")
+        }
+      );
+      return toToolResult(result);
     }
     case "ingest_advisory": {
       const provider = requireString(args?.provider, "provider");

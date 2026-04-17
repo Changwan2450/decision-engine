@@ -45,6 +45,7 @@ function makeRunRecord(input: {
       updatedAt: input.createdAt
     },
     normalizedInput: null,
+    kbContext: null,
     decision: input.decision
       ? {
           value: input.decision.value,

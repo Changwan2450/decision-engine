@@ -46,13 +46,17 @@ A decision-first research system that:
 - Headless-first: `CLI + MCP`, not a browser app
 - Local JSON is the only source of truth
 - DuckDB is a read-only analytics layer
-- Obsidian and external CLI are output / advisory layers
+- Obsidian wiki is both a pre-read prior layer and an export layer
+- QMD is the required search layer in front of the Obsidian wiki
+- External CLI remains an advisory layer
 
 ## Architecture
 
 - Local-first JSON storage is the source of truth
 - Orchestrator pipeline:
-  - `plan -> gather -> synthesize -> evidence -> decision -> insights`
+  - `plan + kb pre-read -> gather fresh evidence -> synthesize -> evidence -> decision -> insights`
+- KB search layer:
+  - `QMD query -> get/multi-get -> kb pre-read`
 - Bridge layer:
   - `bundle -> invoke -> ingest`
 - Analytics layer:
@@ -99,11 +103,23 @@ When an AI agent enters this repo, the shortest reliable read path is:
 
 1. `README.md`
 2. `docs/CLI_SPEC.md`
-3. `docs/SCHEMA.md`
-4. `workspace/{projectId}/project.json`
-5. `workspace/{projectId}/runs/{runId}.json`
-6. `workspace/{projectId}/runs/{runId}/bridge/run-state.json`
-7. `workspace/{projectId}/runs/{runId}/bridge/events.jsonl`
+3. `~/Antigravity WorkSpace/LLM-KB-Core/wiki/START_HERE.md`
+4. `~/Antigravity WorkSpace/LLM-KB-Core/wiki/index.md`
+5. `docs/SCHEMA.md`
+6. `workspace/{projectId}/project.json`
+7. `workspace/{projectId}/runs/{runId}.json`
+8. `workspace/{projectId}/runs/{runId}/bridge/run-state.json`
+9. `workspace/{projectId}/runs/{runId}/bridge/events.jsonl`
+
+## KB Search Rules
+
+- KB 검색은 항상 `QMD`를 먼저 쓴다.
+- 기본 검색:
+  - `qmd query "질문 또는 키워드" --json -n 15 --min-score 0.35 -c wiki`
+- 정밀 검색:
+  - `qmd query "..." --all --files --json -c wiki`
+- 필요한 문서 본문은 `qmd get` 또는 `qmd multi-get`으로 가져온다.
+- `wiki/` 전체를 직접 읽거나 grep해서 KB 검색을 대체하지 않는다.
 
 ## CLI Integration
 

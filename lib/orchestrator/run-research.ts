@@ -5,7 +5,8 @@ import type { ResearchPlan, SourceArtifact } from "@/lib/adapters/types";
 import {
   exportDecisionHistoryToObsidian,
   exportInsightsToObsidian,
-  exportRunToObsidian
+  exportRunToObsidian,
+  syncRunToKnowledgeBase
 } from "@/lib/export/obsidian";
 import { assertRunTransition } from "@/lib/domain/runs";
 import { buildDecisionHistory } from "@/lib/orchestrator/decision-history";
@@ -16,9 +17,11 @@ import {
   deriveProjectInsightPatch,
   synthesizeEvidenceFromArtifacts
 } from "@/lib/orchestrator/insights";
+import { buildKnowledgeArtifacts, buildKnowledgeContext } from "@/lib/orchestrator/kb-context";
 import { planRun } from "@/lib/orchestrator/plan-run";
 import { buildPrdSeed } from "@/lib/orchestrator/prd-seed";
 import {
+  readProjectRecord,
   listRunRecords,
   readRunRecord,
   updateProjectRecord,
@@ -64,7 +67,24 @@ export async function executeResearchRun(
   }
 ) {
   const initialRecord = await readRunRecord(projectId, runId);
-  const plan = planRun(initialRecord);
+  const projectRecord = await readProjectRecord(projectId);
+  const existingRunRecords = await listRunRecords(projectId);
+  const normalizedInputForContext = planRun(initialRecord).normalizedInput;
+  const kbContext = await buildKnowledgeContext({
+    record: {
+      ...initialRecord,
+      normalizedInput: normalizedInputForContext
+    },
+    projectRecord,
+    runRecords: existingRunRecords
+  });
+  const plan = planRun(
+    {
+      ...initialRecord,
+      normalizedInput: normalizedInputForContext
+    },
+    kbContext
+  );
   const now = deps?.now ?? new Date().toISOString();
   const clarificationQuestions = buildClarificationQuestions(plan.normalizedInput);
 
@@ -74,6 +94,7 @@ export async function executeResearchRun(
       return {
         ...record,
         normalizedInput: plan.normalizedInput,
+        kbContext: plan.kbContext,
         run: {
           ...record.run,
           status: "awaiting_clarification",
@@ -89,6 +110,7 @@ export async function executeResearchRun(
     return {
       ...record,
       normalizedInput: plan.normalizedInput,
+      kbContext: plan.kbContext,
       run: {
         ...record.run,
         status: "collecting",
@@ -100,13 +122,18 @@ export async function executeResearchRun(
 
   try {
     const gather = deps?.gather ?? runResearch;
-    const artifacts = await gather(plan);
+    const gatheredArtifacts = await gather(plan);
+    const artifacts = [
+      ...buildKnowledgeArtifacts(plan.kbContext, plan.runId),
+      ...gatheredArtifacts
+    ];
 
     await updateRunRecord(projectId, runId, (record) => {
       assertRunTransition(record.run.status, "synthesizing");
       return {
         ...record,
         normalizedInput: plan.normalizedInput,
+        kbContext: plan.kbContext,
         artifacts,
         run: {
           ...record.run,
@@ -135,6 +162,7 @@ export async function executeResearchRun(
       return {
         ...record,
         normalizedInput: plan.normalizedInput,
+        kbContext: plan.kbContext,
         artifacts: synthesis.artifacts,
         claims: synthesis.claims,
         citations: synthesis.citations,
@@ -185,6 +213,7 @@ export async function executeResearchRun(
       await exportRunToObsidian(finalRecord, updatedProject.project);
       await exportInsightsToObsidian(updatedProject.project, updatedProject.insights);
       await exportDecisionHistoryToObsidian(updatedProject.project, decisionHistory);
+      await syncRunToKnowledgeBase(finalRecord, updatedProject.project, updatedProject.insights);
     } catch (error) {
       console.error("Obsidian export failed", error);
     }
