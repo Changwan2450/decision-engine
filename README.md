@@ -1,97 +1,153 @@
-# Decision Engine (v1 RC) — a decision-first research system with CLI advisory loop
+# Decision Engine
 
-## What it is
+Decision Engine is a decision-first research OS.
 
-A decision-first research system that:
-- turns inputs into evidence
-- generates structured decisions
-- accumulates insights across runs
-- exports to Obsidian
-- connects to external CLI (`Codex` / `Claude`) for advisory workflows
-- exposes an MCP tool surface for AI-first operation
+It is not a browser app and not a generic note-taking wiki. The current product surface is `CLI + MCP`, with local JSON as the source of truth and DuckDB as a read-only analytics layer.
 
-## Who it is for
+## What Exists Now
 
-- builders using `Claude` / `Codex` CLI
-- researchers
-- solo devs
-- AI power users
+Two layers are implemented today.
 
-## Core Concepts
+- Research layer:
+  - creates a run from normalized input
+  - gathers source artifacts through routed adapters
+  - normalizes content to markdown
+  - stores raw payloads with `rawRef`
+  - produces claims, citations, contradictions, evidence summary, and decision state
+- Watch layer:
+  - stores `watch_target`, `digest`, and `inbox_item`
+  - manually triggers a watch target into a normal research run
+  - groups watch-linked runs into a digest with simple novelty detection
+  - creates inbox items from built digests
+  - promotes a digest into a normal project run with explicit trace links
 
-- Project -> container of work
-- Run -> single research execution
-- Evidence -> structured claims + sources
-- Decision -> `go / no_go / unclear`
-- Insights -> accumulated patterns across runs
-- Promotion -> reusable knowledge candidates
-- Decision History -> timeline of decisions
-- External Advisory -> CLI-generated suggestions (read-only)
+## Implemented vs Future Work
 
-## Features
+Implemented:
 
-- Decision-first research pipeline
-- Evidence + contradiction handling
-- Decision Layer (`go / no_go / unclear`)
-- Project-level insights aggregation
-- Obsidian export (`runs + insights + decision history`)
-- DuckDB analytics over `events.jsonl`, run JSON, and workspace state
-- CLI Bridge (`Codex / Claude`)
-  - `prompt_only`
-  - `cli_execute`
-- MCP tools for run/project access and analytics
+- Research PR 1 to PR 4
+- Watch PR W1 to W5
+- Watch shipped surface: manual trigger -> digest -> inbox -> promote with traceable links
+- MCP surface for project/run access, analytics, and routed web fetching
 
-## Current Shape
+Not implemented yet:
 
-- Headless-first: `CLI + MCP`, not a browser app
-- Local JSON is the only source of truth
-- DuckDB is a read-only analytics layer
-- Obsidian wiki is both a pre-read prior layer and an export layer
-- QMD is the required search layer in front of the Obsidian wiki
-- External CLI remains an advisory layer
+- scheduler / cron / webhook driven watch execution
+- Distill runtime
+- KB promotion automation
+- browser UI
+- watch-specific MCP expansion beyond the current Research surface
 
-## Architecture
+## Core Model
 
-- Local-first JSON storage is the source of truth
-- Orchestrator pipeline:
-  - `plan + kb pre-read -> gather fresh evidence -> synthesize -> evidence -> decision -> insights`
-- KB search layer:
-  - `QMD query -> get/multi-get -> kb pre-read`
-- Bridge layer:
-  - `bundle -> invoke -> ingest`
-- Analytics layer:
-  - `events.jsonl -> DuckDB`
-  - `run/project JSON -> DuckDB`
-- MCP layer:
-  - `project/run/bundle/advisory/analytics`
-- External CLI is advisory only
+- Project: container of work and accumulated insights
+- Run: one research execution
+- Source artifact: fetched and normalized source plus metadata
+- Decision: `go | no_go | unclear`
+- Watch target: saved recurring interest definition
+- Digest: grouped output over watch-linked source runs
+- Inbox item: first Watch consumption surface
+- Project origin: trace from promoted Watch output back into a normal project run
 
-## Safety Model
+## Runtime Shape
 
-- Internal decision = source of truth
-- External CLI cannot overwrite decision
-- Advisory = append-only
-- Contradictions are explicitly tracked
+- Headless-first: `CLI + MCP`
+- Local workspace JSON is the source of truth
+- QMD is the required KB search layer in front of Obsidian wiki prior
+- External CLI remains advisory only
+- `run.mode` is still Research execution depth: `quick | standard | deep`
+- Watch uses `watchContext` and `projectOrigin`; it does not add a new run mode
 
-## Requirements
+## Research Flow
 
-- Node.js `20.x` required
-- `pnpm`
-- Optional:
-  - `codex` CLI
-  - `claude` CLI
-  - Obsidian for export
+Research runs use one routed gather path.
 
-## Quick Start
+1. Normalize input.
+2. Read KB prior through QMD.
+3. Route each URL with `routeUrl()`.
+4. Try primary adapter, then fallback adapters within budget.
+5. Normalize fetched content to markdown and store raw payloads.
+6. Build source artifacts, claims, citations, contradictions, and decision state.
+
+Current Research implementation includes:
+
+- adapter contract unification
+- `scrapling` and `agent-reach` adapters
+- router rules and adapter registry
+- total / per-url / per-adapter budgets with fallback budget guard
+- MCP `fetch_web(url)` and `gather_for_run(runId)`
+
+## Watch Flow
+
+Watch reuses the Research substrate. It is a different run creation path, not a different fetch pipeline.
+
+1. Save a `watch_target`.
+2. Manually trigger it.
+3. Create a normal run with `watchContext`.
+4. Reuse the existing Research runtime.
+5. Build a digest from `sourceRunIds`.
+6. Create inbox items from the built digest.
+7. Promote a digest into a normal project run with `projectOrigin`.
+
+Minimal example flow:
+
+```text
+watch_target
+  -> triggerWatchTarget()
+  -> runRecord.watchContext
+  -> executeResearchRun()
+  -> buildWatchDigest(sourceRunIds)
+  -> inbox_item(kind=digest)
+  -> promoteDigestToProject()
+  -> runRecord.projectOrigin
+```
+
+## Storage Layout
+
+Workspace paths in current use:
+
+```text
+workspace/{projectId}/project.json
+workspace/{projectId}/runs/{runId}.json
+workspace/{projectId}/runs/{runId}/bridge/bundle.json
+workspace/{projectId}/runs/{runId}/bridge/bundle.md
+workspace/{projectId}/runs/{runId}/bridge/advisory.json
+workspace/{projectId}/runs/{runId}/bridge/run-state.json
+workspace/{projectId}/runs/{runId}/bridge/events.jsonl
+workspace/{projectId}/watch-targets/{watchTargetId}.json
+workspace/{projectId}/digests/{digestId}.json
+workspace/{projectId}/inbox/{itemId}.json
+workspace/{projectId}/raw/{...}
+```
+
+## MCP Tools
+
+Core:
+
+- `get_project`
+- `get_run`
+- `show_run_state`
+- `export_bundle`
+- `ingest_advisory`
+
+Analytics:
+
+- `query_events`
+- `query_runs`
+
+Research fetch surface:
+
+- `fetch_web`
+- `gather_for_run`
+
+Extension:
+
+- `analyze_hotspots`
+
+## CLI Entry Points
 
 ```bash
 pnpm install
-pnpm cli --help
-```
-
-## Core Entry Points
-
-```bash
 pnpm cli --help
 pnpm mcp
 pnpm test
@@ -103,13 +159,11 @@ When an AI agent enters this repo, the shortest reliable read path is:
 
 1. `README.md`
 2. `docs/CLI_SPEC.md`
-3. `~/Antigravity WorkSpace/LLM-KB-Core/wiki/START_HERE.md`
-4. `~/Antigravity WorkSpace/LLM-KB-Core/wiki/index.md`
-5. `docs/SCHEMA.md`
-6. `workspace/{projectId}/project.json`
-7. `workspace/{projectId}/runs/{runId}.json`
-8. `workspace/{projectId}/runs/{runId}/bridge/run-state.json`
-9. `workspace/{projectId}/runs/{runId}/bridge/events.jsonl`
+3. `docs/SCHEMA.md`
+4. `workspace/{projectId}/project.json`
+5. `workspace/{projectId}/runs/{runId}.json`
+6. `workspace/{projectId}/runs/{runId}/bridge/run-state.json`
+7. `workspace/{projectId}/runs/{runId}/bridge/events.jsonl`
 
 ## KB Search Rules
 
@@ -121,53 +175,17 @@ When an AI agent enters this repo, the shortest reliable read path is:
 - 필요한 문서 본문은 `qmd get` 또는 `qmd multi-get`으로 가져온다.
 - `wiki/` 전체를 직접 읽거나 grep해서 KB 검색을 대체하지 않는다.
 
-## CLI Integration
+## Safety Model
 
-- provider: `codex | claude`
-- mode:
-  - `prompt_only` -> copy prompt
-  - `cli_execute` -> run CLI directly
+- Internal decision remains the source of truth
+- External CLI cannot overwrite a decision
+- Advisory is append-only
+- Watch promotion creates trace links but does not overwrite prior run history
 
-Advisory output:
-- `external_summary`
-- `suggested_next_actions`
-- `notes`
+## Current Limits
 
-## MCP Tools
-
-Core:
-- `get_project`
-- `get_run`
-- `show_run_state`
-- `export_bundle`
-- `ingest_advisory`
-
-Analytics:
-- `query_events`
-- `query_runs`
-
-Extension:
-- `analyze_hotspots`
-
-## Obsidian Export
-
-Path example:
-
-```text
-/Users/.../second-brain/DecisionEngine/
-```
-
-Exports:
-- runs
-- insights
-- decision-history
-
-## Known Limitations
-
-- No background jobs
-- CLI must be installed locally
-- macOS subprocess permissions may require manual setup
-- Current release is headless-first (`CLI + MCP`), not a web app
-- No decision overwrite
-- No merge UI
-- Some repo history still reflects the removed UI phase
+- No background scheduler
+- No Distill runtime
+- No KB promotion automation
+- No browser UI
+- CLI tools must be installed locally when used
