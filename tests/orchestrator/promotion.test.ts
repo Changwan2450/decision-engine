@@ -26,12 +26,15 @@ function makeRunRecord(input: {
       createdAt: "2026-04-09T00:00:00.000Z",
       updatedAt: "2026-04-09T00:00:00.000Z"
     },
+    watchContext: null,
+    projectOrigin: null,
     normalizedInput: {
       title: "run",
       naturalLanguage: "",
       pastedContent: "",
       urls: []
     },
+    expansion: null,
     kbContext: null,
     decision: {
       value: "go",
@@ -83,7 +86,8 @@ function makeRunRecord(input: {
       highestPrioritySeen: input.highestPrioritySeen,
       claimCount: 1,
       contradictionCount: input.contradictionCount ?? 0
-    }
+    },
+    advisory: null
   };
 }
 

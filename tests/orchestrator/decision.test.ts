@@ -127,8 +127,7 @@ describe("prd seed", () => {
 
     const decision = buildDecision(evidence, {
       runTitle: "숏츠 시장 진입",
-      goal: "숏츠 시장 진입 여부 판단",
-      target: "20대 크리에이터"
+      goal: "숏츠 시장 진입 여부 판단"
     });
 
     const prdSeed = buildPrdSeed(decision, evidence, {

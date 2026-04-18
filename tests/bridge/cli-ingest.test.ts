@@ -18,7 +18,10 @@ const runRecord: RunRecord = {
     createdAt: "2026-04-09T10:00:00.000Z",
     updatedAt: "2026-04-09T10:00:00.000Z"
   },
+  watchContext: null,
+  projectOrigin: null,
   normalizedInput: null,
+  expansion: null,
   kbContext: null,
   decision: {
     value: "go",

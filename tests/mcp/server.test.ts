@@ -740,17 +740,17 @@ describe("mcp server", () => {
     const { createMcpHandler } = await import("@/lib/mcp/server");
 
     const handleMcpRequest = createMcpHandler({
-      runSchedulerTick: async ({ projectId }) => ({
+      runSchedulerTick: async (deps) => ({
         triggered: [
           {
-            projectId: projectId ?? project.project.id,
+            projectId: deps?.projectId ?? project.project.id,
             watchTargetId: "watch-1",
             runId: "run-1"
           }
         ],
         skipped: [
           {
-            projectId: projectId ?? project.project.id,
+            projectId: deps?.projectId ?? project.project.id,
             watchTargetId: "watch-2",
             reason: "not_due"
           }

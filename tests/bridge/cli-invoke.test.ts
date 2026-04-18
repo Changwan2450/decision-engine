@@ -33,7 +33,10 @@ const latestRun: RunRecord = {
     createdAt: "2026-04-09T10:00:00.000Z",
     updatedAt: "2026-04-09T10:00:00.000Z"
   },
+  watchContext: null,
+  projectOrigin: null,
   normalizedInput: null,
+  expansion: null,
   kbContext: null,
   decision: {
     value: "go",
@@ -56,7 +59,7 @@ function createChildProcessStub() {
     stdout: PassThrough;
     stderr: PassThrough;
     stdin: PassThrough;
-    kill: (signal?: NodeJS.Signals | number) => void;
+    kill: (signal?: NodeJS.Signals | number) => boolean;
     killed: boolean;
   };
 
@@ -95,9 +98,12 @@ describe("cli invoke", () => {
 
     expect(invocation.provider).toBe("codex");
     expect(invocation.mode).toBe("prompt_only");
-    expect(invocation.prompt).toContain("# Decision Engine Bundle");
-    expect(invocation.bundleJson).toContain("\"schemaVersion\": \"cli-bridge-v1\"");
-    expect(invocation.bundleMarkdown).toContain("Return advisory output only");
+    expect(invocation.ok).toBe(true);
+    if (invocation.ok) {
+      expect(invocation.prompt).toContain("# Decision Engine Bundle");
+      expect(invocation.bundleJson).toContain("\"schemaVersion\": \"cli-bridge-v1\"");
+      expect(invocation.bundleMarkdown).toContain("Return advisory output only");
+    }
   });
 
   it("returns explicit not implemented result for cli_execute mode", () => {
@@ -121,7 +127,9 @@ describe("cli invoke", () => {
     const invocation = createPromptOnlyInvocation(bundle);
 
     expect(invocation.ok).toBe(false);
-    expect(invocation.error).toBe("cli_execute is not implemented in cli-bridge-v1");
+    if (!invocation.ok) {
+      expect(invocation.error).toBe("cli_execute is not implemented in cli-bridge-v1");
+    }
   });
 
   it("executes cli and parses advisory json", async () => {
@@ -159,7 +167,7 @@ describe("cli invoke", () => {
           child.emit("close", 0);
         });
 
-        return child;
+        return child as any;
       }
     });
 
@@ -203,7 +211,7 @@ describe("cli invoke", () => {
           child.emit("close", 0);
         });
 
-        return child;
+        return child as any;
       }
     });
 
@@ -245,14 +253,16 @@ describe("cli invoke", () => {
           child.emit("close", 1);
         });
 
-        return child;
+        return child as any;
       }
     });
 
     const result = await resultPromise;
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("exited with code 1");
+    if (!result.success) {
+      expect(result.error).toContain("exited with code 1");
+    }
     expect(result.rawOutput).toBe("");
   });
 
@@ -278,11 +288,13 @@ describe("cli invoke", () => {
     const result = await executeCliInvocation(bundle, {
       now: "2026-04-09T12:00:01.000Z",
       timeoutMs: 10,
-      spawnImpl: () => child
+      spawnImpl: () => child as any
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe("CLI execution timed out");
+    if (!result.success) {
+      expect(result.error).toBe("CLI execution timed out");
+    }
     expect(child.killed).toBe(true);
   });
 });

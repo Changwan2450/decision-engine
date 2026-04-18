@@ -36,7 +36,10 @@ describe("obsidian export", () => {
           createdAt: "2026-04-09T00:00:00.000Z",
           updatedAt: "2026-04-09T00:00:00.000Z"
         },
+        watchContext: null,
+        projectOrigin: null,
         normalizedInput: null,
+        expansion: null,
         kbContext: null,
         decision: {
           value: "go",
@@ -80,7 +83,8 @@ describe("obsidian export", () => {
           highestPrioritySeen: "official",
           claimCount: 1,
           contradictionCount: 0
-        }
+        },
+        advisory: null
       },
       {
         id: "project-1",
@@ -137,7 +141,10 @@ describe("obsidian export", () => {
               createdAt: "2026-04-09T00:00:00.000Z",
               updatedAt: "2026-04-09T00:00:00.000Z"
             },
+            watchContext: null,
+            projectOrigin: null,
             normalizedInput: null,
+            expansion: null,
             kbContext: null,
             decision: {
               value: "go",
@@ -192,19 +199,22 @@ describe("obsidian export", () => {
       "@/lib/export/obsidian"
     );
 
-    const run = {
+    const run: import("@/lib/storage/schema").RunRecord = {
       run: {
         id: "run-low-value",
         projectId: "project-1",
         title: "generic scan",
-        mode: "standard",
-        status: "decided",
+        mode: "standard" as const,
+        status: "decided" as const,
         clarificationQuestions: [],
         input: { naturalLanguage: "", pastedContent: "", urls: [] },
         createdAt: "2026-04-09T00:00:00.000Z",
         updatedAt: "2026-04-09T00:00:00.000Z"
       },
+      watchContext: null,
+      projectOrigin: null,
       normalizedInput: null,
+      expansion: null,
       kbContext: null,
       decision: {
         value: "go" as const,

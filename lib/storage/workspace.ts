@@ -195,6 +195,8 @@ export async function bootstrapWorkspace(project: Project, run?: Run): Promise<v
   if (run) {
     await saveRunRecord({
       run,
+      watchContext: null,
+      projectOrigin: null,
       normalizedInput: null,
       expansion: null,
       kbContext: null,
@@ -360,6 +362,8 @@ export async function createRunRecord(
       urls: input.urls,
       now
     }),
+    watchContext: null,
+    projectOrigin: null,
     normalizedInput: null,
     expansion: null,
     kbContext: null,

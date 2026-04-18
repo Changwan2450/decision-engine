@@ -118,7 +118,10 @@ function renderKbSyncNote(
   const contradictionBlock =
     contradictions.length > 0
       ? contradictions
-          .map((item) => `- contradiction: ${item.claimIds.join(" vs ")}\n  - why: ${item.reason}`)
+          .map(
+            (item) =>
+              `- contradiction: ${item.claimIds.join(" vs ")}\n  - status: ${item.status}\n  - resolution: ${item.resolution}`
+          )
           .join("\n")
       : "- contradiction: none";
   const suggestedTarget =
