@@ -12,6 +12,7 @@ import {
   syncRunToKnowledgeBase
 } from "@/lib/export/obsidian";
 import { buildClarificationQuestions, shouldClarifyRun } from "@/lib/orchestrator/clarify";
+import { classifyContradictionKind } from "@/lib/orchestrator/contradiction-kind";
 import { buildDecision } from "@/lib/orchestrator/decision";
 import { buildDecisionHistory } from "@/lib/orchestrator/decision-history";
 import {
@@ -30,6 +31,7 @@ import {
   updateProjectRecord,
   updateRunRecord
 } from "@/lib/storage/workspace";
+import type { Claim, Citation, Contradiction, SourceArtifactRecord, SourceTier } from "@/lib/domain/claims";
 
 type RunResearchDeps = {
   registry?: AdapterRegistry;
@@ -363,6 +365,53 @@ function attachSourceTiers(artifacts: SourceArtifact[]): SourceArtifact[] {
   }));
 }
 
+function resolveTierForClaim(
+  claim: Claim | undefined,
+  citationById: Map<string, Citation>,
+  artifactById: Map<string, SourceArtifactRecord>
+): SourceTier | null {
+  if (!claim) return null;
+
+  // TODO(SI3-v2): consider multiple citation tiers instead of first-citation fallback.
+  for (const citationId of claim.citationIds) {
+    const citation = citationById.get(citationId);
+    const artifact = citation ? artifactById.get(citation.artifactId) : undefined;
+    if (artifact?.sourceTier) {
+      return artifact.sourceTier;
+    }
+  }
+
+  return null;
+}
+
+function attachContradictionKinds(
+  contradictions: Contradiction[],
+  claims: Claim[],
+  citations: Citation[],
+  artifacts: SourceArtifactRecord[]
+): Contradiction[] {
+  const claimById = new Map(claims.map((claim) => [claim.id, claim]));
+  const citationById = new Map(citations.map((citation) => [citation.id, citation]));
+  const artifactById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
+
+  return contradictions.map((contradiction) => {
+    const [claimIdA, claimIdB] = contradiction.claimIds;
+    const tierA = resolveTierForClaim(claimById.get(claimIdA), citationById, artifactById);
+    const tierB = resolveTierForClaim(claimById.get(claimIdB), citationById, artifactById);
+
+    if (!tierA || !tierB) {
+      return contradiction;
+    }
+
+    return {
+      ...contradiction,
+      kind: classifyContradictionKind(tierA, tierB),
+      tierA,
+      tierB
+    };
+  });
+}
+
 export async function executeResearchRun(
   projectId: string,
   runId: string,
@@ -466,6 +515,12 @@ export async function executeResearchRun(
       comparisonAxis: plan.normalizedInput.comparisonAxis
     });
     const synthesizedArtifacts = attachSourceTiers(synthesis.artifacts);
+    const contradictions = attachContradictionKinds(
+      synthesis.contradictions,
+      synthesis.claims,
+      synthesis.citations,
+      synthesizedArtifacts
+    );
 
     const finalRecord = await updateRunRecord(projectId, runId, (record) => {
       assertRunTransition(record.run.status, "decided");
@@ -476,7 +531,7 @@ export async function executeResearchRun(
         artifacts: synthesizedArtifacts,
         claims: synthesis.claims,
         citations: synthesis.citations,
-        contradictions: synthesis.contradictions,
+        contradictions,
         evidenceSummary: synthesis.summary,
         decision,
         prdSeed,

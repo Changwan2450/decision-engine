@@ -117,6 +117,7 @@ describe("mcp server", () => {
       "show_run_state",
       "run_research",
       "clarify_run",
+      "suggest_followup_run",
       "fetch_web",
       "gather_for_run",
       "list_watch_targets",
@@ -217,6 +218,17 @@ describe("mcp server", () => {
               }
             }
           ],
+          contradictions: [
+            {
+              id: "contradiction-0",
+              claimIds: ["claim-0", "claim-1"],
+              status: "flagged",
+              resolution: "unresolved",
+              kind: "official_vs_community",
+              tierA: "official",
+              tierB: "community"
+            }
+          ],
           decision: {
             value: "go",
             confidence: "high",
@@ -238,7 +250,7 @@ describe("mcp server", () => {
       urls: ["https://example.com/report"]
     });
 
-    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string; sourceTier: string }>; tierDistribution: { official: number; primary: number; internal: number; community: number; aggregator: number; unknown: number }; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: null; expandedQueries: Array<{ axis: string; source: string; url: string }>; expansionDropped: number } } } }).result;
+    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string; sourceTier: string }>; tierDistribution: { official: number; primary: number; internal: number; community: number; aggregator: number; unknown: number }; contradictionSignals: Array<{ id: string; kind: string; tierA: string; tierB: string; reason: string; followupAvailable: boolean }>; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: null; expandedQueries: Array<{ axis: string; source: string; url: string }>; expansionDropped: number } } } }).result;
     const stored = await workspace.readRunRecord(project.project.id, result.structuredContent.run.id);
 
     expect(result.structuredContent.run.status).toBe("decided");
@@ -260,6 +272,16 @@ describe("mcp server", () => {
       aggregator: 0,
       unknown: 0
     });
+    expect(result.structuredContent.mcpSummary.contradictionSignals).toEqual([
+      {
+        id: "contradiction-0",
+        kind: "official_vs_community",
+        tierA: "official",
+        tierB: "community",
+        reason: "공식 문서와 커뮤니티 경험 충돌. 실 사용 시나리오 확인 필요.",
+        followupAvailable: true
+      }
+    ]);
     expect(result.structuredContent.mcpSummary.paths.bundlePath).toContain(`${project.project.id}/runs/${result.structuredContent.run.id}/bridge/bundle.md`);
     expect(result.structuredContent.mcpSummary.paths.snapshotPath).toContain(`${project.project.id}/runs/${result.structuredContent.run.id}/bridge/run-state.json`);
     expect(result.structuredContent.mcpSummary.recommendedNextTools).toEqual([
@@ -548,6 +570,100 @@ describe("mcp server", () => {
     expect(result.structuredContent.adapter).toBe("mcp/fetch_web");
     expect(result.structuredContent.metadata.fetch_status).toBe("error");
     expect(result.structuredContent.metadata.error).toContain("network exploded");
+  });
+
+  it("builds follow-up suggestions for contradiction signals", async () => {
+    await setupTempWorkspace();
+
+    const workspace = await import("@/lib/storage/workspace");
+    const project = await workspace.createProjectRecord({
+      name: "Decision Engine",
+      description: "AI-first"
+    });
+    const run = await workspace.createRunRecord(project.project.id, {
+      title: "시장 진입 판단",
+      naturalLanguage: "시장 진입 여부 판단"
+    });
+
+    await workspace.updateRunRecord(project.project.id, run.run.id, (record) => ({
+      ...record,
+      normalizedInput: {
+        title: record.run.title,
+        naturalLanguage: "시장 진입 여부 판단",
+        pastedContent: "",
+        urls: [],
+        goal: "결정",
+        target: "solo 개발자",
+        comparisonAxis: "기존 채널"
+      },
+      contradictions: [
+        {
+          id: "contradiction-1",
+          claimIds: ["claim-1", "claim-2"],
+          status: "flagged",
+          resolution: "unresolved",
+          kind: "internal_vs_community",
+          tierA: "internal",
+          tierB: "community"
+        },
+        {
+          id: "contradiction-2",
+          claimIds: ["claim-3", "claim-4"],
+          status: "flagged",
+          resolution: "unresolved",
+          kind: "aggregator_only",
+          tierA: "aggregator",
+          tierB: "aggregator"
+        }
+      ]
+    }));
+
+    const followupResponse = await callTool("suggest_followup_run", {
+      projectId: project.project.id,
+      runId: run.run.id,
+      contradictionId: "contradiction-1"
+    });
+    const followupResult = (followupResponse as { result: { structuredContent: { contradictionId: string; kind: string; followup: { suggestedTitle: string; suggestedNaturalLanguage: string; suggestedComparisonAxis: string } } } }).result;
+
+    expect(followupResult.structuredContent.contradictionId).toBe("contradiction-1");
+    expect(followupResult.structuredContent.kind).toBe("internal_vs_community");
+    expect(followupResult.structuredContent.followup).toEqual({
+      suggestedTitle: "시장 진입 판단 — 내 KB 대비 최신 커뮤니티 의견 재검증",
+      suggestedNaturalLanguage:
+        "목표: 내부 지식과 커뮤니티 의견이 충돌. 내 KB가 stale일 가능성.\n대상: solo 개발자\n비교: 내 KB 기준, 커뮤니티 최신 의견",
+      suggestedComparisonAxis: "내 KB 기준, 커뮤니티 최신 의견"
+    });
+
+    const aggregatorOnlyResponse = await callTool("suggest_followup_run", {
+      projectId: project.project.id,
+      runId: run.run.id,
+      contradictionId: "contradiction-2"
+    });
+    const aggregatorOnlyResult = (aggregatorOnlyResponse as { result: { structuredContent: { contradictionId: string; kind: string; followup: null } } }).result;
+
+    expect(aggregatorOnlyResult.structuredContent).toEqual({
+      contradictionId: "contradiction-2",
+      kind: "aggregator_only",
+      followup: null
+    });
+
+    const missingContradictionResponse = await callTool("suggest_followup_run", {
+      projectId: project.project.id,
+      runId: run.run.id,
+      contradictionId: "missing-contradiction"
+    });
+    expect((missingContradictionResponse as { error: { message: string } }).error.message).toBe(
+      "contradiction_not_found"
+    );
+
+    const missingRunResponse = await callTool("suggest_followup_run", {
+      projectId: project.project.id,
+      runId: "missing-run",
+      contradictionId: "contradiction-1"
+    });
+    expect((missingRunResponse as { error: { message: string } }).error.message).toBe(
+      "run_not_found"
+    );
   });
 
   it("returns gathered artifacts for gather_for_run", async () => {

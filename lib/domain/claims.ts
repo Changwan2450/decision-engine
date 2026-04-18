@@ -110,11 +110,25 @@ export const claimSchema = z.object({
   citationIds: z.array(z.string().min(1)).min(1)
 });
 
+export const contradictionKindSchema = z.enum([
+  "internal_vs_community",
+  "internal_vs_official",
+  "internal_vs_primary",
+  "official_vs_community",
+  "primary_vs_community",
+  "aggregator_only",
+  "community_only",
+  "mixed"
+]);
+
 export const contradictionSchema = z.object({
   id: z.string().min(1),
   claimIds: z.array(z.string().min(1)).length(2),
   status: z.enum(["flagged", "reviewed"]).default("flagged"),
-  resolution: z.enum(["unresolved", "accepted", "dismissed"]).default("unresolved")
+  resolution: z.enum(["unresolved", "accepted", "dismissed"]).default("unresolved"),
+  kind: contradictionKindSchema.optional(),
+  tierA: sourceTierSchema.optional(),
+  tierB: sourceTierSchema.optional()
 });
 
 export const evidenceSummarySchema = z.object({
@@ -135,6 +149,7 @@ export type SourceArtifactRecord = z.infer<typeof sourceArtifactSchema>;
 export type SourceTier = z.infer<typeof sourceTierSchema>;
 export type Citation = z.infer<typeof citationSchema>;
 export type Claim = z.infer<typeof claimSchema>;
+export type ContradictionKind = z.infer<typeof contradictionKindSchema>;
 export type Contradiction = z.infer<typeof contradictionSchema>;
 export type EvidenceSummary = z.infer<typeof evidenceSummarySchema>;
 export type FetchStatus = z.infer<typeof fetchStatusSchema>;

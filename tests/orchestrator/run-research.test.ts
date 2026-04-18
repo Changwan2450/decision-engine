@@ -204,7 +204,7 @@ describe("executeResearchRun", () => {
     expect(storedRun.artifacts).toHaveLength(2);
     expect(storedRun.artifacts[0]?.adapter).toBe("kb-preread");
     expect(storedRun.artifacts.every((artifact) => artifact.sourceTier)).toBe(true);
-    expect(storedRun.artifacts[0]?.sourceTier).toBe("unknown");
+    expect(storedRun.artifacts[0]?.sourceTier).toBe("internal");
     expect(storedRun.artifacts[1]?.sourceTier).toBe("unknown");
     expect(storedRun.claims.some((claim) => claim.artifactId.startsWith("kb-preread-"))).toBe(true);
     expect(storedRun.decision?.value).toBe("go");
@@ -352,6 +352,91 @@ describe("executeResearchRun", () => {
       "analysis",
       "official"
     ]);
+  });
+
+  it("attaches contradiction kinds before persisting the final run", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "research-contradiction-kind-"));
+    tempVault = await mkdtemp(path.join(os.tmpdir(), "research-contradiction-kind-vault-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+    process.env.OBSIDIAN_VAULT_PATH = tempVault;
+    setQmdClientForTests({
+      async operatorNotes() {
+        return [];
+      },
+      async queryNotes() {
+        return [];
+      }
+    });
+
+    const { createProjectRecord, createRunRecord, readRunRecord } = await import(
+      "@/lib/storage/workspace"
+    );
+    const { executeResearchRun } = await import("@/lib/orchestrator/run-research");
+
+    const project = await createProjectRecord({
+      name: "Contradictions",
+      description: "kind tagging"
+    });
+    const run = await createRunRecord(project.project.id, {
+      title: "시장 판단",
+      naturalLanguage: "목표: 결정\n대상: 개발자\n비교: 커뮤니티"
+    });
+
+    await executeResearchRun(project.project.id, run.run.id, {
+      now: "2026-04-19T00:00:00.000Z",
+      gather: async () => [
+        {
+          id: "artifact-internal",
+          adapter: "kb-preread",
+          url: "https://kb.local/wiki/run-1",
+          sourceType: "kb",
+          title: "KB prior",
+          content: "body",
+          snippet: "prior",
+          sourcePriority: "analysis",
+          sourceTier: "internal",
+          metadata: {
+            fetcher: "kb-preread",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false",
+            claims_json: JSON.stringify([
+              { text: "내부 KB는 안정적이라고 본다.", topicKey: "stability", stance: "support" }
+            ])
+          }
+        },
+        {
+          id: "artifact-community",
+          adapter: "agent-reach",
+          url: "https://www.reddit.com/search.json?q=test",
+          sourceType: "community",
+          title: "Community signal",
+          content: "body",
+          snippet: "community",
+          sourcePriority: "community",
+          sourceTier: "community",
+          metadata: {
+            fetcher: "agent-reach",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false",
+            claims_json: JSON.stringify([
+              { text: "커뮤니티는 불안정하다고 본다.", topicKey: "stability", stance: "oppose" }
+            ])
+          }
+        }
+      ]
+    });
+
+    const storedRun = await readRunRecord(project.project.id, run.run.id);
+    expect(storedRun.contradictions).toHaveLength(1);
+    expect(storedRun.contradictions[0]).toMatchObject({
+      kind: "internal_vs_community",
+      tierA: "internal",
+      tierB: "community"
+    });
   });
 
   it("falls back to per-file get when qmd multi-get returns invalid json", async () => {

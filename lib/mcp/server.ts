@@ -8,7 +8,7 @@ import { sendDiscordNotifierFromFile } from "@/lib/bridge/discord-notifier";
 import { exportLinkitIngestBundle } from "@/lib/bridge/linkit-export";
 import { publishLinkitBatch } from "@/lib/bridge/linkit-publish";
 import { WORKSPACE_ROOT } from "@/lib/config";
-import type { SourceTier } from "@/lib/domain/claims";
+import type { Contradiction, ContradictionKind, SourceTier } from "@/lib/domain/claims";
 import { executeResearchRun, fetchWeb, gatherForRun } from "@/lib/orchestrator/run-research";
 import { buildWatchDigest } from "@/lib/orchestrator/watch-digest";
 import { promoteDigestToProject } from "@/lib/orchestrator/watch-inbox";
@@ -130,6 +130,19 @@ const TOOLS: ToolDefinition[] = [
         }
       },
       required: ["projectId", "runId"]
+    }
+  },
+  {
+    name: "suggest_followup_run",
+    description: "Build a follow-up research suggestion from one contradiction without executing a new run.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        runId: { type: "string" },
+        contradictionId: { type: "string" }
+      },
+      required: ["projectId", "runId", "contradictionId"]
     }
   },
   {
@@ -476,6 +489,56 @@ function buildRecommendedNextTools(status: string) {
   return ["get_run", "show_run_state"];
 }
 
+const FOLLOWUP_TEMPLATES: Record<
+  ContradictionKind,
+  {
+    suggestedTitle: ((origin: string) => string) | null;
+    comparisonAxis: ((origin: string) => string) | null;
+    reason: string;
+  }
+> = {
+  internal_vs_community: {
+    suggestedTitle: (origin) => `${origin} — 내 KB 대비 최신 커뮤니티 의견 재검증`,
+    comparisonAxis: () => "내 KB 기준, 커뮤니티 최신 의견",
+    reason: "내부 지식과 커뮤니티 의견이 충돌. 내 KB가 stale일 가능성."
+  },
+  internal_vs_official: {
+    suggestedTitle: (origin) => `${origin} — 공식 문서 기준으로 내 KB 갱신 필요 여부`,
+    comparisonAxis: () => "내 KB 기준, 공식 문서 최신",
+    reason: "내부 지식과 공식 출처 충돌. 공식이 맞다면 KB 업데이트 후보."
+  },
+  internal_vs_primary: {
+    suggestedTitle: (origin) => `${origin} — 1차 자료 기준 내 KB 갱신 필요 여부`,
+    comparisonAxis: () => "내 KB, 1차 자료",
+    reason: "내부 지식과 외부 1차 자료 충돌."
+  },
+  official_vs_community: {
+    suggestedTitle: (origin) => `${origin} — 공식 주장 vs 실 사용자 경험 차이`,
+    comparisonAxis: () => "공식 주장, 실제 운영 경험",
+    reason: "공식 문서와 커뮤니티 경험 충돌. 실 사용 시나리오 확인 필요."
+  },
+  primary_vs_community: {
+    suggestedTitle: (origin) => `${origin} — 1차 데이터 vs 실사용 보고 차이`,
+    comparisonAxis: () => "1차 데이터, 현장 경험",
+    reason: "1차 자료와 현장 보고 사이 편차."
+  },
+  aggregator_only: {
+    suggestedTitle: null,
+    comparisonAxis: null,
+    reason: "aggregator-only 충돌 — 원천 재확인 권장, 신규 run 가치 낮음."
+  },
+  community_only: {
+    suggestedTitle: (origin) => `${origin} — 커뮤니티 의견 분산 원인`,
+    comparisonAxis: () => "긍정 사례, 부정 사례",
+    reason: "커뮤니티 내부에서 의견 분산. 조건별 차이 확인."
+  },
+  mixed: {
+    suggestedTitle: (origin) => `${origin} — 상충 근거 추가 조사`,
+    comparisonAxis: () => "긍정 근거, 부정 근거",
+    reason: "복수 tier에서 상충 주장. 범위 좁혀 재조사."
+  }
+};
+
 function buildNextToolCall(record: Awaited<ReturnType<typeof executeResearchRun>>) {
   if (record.run.status === "awaiting_clarification") {
     return {
@@ -546,6 +609,49 @@ function buildClarificationTemplate(record: Awaited<ReturnType<typeof executeRes
   };
 }
 
+function buildContradictionSignals(contradictions: Contradiction[]) {
+  return contradictions.map((contradiction) => {
+    const kind = contradiction.kind ?? "mixed";
+    const template = FOLLOWUP_TEMPLATES[kind];
+    return {
+      id: contradiction.id,
+      kind,
+      tierA: contradiction.tierA ?? "unknown",
+      tierB: contradiction.tierB ?? "unknown",
+      reason: template.reason,
+      followupAvailable: template.suggestedTitle !== null
+    };
+  });
+}
+
+function buildFollowupSuggestion(params: {
+  title: string;
+  contradiction: Contradiction;
+  target?: string;
+}) {
+  const kind = params.contradiction.kind ?? "mixed";
+  const template = FOLLOWUP_TEMPLATES[kind];
+
+  if (!template.suggestedTitle || !template.comparisonAxis) {
+    return null;
+  }
+
+  const suggestedComparisonAxis = template.comparisonAxis(params.title);
+  return {
+    contradictionId: params.contradiction.id,
+    kind,
+    followup: {
+      suggestedTitle: template.suggestedTitle(params.title),
+      suggestedNaturalLanguage: [
+        `목표: ${template.reason}`,
+        `대상: ${params.target ?? "추가 검토 대상"}`,
+        `비교: ${suggestedComparisonAxis}`
+      ].join("\n"),
+      suggestedComparisonAxis
+    }
+  };
+}
+
 function buildRunBridgePaths(projectId: string, runId: string) {
   const bridgeDir = path.join(WORKSPACE_ROOT, projectId, "runs", runId, "bridge");
   return {
@@ -572,6 +678,7 @@ function withMcpSummary(record: Awaited<ReturnType<typeof executeResearchRun>>) 
       clarificationQuestions: record.run.clarificationQuestions,
       topArtifacts: summarizeArtifacts(record.artifacts),
       tierDistribution: buildTierDistribution(record.artifacts),
+      contradictionSignals: buildContradictionSignals(record.contradictions),
       expandedQueries: record.expansion?.expanded ?? [],
       expansionDropped: record.expansion?.dropped ?? 0,
       paths,
@@ -680,6 +787,32 @@ async function callTool(
       await mergeClarificationInput(targetProjectId, targetRunId, args);
       const record = await executeResearchRunFn(targetProjectId, targetRunId);
       return toToolResult(withMcpSummary(record));
+    }
+    case "suggest_followup_run": {
+      const targetProjectId = requireString(projectId, "projectId");
+      const targetRunId = requireString(runId, "runId");
+      const contradictionId = requireString(args?.contradictionId, "contradictionId");
+      let record;
+      try {
+        record = await readRunRecord(targetProjectId, targetRunId);
+      } catch {
+        throw new Error("run_not_found");
+      }
+      const contradiction = record.contradictions.find((entry) => entry.id === contradictionId);
+      if (!contradiction) {
+        throw new Error("contradiction_not_found");
+      }
+      return toToolResult(
+        buildFollowupSuggestion({
+          title: record.run.title,
+          contradiction,
+          target: record.normalizedInput?.target
+        }) ?? {
+          contradictionId,
+          kind: contradiction.kind ?? "mixed",
+          followup: null
+        }
+      );
     }
     case "fetch_web": {
       const url = requireString(args?.url, "url");
