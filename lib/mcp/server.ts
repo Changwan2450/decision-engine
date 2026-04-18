@@ -455,6 +455,46 @@ function buildRecommendedNextTools(status: string) {
   return ["show_run_state", "get_run"];
 }
 
+function buildNextToolCall(record: Awaited<ReturnType<typeof executeResearchRun>>) {
+  if (record.run.status === "awaiting_clarification") {
+    return {
+      name: "clarify_run",
+      arguments: {
+        projectId: record.run.projectId,
+        runId: record.run.id
+      }
+    };
+  }
+
+  if (record.run.status === "decided") {
+    return {
+      name: "show_run_state",
+      arguments: {
+        projectId: record.run.projectId,
+        runId: record.run.id
+      }
+    };
+  }
+
+  if (record.run.status === "failed") {
+    return {
+      name: "get_run",
+      arguments: {
+        projectId: record.run.projectId,
+        runId: record.run.id
+      }
+    };
+  }
+
+  return {
+    name: "get_run",
+    arguments: {
+      projectId: record.run.projectId,
+      runId: record.run.id
+    }
+  };
+}
+
 function buildRunBridgePaths(projectId: string, runId: string) {
   const bridgeDir = path.join(WORKSPACE_ROOT, projectId, "runs", runId, "bridge");
   return {
@@ -481,7 +521,8 @@ function withMcpSummary(record: Awaited<ReturnType<typeof executeResearchRun>>) 
       clarificationQuestions: record.run.clarificationQuestions,
       topArtifacts: summarizeArtifacts(record.artifacts),
       paths,
-      recommendedNextTools: buildRecommendedNextTools(record.run.status)
+      recommendedNextTools: buildRecommendedNextTools(record.run.status),
+      nextToolCall: buildNextToolCall(record)
     }
   };
 }

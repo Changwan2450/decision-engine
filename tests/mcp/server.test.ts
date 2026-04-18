@@ -226,7 +226,7 @@ describe("mcp server", () => {
       urls: ["https://example.com/report"]
     });
 
-    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string }>; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[] } } } }).result;
+    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string }>; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } } } } } }).result;
     const stored = await workspace.readRunRecord(project.project.id, result.structuredContent.run.id);
 
     expect(result.structuredContent.run.status).toBe("decided");
@@ -246,6 +246,13 @@ describe("mcp server", () => {
       "export_bundle",
       "get_run"
     ]);
+    expect(result.structuredContent.mcpSummary.nextToolCall).toEqual({
+      name: "show_run_state",
+      arguments: {
+        projectId: project.project.id,
+        runId: result.structuredContent.run.id
+      }
+    });
   });
 
   it("clarifies an existing run and re-executes on the same runId", async () => {
@@ -374,7 +381,7 @@ describe("mcp server", () => {
       query: "초기 질문"
     });
 
-    const result = (response as { result: { structuredContent: { run: { status: string }; mcpSummary: { status: string; clarificationQuestions: string[]; recommendedNextTools: string[] } } } }).result;
+    const result = (response as { result: { structuredContent: { run: { id: string; status: string }; mcpSummary: { status: string; clarificationQuestions: string[]; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } } } } } }).result;
 
     expect(result.structuredContent.run.status).toBe("awaiting_clarification");
     expect(result.structuredContent.mcpSummary.status).toBe("awaiting_clarification");
@@ -385,6 +392,13 @@ describe("mcp server", () => {
       "clarify_run",
       "get_run"
     ]);
+    expect(result.structuredContent.mcpSummary.nextToolCall).toEqual({
+      name: "clarify_run",
+      arguments: {
+        projectId: project.project.id,
+        runId: result.structuredContent.run.id
+      }
+    });
   });
 
   it("returns a single artifact from fetch_web and never throws", async () => {
