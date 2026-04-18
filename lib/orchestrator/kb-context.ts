@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { realpath } from "node:fs/promises";
+import path from "node:path";
 import { promisify } from "node:util";
 import { OBSIDIAN_VAULT_PATH } from "@/lib/config";
 import type { KnowledgeContext, KnowledgeContextNote, SourceArtifact } from "@/lib/adapters/types";
@@ -29,6 +31,13 @@ type QmdDocumentRow = {
 };
 
 let qmdClientOverride: QmdClient | null = null;
+let resolvedQmdRuntime:
+  | {
+      nodePath: string;
+      scriptPath: string;
+    }
+  | null
+  | undefined;
 
 function takeUnique(values: string[], limit: number): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).slice(0, limit);
@@ -78,8 +87,46 @@ function toQmdPath(notePath: string): string {
   return `qmd://${QMD_COLLECTION}/${normalizeRelativePath(notePath)}`;
 }
 
+async function resolveQmdRuntime(): Promise<{
+  nodePath: string;
+  scriptPath: string;
+} | null> {
+  if (resolvedQmdRuntime !== undefined) {
+    return resolvedQmdRuntime;
+  }
+
+  try {
+    const { stdout } = await execFileAsync("sh", ["-lc", "command -v qmd"]);
+    const qmdPath = stdout.trim();
+    if (!qmdPath) {
+      resolvedQmdRuntime = null;
+      return resolvedQmdRuntime;
+    }
+
+    const realQmdPath = await realpath(qmdPath);
+    const packageRoot = path.dirname(path.dirname(realQmdPath));
+    const nodePath = path.join(packageRoot, "..", "..", "..", "..", "bin", "node");
+    const scriptPath = path.join(packageRoot, "dist", "cli", "qmd.js");
+
+    resolvedQmdRuntime = {
+      nodePath,
+      scriptPath
+    };
+    return resolvedQmdRuntime;
+  } catch {
+    resolvedQmdRuntime = null;
+    return resolvedQmdRuntime;
+  }
+}
+
 async function runQmd(args: string[], vaultRoot: string): Promise<string> {
-  const { stdout } = await execFileAsync("qmd", args, {
+  const runtime = await resolveQmdRuntime();
+  const commandArgs =
+    args[0] === "query" && !args.includes("--no-rerank") ? [...args, "--no-rerank"] : args;
+
+  const { stdout } = await execFileAsync(runtime?.nodePath ?? "qmd", runtime
+    ? [runtime.scriptPath, ...commandArgs]
+    : commandArgs, {
     cwd: vaultRoot,
     env: {
       ...process.env,
