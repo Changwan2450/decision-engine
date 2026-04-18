@@ -205,6 +205,10 @@ The current policy is intentionally engine-native, not plugin-native.
 
 MCP can now start a research run directly instead of only reading an existing run.
 
+The `mcpSummary` shape below is the stable AI-first follow-up contract for the
+current orchestration layer. New fields may be added later, but existing fields
+should be treated as the baseline operator surface for Claude/Codex flows.
+
 - `run_research`
   - required: `projectId`, `title`
   - optional: `query`, `naturalLanguage`, `pastedContent`, `urls`
@@ -220,3 +224,16 @@ MCP can now start a research run directly instead of only reading an existing ru
   - optional: `query`, `naturalLanguage`, `pastedContent`, `urls`
   - behavior: merges clarification input into an existing run, re-executes research on the same `runId`, and returns the same AI-first `mcpSummary` shape
   - intended use: when `run_research` returns `awaiting_clarification`, AI should answer the questions and retry with `clarify_run` instead of creating a fresh run
+
+## MCP Follow-up Matrix
+
+This matrix fixes the current status-to-next-action policy for the AI-first MCP
+surface.
+
+| `mcpSummary.status` | Meaning | First next tool | Current rule |
+| --- | --- | --- | --- |
+| `awaiting_clarification` | input is insufficient to continue safely | `clarify_run` | answer clarification questions on the same `runId` |
+| `collecting` | evidence collection is still in-flight or partial | `get_run` | inspect the current run record first |
+| `synthesizing` | artifacts exist and synthesis is underway | `get_run` | inspect the current run record first |
+| `decided` | decision-oriented run is complete | `show_run_state` | inspect compact run-state snapshot first |
+| `failed` | execution failed | `get_run` | inspect failure state and inputs first |

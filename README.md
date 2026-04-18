@@ -150,6 +150,55 @@ Extension:
 
 - `analyze_hotspots`
 
+AI-first execution surface:
+
+- `run_research`
+- `clarify_run`
+
+`run_research`와 `clarify_run`은 현재 orchestration layer의 핵심 표면이다.
+이 둘은 AI가 run을 만들고, clarification을 같은 run에서 보완하고, 다음
+tool call까지 이어 가도록 돕는다.
+
+## AI Operator Flow
+
+Claude/Codex가 현재 가장 효율적으로 이 엔진을 쓰는 표준 흐름은 아래다.
+
+```text
+run_research
+  -> mcpSummary 확인
+  -> awaiting_clarification 이면 clarify_run
+  -> decided 이면 show_run_state
+  -> 필요 시 export_bundle
+```
+
+실전 one-shot 예시:
+
+1. `run_research(projectId, title, query, urls)`를 호출한다.
+2. `mcpSummary.status`를 본다.
+3. `awaiting_clarification`이면 `mcpSummary.clarificationTemplate`를 채워 `clarify_run(projectId, runId, query)`를 호출한다.
+4. `decided`이면 `mcpSummary.nextToolCall`에 따라 `show_run_state(projectId, runId)`를 먼저 호출한다.
+5. 외부 모델 전달이나 상세 근거 묶음이 필요할 때만 `export_bundle(projectId, runId)`를 호출한다.
+
+## Orchestration Boundary
+
+현재까지 강화한 것은 검색 지능 자체보다 orchestration layer다.
+
+- 이미 닫힌 것:
+  - routed fetchers
+  - MCP run start/retry surface
+  - stable `mcpSummary` follow-up contract
+  - clarification retry on the same `runId`
+  - AI-first next action hints
+
+- 아직 다음 단계로 남겨 둔 것:
+  - query expansion
+  - source competition / source ranking
+  - contradiction-driven follow-up
+  - richer search intelligence
+
+즉, 지금까지의 마무리는 "AI가 덜 헤매게 하는 orchestration"을 고정하는 단계다.
+다음 기능 단계부터는 "AI가 더 똑똑하게 찾게 하는 search intelligence"로 넘어간다.
+
 ## 빠른 시작
 
 설치 후 테스트를 돌리고 CLI와 MCP 표면을 확인하면 현재 상태를 바로 볼 수 있다.
