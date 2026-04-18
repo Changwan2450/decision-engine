@@ -498,10 +498,15 @@ function buildNextToolCall(record: Awaited<ReturnType<typeof executeResearchRun>
 function buildClarificationTemplate(record: Awaited<ReturnType<typeof executeResearchRun>>) {
   if (record.run.status !== "awaiting_clarification") return null;
 
+  const contextLines = [
+    `현재 제목: ${record.run.title}`,
+    `현재 입력: ${record.run.input.naturalLanguage ?? ""}`.trimEnd()
+  ];
+
   return {
     tool: "clarify_run",
-    queryTemplate: ["목표: ", "대상: ", "비교: "].join("\n"),
-    guidance: "빈 칸을 채워 같은 runId로 다시 실행한다.",
+    queryTemplate: [...contextLines, "", "목표: ", "대상: ", "비교: "].join("\n"),
+    guidance: "현재 문맥을 유지한 채 빈 칸을 채워 같은 runId로 다시 실행한다.",
     questions: record.run.clarificationQuestions
   };
 }
