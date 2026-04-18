@@ -212,6 +212,7 @@ MCP can now start a research run directly instead of only reading an existing ru
   - `mcpSummary`: `runId`, `status`, `decision`, `clarificationQuestions`, `topArtifacts`, `paths`, `recommendedNextTools`, `nextToolCall`, `clarificationTemplate`
   - when status is `awaiting_clarification`, `recommendedNextTools` should lead with `clarify_run`
   - when status is `awaiting_clarification`, `clarificationTemplate.queryTemplate` gives a ready-to-fill `query` shape for `clarify_run`, prefilled with current title, current input, and current pasted content
+  - `clarificationTemplate.fieldHints` maps each clarification question to a suggested field such as `goal`, `target`, or `comparisonAxis`
   - follow-up tools: `get_run`, `show_run_state`, `export_bundle`, `gather_for_run`
 
 - `clarify_run`

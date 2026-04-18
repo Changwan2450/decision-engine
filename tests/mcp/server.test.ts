@@ -382,7 +382,7 @@ describe("mcp server", () => {
       query: "초기 질문"
     });
 
-    const result = (response as { result: { structuredContent: { run: { id: string; status: string }; mcpSummary: { status: string; clarificationQuestions: string[]; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: { tool: string; queryTemplate: string; guidance: string; questions: string[] } } } } }).result;
+    const result = (response as { result: { structuredContent: { run: { id: string; status: string }; mcpSummary: { status: string; clarificationQuestions: string[]; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: { tool: string; queryTemplate: string; guidance: string; questions: string[]; fieldHints: Array<{ question: string; suggestedField: string }> } } } } }).result;
 
     expect(result.structuredContent.run.status).toBe("awaiting_clarification");
     expect(result.structuredContent.mcpSummary.status).toBe("awaiting_clarification");
@@ -404,7 +404,13 @@ describe("mcp server", () => {
       tool: "clarify_run",
       queryTemplate: "현재 제목: 시장 진입 판단\n현재 입력: 초기 질문\n현재 pastedContent:\n\n목표: \n대상: \n비교: ",
       guidance: "현재 문맥을 유지한 채 빈 칸을 채워 같은 runId로 다시 실행한다.",
-      questions: ["무엇을 결정하려는지 알려줘."]
+      questions: ["무엇을 결정하려는지 알려줘."],
+      fieldHints: [
+        {
+          question: "무엇을 결정하려는지 알려줘.",
+          suggestedField: "goal"
+        }
+      ]
     });
   });
 

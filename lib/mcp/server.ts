@@ -504,11 +504,24 @@ function buildClarificationTemplate(record: Awaited<ReturnType<typeof executeRes
     `현재 pastedContent: ${record.run.input.pastedContent ?? ""}`.trimEnd()
   ];
 
+  const fieldHints = record.run.clarificationQuestions.map((question) => ({
+    question,
+    suggestedField:
+      /무엇을 결정|목표|goal/i.test(question)
+        ? "goal"
+        : /누구|대상|target/i.test(question)
+          ? "target"
+          : /비교|comparison/i.test(question)
+            ? "comparisonAxis"
+            : "goal"
+  }));
+
   return {
     tool: "clarify_run",
     queryTemplate: [...contextLines, "", "목표: ", "대상: ", "비교: "].join("\n"),
     guidance: "현재 문맥을 유지한 채 빈 칸을 채워 같은 runId로 다시 실행한다.",
-    questions: record.run.clarificationQuestions
+    questions: record.run.clarificationQuestions,
+    fieldHints
   };
 }
 
