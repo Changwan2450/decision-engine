@@ -166,7 +166,11 @@ async function qmdMultiGet(vaultRoot: string, files: string[]): Promise<Knowledg
       .filter((row) => typeof row.file === "string" && typeof row.body === "string")
       .map((row) => noteFromMarkdown(row.body ?? "", row.file, row.title ?? ""))
       .filter((note) => note.title.length > 0);
-  } catch {
+  } catch (error) {
+    console.warn(
+      `[kb-context] qmd multi-get JSON parse failed (files=${files.length}); falling back to per-file get:`,
+      error instanceof Error ? error.message : String(error)
+    );
     const notes = await Promise.all(
       files.map(async (file) => {
         const markdown = await runQmd(["get", toQmdPath(file)], vaultRoot);
@@ -214,6 +218,10 @@ function buildDefaultQmdClient(vaultRoot: string): QmdClient {
 
 function getQmdClient(vaultRoot: string): QmdClient {
   return qmdClientOverride ?? buildDefaultQmdClient(vaultRoot);
+}
+
+export function createQmdClientForTests(vaultRoot: string): QmdClient {
+  return buildDefaultQmdClient(vaultRoot);
 }
 
 export function setQmdClientForTests(client: QmdClient | null): void {
