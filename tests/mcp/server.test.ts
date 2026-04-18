@@ -185,6 +185,32 @@ describe("mcp server", () => {
             target: "시장",
             comparisonAxis: "대안"
           },
+          artifacts: [
+            {
+              id: "artifact-1",
+              adapter: "scrapling",
+              sourceType: "web",
+              title: "시장 보고서",
+              url: "https://example.com/report",
+              snippet: "시장 신호 요약",
+              content: "body",
+              sourcePriority: "analysis",
+              metadata: {
+                fetcher: "scrapling",
+                fetch_status: "success",
+                block_reason: "unknown",
+                bypass_level: "none",
+                login_required: "false"
+              }
+            }
+          ],
+          decision: {
+            value: "go",
+            confidence: "high",
+            why: "시장 진입 신호가 충분함",
+            blockingUnknowns: [],
+            nextActions: ["bundle 확인"]
+          },
           run: {
             ...record.run,
             status: "decided"
@@ -199,12 +225,26 @@ describe("mcp server", () => {
       urls: ["https://example.com/report"]
     });
 
-    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string } } } }).result;
+    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string }>; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[] } } } }).result;
     const stored = await workspace.readRunRecord(project.project.id, result.structuredContent.run.id);
 
     expect(result.structuredContent.run.status).toBe("decided");
     expect(result.structuredContent.normalizedInput.naturalLanguage).toBe("시장 진입 여부 판단");
     expect(stored.run.input.urls).toEqual(["https://example.com/report"]);
+    expect(result.structuredContent.mcpSummary.runId).toBe(result.structuredContent.run.id);
+    expect(result.structuredContent.mcpSummary.status).toBe("decided");
+    expect(result.structuredContent.mcpSummary.decision).toMatchObject({
+      value: "go",
+      confidence: "high"
+    });
+    expect(result.structuredContent.mcpSummary.topArtifacts[0]?.title).toBe("시장 보고서");
+    expect(result.structuredContent.mcpSummary.paths.bundlePath).toContain(`${project.project.id}/runs/${result.structuredContent.run.id}/bridge/bundle.md`);
+    expect(result.structuredContent.mcpSummary.paths.snapshotPath).toContain(`${project.project.id}/runs/${result.structuredContent.run.id}/bridge/run-state.json`);
+    expect(result.structuredContent.mcpSummary.recommendedNextTools).toEqual([
+      "show_run_state",
+      "export_bundle",
+      "get_run"
+    ]);
   });
 
   it("returns a single artifact from fetch_web and never throws", async () => {

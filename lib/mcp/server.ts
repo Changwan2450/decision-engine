@@ -1,10 +1,13 @@
+import path from "node:path";
 import { analyzeHotspots } from "@/lib/analytics/hotspot";
 import { queryEvents, queryRuns } from "@/lib/analytics/duckdb";
 import { buildFailureArtifact } from "@/lib/adapters/contract";
+import type { SourceArtifact } from "@/lib/adapters/types";
 import { exportRunBundle, ingestAdvisoryFromFile, writeRunStateSnapshot } from "@/lib/bridge/cli-file";
 import { sendDiscordNotifierFromFile } from "@/lib/bridge/discord-notifier";
 import { exportLinkitIngestBundle } from "@/lib/bridge/linkit-export";
 import { publishLinkitBatch } from "@/lib/bridge/linkit-publish";
+import { WORKSPACE_ROOT } from "@/lib/config";
 import { executeResearchRun, fetchWeb, gatherForRun } from "@/lib/orchestrator/run-research";
 import { buildWatchDigest } from "@/lib/orchestrator/watch-digest";
 import { promoteDigestToProject } from "@/lib/orchestrator/watch-inbox";
@@ -407,6 +410,62 @@ function toToolResult(payload: unknown) {
   };
 }
 
+function summarizeArtifacts(artifacts: SourceArtifact[]) {
+  return artifacts.slice(0, 3).map((artifact) => ({
+    id: artifact.id,
+    title: artifact.title,
+    url: artifact.url,
+    adapter: artifact.adapter,
+    sourceType: artifact.sourceType,
+    fetchStatus: artifact.metadata.fetch_status,
+    snippet: artifact.snippet
+  }));
+}
+
+function buildRecommendedNextTools(status: string) {
+  if (status === "awaiting_clarification") {
+    return ["get_run", "run_research"];
+  }
+  if (status === "decided") {
+    return ["show_run_state", "export_bundle", "get_run"];
+  }
+  if (status === "failed") {
+    return ["get_run"];
+  }
+  return ["show_run_state", "get_run"];
+}
+
+function buildRunBridgePaths(projectId: string, runId: string) {
+  const bridgeDir = path.join(WORKSPACE_ROOT, projectId, "runs", runId, "bridge");
+  return {
+    bridgeDir,
+    bundlePath: path.join(bridgeDir, "bundle.md"),
+    snapshotPath: path.join(bridgeDir, "run-state.json")
+  };
+}
+
+function withMcpSummary(record: Awaited<ReturnType<typeof executeResearchRun>>) {
+  const paths = buildRunBridgePaths(record.run.projectId, record.run.id);
+  return {
+    ...record,
+    mcpSummary: {
+      runId: record.run.id,
+      status: record.run.status,
+      decision: record.decision
+        ? {
+            value: record.decision.value,
+            confidence: record.decision.confidence,
+            why: record.decision.why
+          }
+        : null,
+      clarificationQuestions: record.run.clarificationQuestions,
+      topArtifacts: summarizeArtifacts(record.artifacts),
+      paths,
+      recommendedNextTools: buildRecommendedNextTools(record.run.status)
+    }
+  };
+}
+
 function buildMcpFailureArtifact(params: {
   adapter: "mcp/fetch_web" | "mcp/gather_for_run";
   url?: string;
@@ -475,7 +534,7 @@ async function callTool(
         urls: optionalStringArray(args?.urls, "urls")
       });
       const record = await executeResearchRunFn(createdRun.run.projectId, createdRun.run.id);
-      return toToolResult(record);
+      return toToolResult(withMcpSummary(record));
     }
     case "fetch_web": {
       const url = requireString(args?.url, "url");
