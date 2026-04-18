@@ -54,6 +54,26 @@ function hostEquals(...hosts: string[]): HostnamePredicate {
   return (host: string) => hosts.includes(host);
 }
 
+function isKnownPublicFeedUrl(url: string): boolean {
+  const pathname = safePathname(url)?.toLowerCase() ?? "";
+  return (
+    pathname.endsWith(".xml") ||
+    pathname.endsWith("/feed") ||
+    pathname.endsWith("/rss") ||
+    pathname.includes("/feed/") ||
+    pathname.includes("/rss/")
+  );
+}
+
+function isJinaReaderMirror(url: string): boolean {
+  const host = hostnameOf(url);
+  if (!host) return false;
+  if (host !== "r.jina.ai" && host !== "s.jina.ai") return false;
+
+  const pathname = safePathname(url);
+  return Boolean(pathname && pathname !== "/");
+}
+
 // ---- routing table ------------------------------------------------------
 //
 // Order matters: the first rule whose matcher returns true wins.
@@ -61,6 +81,17 @@ function hostEquals(...hosts: string[]): HostnamePredicate {
 // docs/INTEGRATION_ARCHITECTURE.md §4.0.
 
 const RULES: Rule[] = [
+  // Lightweight/public endpoints — these are the first slice of the
+  // insane-search-style fallback policy absorbed into the engine. We do not
+  // integrate the plugin package itself; we only recognize endpoints that are
+  // already public, text-oriented, or mirror-friendly so downstream logs can
+  // distinguish them from generic blocked-web routing.
+  {
+    match: hostEquals("r.jina.ai", "s.jina.ai"),
+    chain: { primary: "scrapling", fallbacks: ["markitdown"] },
+    rule: "web/public-mirror"
+  },
+
   // Video platforms — agent-reach first (cheap transcript API),
   // reclip only as fallback (expensive download + STT).
   {
@@ -145,6 +176,14 @@ const DEFAULT_CHAIN: AdapterChain = {
  * return the default so callers don't have to handle null.
  */
 export function routeUrl(url: string): AdapterChain {
+  if (isJinaReaderMirror(url)) {
+    return { primary: "scrapling", fallbacks: ["markitdown"], rule: "web/public-mirror" };
+  }
+
+  if (isKnownPublicFeedUrl(url)) {
+    return { primary: "scrapling", fallbacks: ["markitdown"], rule: "web/public-feed" };
+  }
+
   const host = hostnameOf(url);
 
   for (const r of RULES) {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createCliExecutor,
   createScraplingAdapter,
   type ScraplingExecutor
 } from "@/lib/adapters/scrapling";
@@ -413,5 +414,63 @@ describe("createScraplingAdapter() — executor input contract", () => {
       mode: "dynamic",
       timeoutMs: 12_345
     });
+  });
+});
+
+describe("createCliExecutor()", () => {
+  it("escalates get -> fetch -> stealthy-fetch for stealth mode", async () => {
+    const calls: string[][] = [];
+    const exec = createCliExecutor({
+      tmpRoot: "/tmp",
+      run: async ({ args }) => {
+        calls.push(args);
+        if (args[1] === "get") {
+          return { stdout: "", stderr: "empty body", exitCode: 1 };
+        }
+        if (args[1] === "fetch") {
+          return { stdout: "", stderr: "still blocked", exitCode: 1 };
+        }
+        return {
+          stdout: "",
+          stderr: "",
+          exitCode: 0
+        };
+      }
+    });
+
+    const result = await exec({
+      url: "https://example.com",
+      mode: "stealth",
+      timeoutMs: 30000
+    });
+
+    expect(calls.map((args) => args[1])).toEqual([
+      "get",
+      "fetch",
+      "stealthy-fetch"
+    ]);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("classifies Cloudflare-like stderr as blocked instead of raw process failure", async () => {
+    const exec = createCliExecutor({
+      tmpRoot: "/tmp",
+      run: async () => ({
+        stdout: "",
+        stderr: "Blocked by Cloudflare Turnstile challenge",
+        exitCode: 1
+      })
+    });
+
+    const result = await exec({
+      url: "https://protected.example.com",
+      mode: "stealth",
+      timeoutMs: 30000
+    });
+
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.status).toBe("blocked");
+    expect(parsed.block_reason).toBe("turnstile");
   });
 });

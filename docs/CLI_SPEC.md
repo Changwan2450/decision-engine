@@ -2,13 +2,14 @@
 
 ## Goal
 
-Decision Engine CLI is the primary AI-facing interface.
+Decision Engine CLI is the primary AI-facing interface for the research engine.
 
 The contract is:
 - predictable command names
 - JSON-first stdout
 - append-only advisory ingest
 - local JSON remains source of truth
+- AI operators are the primary caller; human-facing UI is out of scope
 
 ## Standard Commands
 
@@ -153,6 +154,9 @@ Output:
 
 ## MCP Tools
 
+These tools expose the research engine first. Watch tools are secondary automation
+tools layered on top of it.
+
 ### Core
 
 - `get_project`
@@ -183,3 +187,15 @@ Output:
 - stderr may contain operational errors
 - internal decision must never be overwritten by external advisory
 - advisory remains append-only
+
+## Routed Fetch Policy
+
+`run-research` and MCP fetch surfaces use URL routing rather than a single fetcher.
+The current policy is intentionally engine-native, not plugin-native.
+
+- Known public mirrors such as `r.jina.ai` / `s.jina.ai` are treated as lightweight public endpoints first.
+- Known public feeds such as `/feed`, `/rss`, and `*.xml` are treated as public-feed routes first.
+- Platform-specific routes still win when explicitly matched, such as `youtube`, `reddit`, `x`, `github`, and `arxiv`.
+- Generic web keeps `scrapling` as primary and `markitdown` as fallback.
+- This policy is where `insane-search`-style strategy is absorbed: public endpoint, alternate URL/feed, and mirror-aware routing.
+- The engine does not package the external plugin itself.

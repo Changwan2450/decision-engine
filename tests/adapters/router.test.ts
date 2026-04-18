@@ -103,6 +103,26 @@ describe("routeUrl() — PDF / papers", () => {
 });
 
 describe("routeUrl() — generic fallback", () => {
+  it("routes RSS/feed endpoints through the public-feed policy", () => {
+    const chain = routeUrl("https://example.com/feed");
+    expect(chain.primary).toBe("scrapling");
+    expect(chain.fallbacks).toEqual(["markitdown"]);
+    expect(chain.rule).toBe("web/public-feed");
+  });
+
+  it("routes XML feeds through the public-feed policy", () => {
+    expect(routeUrl("https://example.com/rss.xml").rule).toBe(
+      "web/public-feed"
+    );
+  });
+
+  it("routes Jina Reader mirrors through the public-mirror policy", () => {
+    const chain = routeUrl("https://r.jina.ai/http://example.com/post");
+    expect(chain.primary).toBe("scrapling");
+    expect(chain.fallbacks).toEqual(["markitdown"]);
+    expect(chain.rule).toBe("web/public-mirror");
+  });
+
   it("routes unknown hosts to scrapling with markitdown fallback", () => {
     const chain = routeUrl("https://some-random-blog.dev/post");
     expect(chain.primary).toBe("scrapling");
@@ -150,6 +170,6 @@ describe("isPdfUrl()", () => {
 
 describe("routing table integrity", () => {
   it("has a non-trivial number of rules (regression guard)", () => {
-    expect(ruleCount()).toBeGreaterThanOrEqual(9);
+    expect(ruleCount()).toBeGreaterThanOrEqual(10);
   });
 });

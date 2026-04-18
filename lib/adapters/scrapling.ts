@@ -14,11 +14,14 @@
 //     artifacts so the router can fall back deterministically.
 //
 // Network boundary: the actual Python / CLI invocation is behind the
-// `ScraplingExecutor` interface. Tests inject fixtures. The default
-// executor is a stub that signals "not configured" — real wiring happens
-// in PR 4 alongside router + MCP tools.
+// `ScraplingExecutor` interface. Tests inject fixtures. Registry wiring
+// uses the real Scrapling CLI with `get -> fetch -> stealthy-fetch`
+// escalation; the default executor here remains a stub for unit isolation.
 
 import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { promisify } from "node:util";
 
 import type {
@@ -423,6 +426,85 @@ const defaultExecutor: ScraplingExecutor = async () => ({
   exitCode: 1
 });
 
+type CliRunner = (input: {
+  command: string;
+  args: string[];
+  timeoutMs: number;
+}) => Promise<ScraplingExecResult>;
+
+export function createCliExecutor(opts?: {
+  command?: string;
+  run?: CliRunner;
+  tmpRoot?: string;
+}): ScraplingExecutor {
+  const command = opts?.command ?? "scrapling";
+  const run = opts?.run ?? defaultCliRunner;
+  const tmpRoot = opts?.tmpRoot ?? os.tmpdir();
+
+  return async (input) => {
+    const attempts = buildCliAttempts(input);
+
+    for (const attempt of attempts) {
+      const tempDir = await mkdtemp(path.join(tmpRoot, "scrapling-"));
+      const outputFile = path.join(tempDir, "page.html");
+      try {
+        const result = await run({
+          command,
+          args: [...attempt.args, input.url, outputFile],
+          timeoutMs: attempt.timeoutMs
+        });
+
+        if (result.timedOut) {
+          return result;
+        }
+
+        if (result.exitCode === 0) {
+          const html = await readFile(outputFile, "utf8").catch(() => "");
+          if (html.trim()) {
+            return {
+              stdout: JSON.stringify({
+                status: "success",
+                html,
+                final_url: input.url,
+                bypass_level: attempt.bypassLevel
+              }),
+              stderr: result.stderr,
+              exitCode: 0
+            };
+          }
+        }
+
+        const classified = classifyCliError(result.stderr || result.stdout, attempt.bypassLevel);
+        if (classified) {
+          return {
+            stdout: JSON.stringify({
+              status: "blocked",
+              block_reason: classified.blockReason,
+              bypass_level: classified.bypassLevel,
+              login_required: classified.loginRequired,
+              error: classified.errorMessage
+            }),
+            stderr: result.stderr,
+            exitCode: 0
+          };
+        }
+
+        if (!attempt.allowFallback) {
+          return result;
+        }
+      } finally {
+        await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+      }
+    }
+
+    return {
+      stdout: "",
+      stderr: "scrapling cli failed without classified result",
+      exitCode: 1
+    };
+  };
+}
+
 /**
  * Convenience: build an executor that spawns an external process.
  * Not used by the adapter default — exposed for runtime wiring (PR 4)
@@ -460,3 +542,153 @@ export function createProcessExecutor(opts: {
     }
   };
 }
+
+function buildCliAttempts(input: {
+  url: string;
+  mode: ScraplingMode;
+  timeoutMs: number;
+}): Array<{
+  args: string[];
+  timeoutMs: number;
+  bypassLevel: BypassLevel;
+  allowFallback: boolean;
+}> {
+  if (input.mode === "fetch") {
+    return [
+      {
+        args: ["extract", "get", "--timeout", String(Math.max(1, Math.ceil(input.timeoutMs / 1000)))],
+        timeoutMs: input.timeoutMs,
+        bypassLevel: "headers",
+        allowFallback: false
+      }
+    ];
+  }
+
+  if (input.mode === "dynamic") {
+    return [
+      {
+        args: ["extract", "get", "--timeout", String(Math.max(1, Math.ceil(input.timeoutMs / 1000)))],
+        timeoutMs: input.timeoutMs,
+        bypassLevel: "headers",
+        allowFallback: true
+      },
+      {
+        args: ["extract", "fetch", "--timeout", String(input.timeoutMs), "--disable-resources"],
+        timeoutMs: input.timeoutMs,
+        bypassLevel: "headless",
+        allowFallback: false
+      }
+    ];
+  }
+
+  return [
+    {
+      args: ["extract", "get", "--timeout", String(Math.max(1, Math.ceil(input.timeoutMs / 1000)))],
+      timeoutMs: input.timeoutMs,
+      bypassLevel: "headers",
+      allowFallback: true
+    },
+    {
+      args: ["extract", "fetch", "--timeout", String(input.timeoutMs), "--disable-resources"],
+      timeoutMs: input.timeoutMs,
+      bypassLevel: "headless",
+      allowFallback: true
+    },
+    {
+      args: [
+        "extract",
+        "stealthy-fetch",
+        "--timeout",
+        String(input.timeoutMs),
+        "--disable-resources",
+        "--solve-cloudflare"
+      ],
+      timeoutMs: input.timeoutMs,
+      bypassLevel: "turnstile",
+      allowFallback: false
+    }
+  ];
+}
+
+function classifyCliError(
+  message: string,
+  bypassLevel: BypassLevel
+): {
+  blockReason: BlockReason;
+  bypassLevel: BypassLevel;
+  loginRequired: boolean;
+  errorMessage: string;
+} | null {
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("cloudflare") ||
+    lower.includes("turnstile") ||
+    lower.includes("interstitial")
+  ) {
+    return {
+      blockReason: "turnstile",
+      bypassLevel,
+      loginRequired: false,
+      errorMessage: truncateErrorMessage(message)
+    };
+  }
+
+  if (lower.includes("captcha")) {
+    return {
+      blockReason: "captcha",
+      bypassLevel,
+      loginRequired: false,
+      errorMessage: truncateErrorMessage(message)
+    };
+  }
+
+  if (lower.includes("429") || lower.includes("rate limit")) {
+    return {
+      blockReason: "ratelimit",
+      bypassLevel,
+      loginRequired: false,
+      errorMessage: truncateErrorMessage(message)
+    };
+  }
+
+  if (
+    lower.includes("login") ||
+    lower.includes("sign in") ||
+    lower.includes("401") ||
+    lower.includes("403") ||
+    lower.includes("cookies")
+  ) {
+    return {
+      blockReason: "login",
+      bypassLevel,
+      loginRequired: true,
+      errorMessage: truncateErrorMessage(message)
+    };
+  }
+
+  return null;
+}
+
+const defaultCliRunner: CliRunner = async (input) => {
+  try {
+    const result = await execFileAsync(input.command, input.args, {
+      timeout: input.timeoutMs,
+      maxBuffer: 16 * 1024 * 1024
+    });
+    return { stdout: result.stdout, stderr: result.stderr, exitCode: 0 };
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException & {
+      stdout?: string;
+      stderr?: string;
+      code?: number | string;
+      killed?: boolean;
+      signal?: string;
+    };
+    return {
+      stdout: err.stdout ?? "",
+      stderr: err.stderr ?? err.message,
+      exitCode: typeof err.code === "number" ? err.code : 1,
+      timedOut: err.killed === true && err.signal === "SIGTERM"
+    };
+  }
+};

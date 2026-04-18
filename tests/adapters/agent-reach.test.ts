@@ -97,7 +97,41 @@ describe("agent reach adapter — success path", () => {
 
     const [a] = await adapter.execute(plan);
     expect(a.content).toBe("정규화 본문");
+    expect(a.snippet).toBe("정규화 본문");
     expect(a.rawRef).toBe("project-1/runs/run-1/raw/agent-reach/item.json");
+  });
+
+  it("passes inferred source type to the bridge based on URL host", async () => {
+    const adapter = createAgentReachAdapter({
+      now: () => FIXED_NOW,
+      exec: async (_command, args) => {
+        expect(args[4]).toBe("community");
+        return {
+          stdout: JSON.stringify({
+            items: [
+              {
+                sourceType: "community",
+                title: "트윗",
+                url: "https://x.com/user/status/1"
+              }
+            ]
+          }),
+          stderr: "",
+          exitCode: 0
+        };
+      }
+    });
+
+    const communityPlan: ResearchPlan = {
+      ...plan,
+      normalizedInput: {
+        ...plan.normalizedInput,
+        urls: ["https://x.com/user/status/1"]
+      }
+    };
+
+    const [artifact] = await adapter.execute(communityPlan);
+    expect(artifact.sourceType).toBe("community");
   });
 
   it("converts executor items into artifacts with full metadata contract", async () => {

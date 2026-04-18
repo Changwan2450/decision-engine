@@ -4,8 +4,8 @@
 AI-AGENT-CONTEXT
 purpose: clone workspace 레포들을 Decision Engine에 어떻게 물릴지에 대한 통합 설계
 scope: community / video / pdf / general-web(+blocked) 4개 source track 전부 커버
-status: design (not yet implemented)
-last-updated: 2026-04-17
+status: partial implementation
+last-updated: 2026-04-18
 -->
 
 ## 1. 목표
@@ -36,15 +36,15 @@ evidence → decision → insight까지 한 루프로 돌게 만드는 것.
   외부 CLI 프로세스 실행 추상화가 이미 있음.
 - `lib/mcp/server.ts` — MCP 표면이 이미 존재 (읽기 도구 중심).
 
-### 2.2 지금 비어 있는 부분 (이번 통합의 핵심)
+### 2.2 현재 구현 상태 (2026-04-18 기준)
 
 | 항목 | 현재 | 문제 |
 |---|---|---|
-| `agent-reach.ts` | 파이썬 inline script가 `'agent-reach placeholder'` 찍음 | 실제 Agent-Reach 호출 없음 |
-| `reclip.ts` | `extract` deps 기본값이 `async () => null` | 실제 reclip 호출 없음 |
-| Scrapling 어댑터 | 없음 | 일반 웹/차단 사이트 수집 불가 |
-| PDF 어댑터 | 없음 | 논문·공식문서 evidence 불가 |
-| 정규화 레이어 | 없음 | 어댑터별로 content 포맷이 제각각 |
+| `agent-reach.ts` | local Agent-Reach repo의 `WebChannel.read()`를 Python bridge로 호출 | platform-specific search/read 확장은 아직 후속 범위 |
+| `reclip.ts` | `yt-dlp -J` 기반 metadata/subtitle/description fallback 구현 | local STT까지는 아직 안 붙음 |
+| Scrapling 어댑터 | Scrapling CLI `get -> fetch -> stealthy-fetch` escalation 구현 | cookies/proxy per-host 정책은 아직 얕음 |
+| PDF 어댑터 | `opendataloader-pdf` 연결 완료 | richer PDF heuristics는 후속 범위 |
+| 정규화 레이어 | `markitdown` normalize + raw payload 저장 사용 중 | 어댑터별 richer normalization은 여지 있음 |
 | MCP 수집 도구 | 없음 (읽기만 있음) | AI가 MCP로 직접 "가서 긁어와" 불가능 |
 | Multi-provider CLI | codex/claude 2개만 하드코딩 | Gemini 등 추가 고비용 |
 
@@ -172,6 +172,8 @@ primary인가"를 단일 책임으로 결정.
 | 한국 커뮤 (`dcinside`, `arca.live`, `clien`, `fmkorea`, `ppomppu`) | scrapling | — | — |
 | `.pdf` 확장자 또는 `content-type: application/pdf` | opendataloader-pdf | markitdown (fallback) | — |
 | `arxiv.org/abs/*`, `arxiv.org/pdf/*` | opendataloader-pdf | agent-reach (meta만) | — |
+| `r.jina.ai/*`, `s.jina.ai/*` | scrapling | markitdown | — |
+| public feed (`/feed`, `/rss`, `*.xml`) | scrapling | markitdown | — |
 | 그 외 일반 web | scrapling | markitdown (이미 HTML) | — |
 | 동영상/오디오 URL 중 위에 없는 것 | reclip | — | — |
 
@@ -189,81 +191,63 @@ export function routeUrl(url: string): AdapterChain {
 Adapter 레이어 자체는 "무엇을 할 수 있는가(supports)"만 알고, "누가 먼저 하는가"는 라우터가
 결정. 이 분리는 나중에 새 어댑터를 끼워넣어도 라우팅 정책만 고치면 되게 한다.
 
+현재 1차 흡수 범위에서 `insane-search`는 플러그인 패키지로 넣지 않는다.
+대신 엔진 policy에 아래 전략만 흡수한다.
+
+- known public endpoint
+- alternate URL / RSS / feed
+- Jina reader mirror
+- 이후 blocked-web fallback
+
 ### 4.1 Adapter 레이어
 
-새로 추가되거나 실구현이 필요한 어댑터는 총 **4개**.
+현재 기준 핵심 어댑터 4개는 모두 구현되어 있다.
 
 ```
 lib/adapters/
 ├── types.ts              # SourceTarget에 "pdf" 추가
-├── agent-reach.ts        # ⚠️ 실구현 (지금 placeholder)
-├── reclip.ts             # ⚠️ 기본 extractor 주입
-├── scrapling.ts          # 🆕 신규 — 일반 웹 + 차단 사이트
-├── opendataloader-pdf.ts # 🆕 신규 — 논문/PDF
+├── agent-reach.ts        # local Agent-Reach bridge
+├── reclip.ts             # yt-dlp metadata/subtitle fallback
+├── scrapling.ts          # Scrapling CLI escalation
+├── opendataloader-pdf.ts # Node SDK 기반 PDF ingest
 └── geocoding.ts          # (기존 유지)
 ```
 
-#### 4.1.1 Scrapling 어댑터 (신규)
+#### 4.1.1 Scrapling 어댑터
 
 **책임**: `sourceTargets`에 `"web"`이 있거나 `normalizedInput.urls`에 일반 웹 URL이 있을 때 실행.
 Cloudflare Turnstile이 걸린 사이트에서도 HTML을 받아옴.
 
-**호출 형태**:
+**현재 호출 형태**:
 ```ts
 // lib/adapters/scrapling.ts
 export function createScraplingAdapter(deps?: {
   exec?: ScraplingExecutor;
-  pythonBin?: string;   // default "python3"
-  scriptPath?: string;  // default: repo 내 agent-skill/fetch_url.py
 }): ResearchAdapter
 ```
 
-**내부 동작**:
-1. `normalizedInput.urls`를 대상으로 Scrapling `PlayWrightFetcher`(또는 `StealthyFetcher`) 호출
-2. HTML 응답 → markitdown 정규화 어댑터로 패스스루
-3. `SourceArtifact`로 변환 시 `metadata.bypass_level`을 실제 쓴 fetcher 종류로 태깅
+**현재 동작**:
+1. `scrapling extract get` 시도
+2. 실패 시 `scrapling extract fetch`로 escalation
+3. 보호/차단 계열이면 `scrapling extract stealthy-fetch --solve-cloudflare`로 escalation
+4. 결과 HTML/TXT를 raw payload + normalized markdown로 저장
+5. `metadata.bypass_level`에 `headers | headless | turnstile`를 태깅
 
 **우회 정책**: Scrapling 기본 설정 이상으로 공격적인 설정(과도한 request-per-second, proxy rotation abuse 등)은 어댑터 레벨에서 옵트인으로만 허용.
 
 #### 4.1.2 Agent-Reach 어댑터 (실구현)
 
-현재 placeholder를 실제 구현으로 교체.
-
-**설치 전제**: Agent-Reach는 "AI가 install md를 읽고 스스로 설치" 방식. Decision Engine 입장에서는
-`../git clone/Agent-Reach`에 이미 존재하므로 `python -m agent_reach` 형태로 바로 호출.
-
-**플랫폼 분기**:
-```ts
-function routeToAgentReach(url: string): AgentReachCommand {
-  if (/reddit\.com/.test(url))      return { cmd: "reach-reddit",  args: ["thread", url] };
-  if (/x\.com|twitter\.com/.test(url)) return { cmd: "reach-twitter", args: ["post", url] };
-  if (/youtube\.com|youtu\.be/.test(url)) return { cmd: "reach-youtube", args: ["transcript", url] };
-  if (/bilibili\.com|b23\.tv/.test(url)) return { cmd: "reach-bilibili", args: ["transcript", url] };
-  if (/xiaohongshu\.com/.test(url)) return { cmd: "reach-xhs", args: ["post", url] };
-  if (/github\.com/.test(url))       return { cmd: "reach-github", args: ["issues", url] };
-  return { cmd: "reach-generic", args: ["fetch", url] };
-}
-```
+현재는 local clone의 `agent_reach.channels.web.WebChannel.read()`를 Python bridge로 호출한다.
+즉 Agent-Reach 패키지를 엔진에 넣는 것이 아니라, local repo의 zero-config web surface를 활용하는 상태다.
+platform-specific search/read 분기는 아직 후속 범위다.
 
 Agent-Reach가 지원 안 하는 한국 커뮤니티(디시·아카·클리앙 등)는 자동으로 **Scrapling fallback**.
 
 #### 4.1.3 Reclip 어댑터 (실구현)
 
-기본 extractor를 `lib/adapters/reclip/extract.ts`로 구현.
-`reclip` CLI가 설치되어 있어야 하며, 설치 여부는 `reclip --version` 프로브로 선제 확인.
-
-```ts
-const extract: ReclipExtractor = async (url) => {
-  const { stdout } = await execFileAsync("reclip", [
-    "extract", url,
-    "--transcript", "--json"
-  ]);
-  return JSON.parse(stdout);
-};
-```
-
-YouTube의 경우 Agent-Reach가 먼저 자막을 잡고, 자막이 없을 때만 reclip으로 fallback (reclip은
-다운로드 후 로컬 STT가 필요할 수 있어 비용이 더 큼).
+현재는 `reclip` web UI 서버를 띄우지 않고, `yt-dlp -J`를 직접 호출한다.
+subtitle URL이 있으면 transcript를 우선 가져오고, 없으면 description으로 fallback 한다.
+YouTube/Bilibili는 여전히 `agent-reach -> reclip` fallback 순서를 유지한다.
 
 #### 4.1.4 OpenDataLoader-PDF 어댑터 (신규)
 

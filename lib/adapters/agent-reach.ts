@@ -12,9 +12,9 @@
 //     the router (PR 4) can fall back deterministically.
 //
 // Network boundary: the actual Python / CLI invocation is behind the
-// `AgentReachExecutor` interface. Tests inject fixtures. The current
-// default executor runs a placeholder python script; it will be replaced
-// with the real Agent-Reach invocation in PR 4.
+// `AgentReachExecutor` interface. Tests inject fixtures. The default
+// executor now runs a small Python bridge that imports the local
+// Agent-Reach repo and calls its zero-config web channel.
 
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -41,7 +41,7 @@ import {
 } from "@/lib/adapters/contract";
 import { normalizeToMarkdown } from "@/lib/normalize/markitdown";
 import { storeRawPayload } from "@/lib/normalize/raw-store";
-import { canonicalize } from "@/lib/adapters/url";
+import { canonicalize, hostnameOf } from "@/lib/adapters/url";
 
 const execFileAsync = promisify(execFile);
 
@@ -81,6 +81,53 @@ export type AgentReachResponse = {
   status?: string;
   error?: string;
 };
+
+function inferSourceTypeFromUrl(url: string): SourceTarget {
+  const host = hostnameOf(url) ?? "";
+  if (host.includes("github.com")) return "github";
+  if (
+    host.includes("youtube.com") ||
+    host.includes("youtu.be") ||
+    host.includes("bilibili.com") ||
+    host.includes("b23.tv")
+  ) {
+    return "video";
+  }
+  if (
+    host.includes("reddit.com") ||
+    host.includes("redd.it") ||
+    host.includes("x.com") ||
+    host.includes("twitter.com") ||
+    host.includes("xiaohongshu.com")
+  ) {
+    return "community";
+  }
+  return "web";
+}
+
+function defaultSnippet(text: string): string {
+  return text.trim().replace(/\s+/g, " ").slice(0, 240);
+}
+
+function buildAgentReachReadScript(): string {
+  return [
+    "import json, sys, urllib.error",
+    "repo_root, url, source_type = sys.argv[1], sys.argv[2], sys.argv[3]",
+    "sys.path.insert(0, repo_root)",
+    "from agent_reach.channels.web import WebChannel",
+    "def emit(payload):",
+    "    print(json.dumps(payload, ensure_ascii=False))",
+    "try:",
+    "    content = WebChannel().read(url)",
+    "    emit({'items':[{'sourceType': source_type, 'url': url, 'content': content, 'status':'success', 'metadata': {'retrieval_mode':'agent_reach/web_channel'}}]})",
+    "except urllib.error.HTTPError as e:",
+    "    status = 'blocked' if e.code in (401, 403, 429) else 'error'",
+    "    block_reason = 'login' if e.code in (401, 403) else ('ratelimit' if e.code == 429 else 'unknown')",
+    "    emit({'items':[{'sourceType': source_type, 'url': url, 'status': status, 'block_reason': block_reason, 'login_required': e.code in (401, 403), 'metadata': {'http_status': str(e.code), 'retrieval_mode':'agent_reach/web_channel'}}]})",
+    "except Exception as e:",
+    "    emit({'status':'error','error': str(e), 'items': []})"
+  ].join("; ");
+}
 
 function defaultExecutor(command: string, args: string[]): Promise<ExecResult> {
   return execFileAsync(command, args).then(
@@ -244,6 +291,9 @@ async function itemToArtifact(
         payload: item.content
       })
     : "";
+  const snippet =
+    item.snippet?.trim() ||
+    (content.trim().length > 0 ? defaultSnippet(content) : "");
 
   return buildArtifact({
     id: `${ADAPTER_NAME}-${index}`,
@@ -253,7 +303,7 @@ async function itemToArtifact(
     url,
     canonicalUrl: canonical || undefined,
     title,
-    snippet: item.snippet ?? "",
+    snippet,
     content,
     retrievedAt,
     publishedAt: coerceDateIso(item.publishedAt),
@@ -290,21 +340,18 @@ export function createAgentReachAdapter(deps?: {
       const fallbackUrl = plan.normalizedInput.urls[0] ?? "";
       const repoRoot = path.join(process.cwd(), "..", "git clone", "Agent-Reach");
       const query = buildQuery(plan);
-
-      const script = [
-        "import json, sys",
-        "payload = {'items':[{'sourceType':'web','title':sys.argv[1],'url':(sys.argv[2] if len(sys.argv)>2 else ''),'snippet':'agent-reach placeholder','metadata':{'retrieval_mode':'fresh_evidence'}}]}",
-        "print(json.dumps(payload, ensure_ascii=False))"
-      ].join("; ");
+      const sourceType = inferSourceTypeFromUrl(fallbackUrl);
+      const script = buildAgentReachReadScript();
 
       let result: ExecResult;
       try {
         result = await exec("python3", [
           "-c",
           script,
-          query,
+          repoRoot,
           fallbackUrl,
-          repoRoot
+          sourceType,
+          query
         ]);
       } catch (err) {
         return [
