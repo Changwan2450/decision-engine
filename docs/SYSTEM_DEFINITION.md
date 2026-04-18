@@ -9,6 +9,16 @@ layer-specific references (`docs/WATCH_LAYER.md`,
 
 ## Core Principles
 
+### 0. The center is the Research Engine
+
+This system is primarily an AI-first, headless research engine.
+
+Its main job is to help AI operators such as Claude or Codex gather, normalize,
+compare, and retain evidence in a reusable structure.
+
+Watch, Distill, and Memory are secondary layers or processes that extend the
+research engine. They must not replace it as the system's primary identity.
+
 ### 1. Run modes are not system layers
 
 Run modes (e.g. `quick`, `standard`, `deep`) represent execution depth and resource budget.
@@ -50,7 +60,7 @@ are intentionally left undefined at this stage and will evolve in later phases.
 
 ### 4. Memory is downstream and partially implemented
 
-Memory represents long-term, user-facing knowledge storage (e.g. wiki, Obsidian).
+Memory represents long-term, downstream knowledge storage (e.g. wiki, Obsidian).
 
 It already exists as a downstream system connected to the Research pipeline,
 primarily through export and pre-read mechanisms.
@@ -63,9 +73,10 @@ from Research/Watch outputs into Memory.
 
 ## System Structure
 
-The system is composed of three primary layers and one transformation process:
+The system is composed of one primary engine, two downstream/automation layers,
+and one transformation process:
 
-- Research layer
+- Research engine
   Executes on-demand runs to gather, normalize, and synthesize evidence.
 
 - Watch layer
@@ -98,5 +109,4 @@ Violating these constraints will lead to model divergence and system fragmentati
 
 ## One-line Definition
 
-This system is a Research OS that continuously gathers, evaluates,
-and promotes information — not a static knowledge base.
+This system is an AI-first research engine with watch and memory layers — not a static knowledge base.

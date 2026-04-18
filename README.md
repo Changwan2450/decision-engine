@@ -1,7 +1,7 @@
 # Decision Engine
 
-Decision Engine은 입력과 URL을 근거가 남는 리서치 실행 결과로 바꾸고, Watch digest, inbox item, 프로젝트 승격 후보까지 이어 주는 로컬 중심 리서치 엔진이다.
-현재 제품 표면은 웹앱이 아니라 `CLI + MCP`이며, workspace 아래 파일이 source of truth다.
+Decision Engine은 AI가 더 효율적으로 리서치하도록 돕는 로컬 중심 헤드리스 리서치 엔진이다.
+입력과 URL을 근거가 남는 research run으로 바꾸고, 필요할 때만 Watch / Memory 레이어를 통해 추적과 축적을 붙인다. 현재 제품 표면은 웹앱이 아니라 `CLI + MCP`이며, workspace 아래 파일이 source of truth다.
 
 ## 이 엔진이 이미 해주는 일
 
@@ -9,18 +9,21 @@ Decision Engine은 입력과 URL을 근거가 남는 리서치 실행 결과로 
 - total / per-url / per-adapter budget을 적용해 fallback이 무한정 돌지 않게 제어한다.
 - 원본 payload와 정규화된 markdown을 함께 보존해, 원문과 작업용 표현을 동시에 남긴다.
 - 실행 결과를 source artifact, claims, citations, contradictions, evidence summary, decision-oriented state로 구조화한다.
+- 사람이 직접 읽기 좋게 정리하는 것보다, Claude / Codex 같은 AI가 다시 쓰기 좋게 structured state를 남기는 데 초점을 둔다.
 - 반복적으로 추적할 관심사를 watch target으로 저장하고, watch-linked run -> digest -> inbox -> project 승격 흐름으로 연결한다.
 - 승격된 project run이 어떤 watch target, digest, inbox item, source runs에서 나왔는지 역추적 가능하게 남긴다.
 
 ## 왜 단순 위키나 스크래퍼가 아닌가
 
-이 저장소는 단순히 페이지를 긁어 저장하거나 노트를 쌓는 도구가 아니다.
-수집 -> 정규화 -> 근거 보존 -> digest -> inbox -> project 승격까지 이미 닫혀 있다.
+이 저장소는 사람 중심 개인 위키나 단순 스크래퍼가 아니다.
+핵심은 AI가 필요할 때 더 강하게 검색하고, 더 나은 근거 상태를 남기며, 살아남은 결과만 downstream 레이어로 넘기게 만드는 것이다.
+수집 -> 정규화 -> 근거 보존 -> decision-oriented run -> optional watch automation -> downstream accumulation까지 이미 닫혀 있다.
 
 - 단순 fetch가 아니다. URL마다 adapter routing, fallback, budget control이 붙어 있다.
 - 단순 저장이 아니다. raw payload, normalized markdown, 구조화된 evidence state를 함께 남긴다.
 - 단순 요약이 아니다. run record 안에 claims, citations, contradictions, decision-oriented output이 같이 쌓인다.
 - 단순 watch rule 저장이 아니다. watch-linked runs를 digest, inbox item, promotion-ready project work로 바꾼다.
+- 위키는 중심이 아니다. 살아남은 결과를 쌓는 downstream 축적 레이어일 뿐이다.
 - promoted run은 watch target, digest, inbox item, source runs까지 명시적으로 origin link를 가진다.
 
 ## 지금 할 수 있는 일
@@ -33,6 +36,16 @@ Decision Engine은 입력과 URL을 근거가 남는 리서치 실행 결과로 
 - digest와 optional internal alert에 대한 inbox item을 만들 수 있다.
 - digest를 일반 project run으로 승격할 수 있다.
 - MCP를 통해 project, run, analytics, fetch surface에 접근할 수 있다.
+
+## 이 프로젝트의 중심과 부가 레이어
+
+- 중심: AI-first headless research engine
+- 부가: Watch automation
+- 부가: Memory / wiki accumulation
+- 부가: 외부 리서치 보조 도구와 MCP/CLI 표면
+
+Watch와 Memory는 메인 제품이 아니다.
+둘 다 리서치 엔진 위에 붙는 자동화 / 축적 레이어다.
 
 ## 아직 없는 것
 

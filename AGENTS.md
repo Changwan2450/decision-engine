@@ -2,7 +2,8 @@
 
 ## Purpose
 
-- 이 저장소는 decision-first research system이다.
+- 이 저장소는 AI-first headless research engine이다.
+- 메인 제품은 리서치 엔진이며, Watch / Memory / wiki는 보조 레이어다.
 - 현재 운영 표면은 `CLI + MCP`다. 웹앱처럼 다루지 않는다.
 
 ## Source Of Truth
@@ -15,6 +16,7 @@
 - 먼저 `README.md`를 읽고 현재 저장소가 어떤 루프로 동작하는지 파악한다.
 - 직접 파일을 뒤지기보다 `CLI`와 `MCP` 표면을 우선 사용한다.
 - 분석성 질문은 가능하면 MCP 도구로 처리한다.
+- 사람용 UI보다 AI 오퍼레이터 관점에서 현재 표면을 해석한다.
 
 ## Research Routing
 
@@ -31,6 +33,7 @@
 
 - core: `get_project`, `get_run`, `show_run_state`, `export_bundle`, `ingest_advisory`
 - watch: `run_scheduler_tick`, `trigger_watch`, `list_inbox`, `promote_digest_to_project`, `list_watch_targets`, `list_digests`
+  watch는 research engine 위의 자동화 레이어로 취급한다.
 - analytics: `query_events`, `query_runs`
 - extension: `analyze_hotspots`
 

@@ -1,6 +1,7 @@
 # Watch Layer Reference
 
 This document is a reference note, not the source of truth.
+Watch is not the main product. It is an automation layer on top of the research engine.
 
 The source of truth for shipped behavior is:
 
@@ -8,11 +9,12 @@ The source of truth for shipped behavior is:
 2. `docs/SCHEMA.md`
 3. the current code in `lib/storage/*` and `lib/orchestrator/watch-*`
 
-This file exists to separate what is already implemented from what may come next.
+This file exists to separate what is already implemented from what may come next, without displacing the research engine as the center of the system.
 
 ## Current Position
 
 Watch is implemented as a layer on top of the existing Research substrate.
+It exists to keep useful research running over time, not to replace the core research engine.
 
 - Watch does not introduce a new fetch pipeline
 - Watch does not introduce a new `run.mode`
