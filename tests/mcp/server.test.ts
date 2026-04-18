@@ -126,6 +126,7 @@ describe("mcp server", () => {
       "list_inbox",
       "archive_inbox_item",
       "promote_digest_to_project",
+      "run_scheduler_tick",
       "export_bundle",
       "export_linkit_ingest",
       "publish_linkit_batch",
@@ -448,6 +449,46 @@ describe("mcp server", () => {
     expect(result.structuredContent.projectOrigin.digestId).toBe(digest.id);
   });
 
+  it("runs a scheduler tick through MCP", async () => {
+    await setupTempWorkspace();
+    const { project } = await createWatchFixture();
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+
+    const handleMcpRequest = createMcpHandler({
+      runSchedulerTick: async ({ projectId }) => ({
+        triggered: [
+          {
+            projectId: projectId ?? project.project.id,
+            watchTargetId: "watch-1",
+            runId: "run-1"
+          }
+        ],
+        skipped: [
+          {
+            projectId: projectId ?? project.project.id,
+            watchTargetId: "watch-2",
+            reason: "not_due"
+          }
+        ]
+      })
+    });
+
+    const response = await callToolWithHandler(handleMcpRequest, "run_scheduler_tick", {
+      projectId: project.project.id
+    });
+
+    const result = (response as {
+      result: {
+        structuredContent: {
+          triggered: Array<{ runId: string }>;
+          skipped: Array<{ reason: string }>;
+        };
+      };
+    }).result;
+    expect(result.structuredContent.triggered[0]?.runId).toBe("run-1");
+    expect(result.structuredContent.skipped[0]?.reason).toBe("not_due");
+  });
+
   it("returns an error for a missing watch target", async () => {
     await setupTempWorkspace();
     const { project } = await createWatchFixture();
@@ -564,6 +605,31 @@ describe("mcp server", () => {
       inboxItemId: expect.any(String),
       sourceRunIds: [triggered.run.id]
     });
+  });
+
+  it("returns empty results when no watches are due", async () => {
+    await setupTempWorkspace();
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+
+    const handleMcpRequest = createMcpHandler({
+      runSchedulerTick: async () => ({
+        triggered: [],
+        skipped: []
+      })
+    });
+
+    const response = await callToolWithHandler(handleMcpRequest, "run_scheduler_tick", {});
+    const result = (response as {
+      result: {
+        structuredContent: {
+          triggered: unknown[];
+          skipped: unknown[];
+        };
+      };
+    }).result;
+
+    expect(result.structuredContent.triggered).toEqual([]);
+    expect(result.structuredContent.skipped).toEqual([]);
   });
 
   it("calls query_events and returns grouped counts", async () => {

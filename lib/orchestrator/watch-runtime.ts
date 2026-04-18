@@ -3,6 +3,7 @@ import type { RunRecord } from "@/lib/storage/schema";
 import {
   createRunRecord,
   readWatchTargetRecord,
+  updateWatchTargetRecord,
   updateRunRecord
 } from "@/lib/storage/workspace";
 
@@ -32,5 +33,12 @@ export async function triggerWatchTarget(
   }));
 
   const executeRun = deps?.executeRun ?? ((p, r) => executeResearchRun(p, r, { now: deps?.now }));
-  return executeRun(projectId, createdRun.run.id);
+  const result = await executeRun(projectId, createdRun.run.id);
+  const triggeredAt = deps?.now ?? new Date().toISOString();
+  await updateWatchTargetRecord(projectId, watchTargetId, (record) => ({
+    ...record,
+    lastTriggeredAt: triggeredAt,
+    updatedAt: triggeredAt
+  }));
+  return result;
 }

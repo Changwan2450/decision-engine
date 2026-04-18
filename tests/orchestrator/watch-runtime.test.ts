@@ -18,7 +18,13 @@ describe("triggerWatchTarget", () => {
     tempRoot = await mkdtemp(path.join(os.tmpdir(), "watch-runtime-"));
     process.env.WORKSPACE_ROOT = tempRoot;
 
-    const { createProjectRecord, createWatchTargetRecord, readRunRecord } = await import(
+    const {
+      createProjectRecord,
+      createWatchTargetRecord,
+      readRunRecord,
+      readWatchTargetRecord,
+      updateWatchTargetRecord
+    } = await import(
       "@/lib/storage/workspace"
     );
     const { triggerWatchTarget } = await import("@/lib/orchestrator/watch-runtime");
@@ -32,6 +38,10 @@ describe("triggerWatchTarget", () => {
       naturalLanguage: "track short-form creator signals",
       urls: ["https://example.com/watch"]
     });
+    await updateWatchTargetRecord(project.project.id, watchTarget.id, (record) => ({
+      ...record,
+      status: "active"
+    }));
 
     const result = await triggerWatchTarget(project.project.id, watchTarget.id, {
       now: "2026-04-17T12:00:00.000Z",
@@ -50,5 +60,11 @@ describe("triggerWatchTarget", () => {
       "track short-form creator signals"
     );
     expect(result.run.input.urls).toEqual(["https://example.com/watch"]);
+    await expect(
+      readWatchTargetRecord(project.project.id, watchTarget.id)
+    ).resolves.toMatchObject({
+      lastTriggeredAt: "2026-04-17T12:00:00.000Z",
+      updatedAt: "2026-04-17T12:00:00.000Z"
+    });
   });
 });

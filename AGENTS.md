@@ -30,7 +30,7 @@
 ## MCP Priority
 
 - core: `get_project`, `get_run`, `show_run_state`, `export_bundle`, `ingest_advisory`
-- watch: `trigger_watch`, `list_inbox`, `promote_digest_to_project`, `list_watch_targets`, `list_digests`
+- watch: `run_scheduler_tick`, `trigger_watch`, `list_inbox`, `promote_digest_to_project`, `list_watch_targets`, `list_digests`
 - analytics: `query_events`, `query_runs`
 - extension: `analyze_hotspots`
 

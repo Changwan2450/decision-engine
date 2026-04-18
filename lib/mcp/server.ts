@@ -8,6 +8,7 @@ import { publishLinkitBatch } from "@/lib/bridge/linkit-publish";
 import { fetchWeb, gatherForRun } from "@/lib/orchestrator/run-research";
 import { buildWatchDigest } from "@/lib/orchestrator/watch-digest";
 import { promoteDigestToProject } from "@/lib/orchestrator/watch-inbox";
+import { runSchedulerTick } from "@/lib/orchestrator/watch-scheduler";
 import { triggerWatchTarget } from "@/lib/orchestrator/watch-runtime";
 import {
   listDigestRecords,
@@ -225,6 +226,16 @@ const TOOLS: ToolDefinition[] = [
     }
   },
   {
+    name: "run_scheduler_tick",
+    description: "Fire all due watch_target triggers based on interval schedule. Returns triggered + skipped.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" }
+      }
+    }
+  },
+  {
     name: "export_bundle",
     description: "Export bundle.json and bundle.md for a run.",
     inputSchema: {
@@ -390,6 +401,7 @@ async function callTool(
     triggerWatch?: typeof triggerWatchTarget;
     buildWatchDigest?: typeof buildWatchDigest;
     promoteDigestToProject?: typeof promoteDigestToProject;
+    runSchedulerTick?: typeof runSchedulerTick;
   }
 ) {
   const projectId = args?.projectId;
@@ -400,6 +412,7 @@ async function callTool(
   const buildWatchDigestFn = deps?.buildWatchDigest ?? buildWatchDigest;
   const promoteDigestToProjectFn =
     deps?.promoteDigestToProject ?? promoteDigestToProject;
+  const runSchedulerTickFn = deps?.runSchedulerTick ?? runSchedulerTick;
 
   switch (name) {
     case "get_project": {
@@ -538,6 +551,15 @@ async function callTool(
       );
       return toToolResult(record);
     }
+    case "run_scheduler_tick": {
+      const targetProjectId =
+        typeof projectId === "string" && projectId.length > 0 ? projectId : undefined;
+      return toToolResult(
+        await runSchedulerTickFn({
+          projectId: targetProjectId
+        })
+      );
+    }
     case "export_bundle": {
       const bundleDir = await exportRunBundle(
         requireString(projectId, "projectId"),
@@ -608,6 +630,7 @@ export function createMcpHandler(deps?: {
   triggerWatch?: typeof triggerWatchTarget;
   buildWatchDigest?: typeof buildWatchDigest;
   promoteDigestToProject?: typeof promoteDigestToProject;
+  runSchedulerTick?: typeof runSchedulerTick;
 }) {
   return async function handleMcpRequest(
     request: JsonRpcRequest

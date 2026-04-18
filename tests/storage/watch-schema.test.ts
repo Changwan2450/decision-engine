@@ -30,6 +30,41 @@ describe("watch schemas", () => {
 
     expect(parsed.tags).toEqual(["short-form", "creator"]);
     expect(parsed.delivery.digest).toBe(true);
+    expect(parsed.schedule).toBeNull();
+    expect(parsed.lastTriggeredAt).toBeNull();
+  });
+
+  it("parses an interval watch schedule", () => {
+    const parsed = watchTargetSchema.parse({
+      id: "watch-1",
+      projectId: "project-1",
+      title: "Short-form market watch",
+      query: {
+        naturalLanguage: "track short-form creator market",
+        urls: ["https://example.com/source"]
+      },
+      sourceFilter: {},
+      delivery: {
+        digest: true,
+        alert: false,
+        inbox: true
+      },
+      tags: [],
+      status: "active",
+      schedule: {
+        kind: "interval",
+        intervalMs: 60000
+      },
+      lastTriggeredAt: "2026-04-18T00:00:00.000Z",
+      createdAt: "2026-04-17T00:00:00.000Z",
+      updatedAt: "2026-04-17T00:00:00.000Z"
+    });
+
+    expect(parsed.schedule).toEqual({
+      kind: "interval",
+      intervalMs: 60000
+    });
+    expect(parsed.lastTriggeredAt).toBe("2026-04-18T00:00:00.000Z");
   });
 
   it("parses a digest with source run ids", () => {

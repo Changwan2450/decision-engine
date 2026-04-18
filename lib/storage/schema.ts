@@ -79,6 +79,16 @@ export const watchDeliverySchema = z.object({
   inbox: z.boolean().default(true)
 });
 
+export const watchScheduleSchema = z
+  .discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("interval"),
+      intervalMs: z.number().int().positive()
+    })
+  ])
+  .nullable()
+  .default(null);
+
 export const watchTargetSchema = z.object({
   id: z.string().min(1),
   projectId: z.string().min(1),
@@ -97,6 +107,8 @@ export const watchTargetSchema = z.object({
   }),
   tags: z.array(z.string()).default([]),
   status: z.enum(["draft", "active", "paused", "archived"]),
+  schedule: watchScheduleSchema,
+  lastTriggeredAt: z.string().datetime().nullable().default(null),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
 });
