@@ -22,7 +22,8 @@ import {
   readProjectRecord,
   readRunRecord,
   readWatchTargetRecord,
-  updateInboxItemStatus
+  updateInboxItemStatus,
+  updateRunRecord
 } from "@/lib/storage/workspace";
 
 type JsonRpcId = number | string | null;
@@ -109,6 +110,25 @@ const TOOLS: ToolDefinition[] = [
         }
       },
       required: ["projectId", "title"]
+    }
+  },
+  {
+    name: "clarify_run",
+    description: "Merge clarification inputs into an existing run and re-execute research on the same run.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        runId: { type: "string" },
+        query: { type: "string" },
+        naturalLanguage: { type: "string" },
+        pastedContent: { type: "string" },
+        urls: {
+          type: "array",
+          items: { type: "string" }
+        }
+      },
+      required: ["projectId", "runId"]
     }
   },
   {
@@ -466,6 +486,28 @@ function withMcpSummary(record: Awaited<ReturnType<typeof executeResearchRun>>) 
   };
 }
 
+async function mergeClarificationInput(
+  projectId: string,
+  runId: string,
+  args: Record<string, unknown> | undefined
+) {
+  const naturalLanguage = optionalString(args?.query) ?? optionalString(args?.naturalLanguage);
+  const pastedContent = optionalString(args?.pastedContent);
+  const urls = optionalStringArray(args?.urls, "urls");
+
+  return updateRunRecord(projectId, runId, (record) => ({
+    ...record,
+    run: {
+      ...record.run,
+      input: {
+        naturalLanguage: naturalLanguage ?? record.run.input.naturalLanguage,
+        pastedContent: pastedContent ?? record.run.input.pastedContent,
+        urls: urls ?? record.run.input.urls
+      }
+    }
+  }));
+}
+
 function buildMcpFailureArtifact(params: {
   adapter: "mcp/fetch_web" | "mcp/gather_for_run";
   url?: string;
@@ -534,6 +576,13 @@ async function callTool(
         urls: optionalStringArray(args?.urls, "urls")
       });
       const record = await executeResearchRunFn(createdRun.run.projectId, createdRun.run.id);
+      return toToolResult(withMcpSummary(record));
+    }
+    case "clarify_run": {
+      const targetProjectId = requireString(projectId, "projectId");
+      const targetRunId = requireString(runId, "runId");
+      await mergeClarificationInput(targetProjectId, targetRunId, args);
+      const record = await executeResearchRunFn(targetProjectId, targetRunId);
       return toToolResult(withMcpSummary(record));
     }
     case "fetch_web": {

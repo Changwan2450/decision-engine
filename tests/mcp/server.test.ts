@@ -116,6 +116,7 @@ describe("mcp server", () => {
       "get_run",
       "show_run_state",
       "run_research",
+      "clarify_run",
       "fetch_web",
       "gather_for_run",
       "list_watch_targets",
@@ -245,6 +246,98 @@ describe("mcp server", () => {
       "export_bundle",
       "get_run"
     ]);
+  });
+
+  it("clarifies an existing run and re-executes on the same runId", async () => {
+    await setupTempWorkspace();
+
+    const workspace = await import("@/lib/storage/workspace");
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+    const project = await workspace.createProjectRecord({
+      name: "Decision Engine",
+      description: "AI-first"
+    });
+    const run = await workspace.createRunRecord(project.project.id, {
+      title: "시장 진입 판단",
+      naturalLanguage: "초기 질문",
+      urls: ["https://example.com/original"]
+    });
+
+    await workspace.updateRunRecord(project.project.id, run.run.id, (record) => ({
+      ...record,
+      run: {
+        ...record.run,
+        status: "awaiting_clarification",
+        clarificationQuestions: ["이번 리서치로 무엇을 결정하려는지 알려줘."]
+      }
+    }));
+
+    const handleMcpRequest = createMcpHandler({
+      executeResearchRun: async (projectId, runId) =>
+        workspace.updateRunRecord(projectId, runId, (record) => ({
+          ...record,
+          normalizedInput: {
+            title: record.run.title,
+            naturalLanguage: record.run.input.naturalLanguage ?? "",
+            pastedContent: record.run.input.pastedContent ?? "",
+            urls: record.run.input.urls,
+            goal: "진입 여부 결정",
+            target: "신규 시장",
+            comparisonAxis: "기존 채널"
+          },
+          artifacts: [
+            {
+              id: "artifact-clarified",
+              adapter: "agent-reach",
+              sourceType: "web",
+              title: "보강된 시장 근거",
+              url: "https://example.com/updated",
+              snippet: "보강된 근거 요약",
+              content: "body",
+              sourcePriority: "analysis",
+              metadata: {
+                fetcher: "agent-reach",
+                fetch_status: "success",
+                block_reason: "unknown",
+                bypass_level: "none",
+                login_required: "false"
+              }
+            }
+          ],
+          decision: {
+            value: "go",
+            confidence: "high",
+            why: "보강 입력 후 기준이 충족됨",
+            blockingUnknowns: [],
+            nextActions: ["bundle 확인"]
+          },
+          run: {
+            ...record.run,
+            status: "decided",
+            clarificationQuestions: []
+          }
+        }))
+    });
+
+    const response = await callToolWithHandler(handleMcpRequest, "clarify_run", {
+      projectId: project.project.id,
+      runId: run.run.id,
+      query: "목표: 진입 여부 결정\n대상: 신규 시장\n비교: 기존 채널",
+      urls: ["https://example.com/updated"]
+    });
+
+    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { naturalLanguage?: string; urls: string[] } }; mcpSummary: { runId: string; status: string; topArtifacts: Array<{ title: string }> } } } }).result;
+    const stored = await workspace.readRunRecord(project.project.id, run.run.id);
+
+    expect(result.structuredContent.run.id).toBe(run.run.id);
+    expect(result.structuredContent.run.status).toBe("decided");
+    expect(result.structuredContent.run.input.naturalLanguage).toContain("목표: 진입 여부 결정");
+    expect(result.structuredContent.run.input.urls).toEqual(["https://example.com/updated"]);
+    expect(stored.run.id).toBe(run.run.id);
+    expect(stored.run.input.urls).toEqual(["https://example.com/updated"]);
+    expect(result.structuredContent.mcpSummary.runId).toBe(run.run.id);
+    expect(result.structuredContent.mcpSummary.status).toBe("decided");
+    expect(result.structuredContent.mcpSummary.topArtifacts[0]?.title).toBe("보강된 시장 근거");
   });
 
   it("returns a single artifact from fetch_web and never throws", async () => {
