@@ -111,4 +111,50 @@ describe("evidence synthesis", () => {
       "insufficient_high_priority_support"
     ]);
   });
+
+  it("infers oppose stance and topic keys from fallback claim text", () => {
+    const artifacts: SourceArtifact[] = [
+      {
+        id: "artifact-support",
+        adapter: "scrapling",
+        sourceType: "web",
+        title: "Official perspective",
+        url: "https://example.com/official",
+        snippet: "",
+        content: ["- RSC is worth it for large teams", "- I'd recommend RSC despite the complexity"].join(
+          "\n"
+        ),
+        sourcePriority: "analysis",
+        metadata: {}
+      },
+      {
+        id: "artifact-oppose",
+        adapter: "scrapling",
+        sourceType: "community",
+        title: "Community perspective",
+        url: "https://example.com/community",
+        snippet: "",
+        content: [
+          "- I think the trade-off simply isn't worth it for RSC",
+          "- massive mental overhead for little gain with RSC",
+          "- React Server Components, maybe a mistake from the beginning?"
+        ].join("\n"),
+        sourcePriority: "community",
+        metadata: {}
+      }
+    ];
+
+    const synthesis = synthesizeEvidenceFromArtifacts(artifacts, {
+      now: "2026-04-19T00:00:00.000Z",
+      recencySensitive: false
+    });
+
+    const opposeClaims = synthesis.claims.filter((claim) => claim.stance === "oppose");
+    const keyedClaims = synthesis.claims.filter((claim) => claim.topicKey);
+
+    expect(opposeClaims.length).toBeGreaterThanOrEqual(2);
+    expect(keyedClaims.length).toBeGreaterThanOrEqual(4);
+    expect(new Set(keyedClaims.map((claim) => claim.topicKey))).toContain("rsc");
+    expect(synthesis.contradictions.length).toBeGreaterThanOrEqual(1);
+  });
 });

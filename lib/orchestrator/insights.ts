@@ -1,5 +1,10 @@
 import type { SourceArtifact } from "@/lib/adapters/types";
 import {
+  assignTopicKey,
+  extractTopicAnchors,
+  inferClaimStance
+} from "@/lib/orchestrator/claim-inference";
+import {
   evidenceSummarySchema,
   type Claim,
   type Citation,
@@ -63,10 +68,10 @@ function parseClaimSeeds(artifact: SourceArtifact): ClaimSeed[] {
     .map((line) => line.replace(/^- /, "").trim());
 
   if (lines.length > 0) {
-    return lines.map((text) => ({ text, stance: "neutral" }));
+    return lines.map((text) => ({ text, stance: inferClaimStance(text) }));
   }
 
-  return raw ? [{ text: raw, stance: "neutral" }] : [];
+  return raw ? [{ text: raw, stance: inferClaimStance(raw) }] : [];
 }
 
 function comparePriority(left: Citation, right: Citation): number {
@@ -100,18 +105,28 @@ export function synthesizeEvidenceFromArtifacts(
 
   const citationByArtifactId = new Map(citations.map((citation) => [citation.artifactId, citation]));
 
-  const claims: Claim[] = artifacts.flatMap((artifact) => {
+  const seededClaims = artifacts.flatMap((artifact) => {
     const citation = citationByArtifactId.get(artifact.id);
 
     return parseClaimSeeds(artifact).map((seed, index) => ({
-      id: `claim-${claimIndex++}`,
       artifactId: artifact.id,
       text: seed.text,
       topicKey: seed.topicKey,
-      stance: seed.stance ?? "neutral",
+      stance: seed.stance,
       citationIds: citation ? [citation.id] : [`missing-citation-${index}`]
     }));
   });
+  const inferredAnchors = extractTopicAnchors(
+    seededClaims.filter((seed) => !seed.topicKey).map((seed) => seed.text)
+  );
+  const claims: Claim[] = seededClaims.map((seed) => ({
+    id: `claim-${claimIndex++}`,
+    artifactId: seed.artifactId,
+    text: seed.text,
+    topicKey: seed.topicKey ?? assignTopicKey(seed.text, inferredAnchors),
+    stance: seed.stance ?? "neutral",
+    citationIds: seed.citationIds
+  }));
 
   const contradictions: Contradiction[] = [];
 
