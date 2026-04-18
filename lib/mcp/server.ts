@@ -495,6 +495,17 @@ function buildNextToolCall(record: Awaited<ReturnType<typeof executeResearchRun>
   };
 }
 
+function buildClarificationTemplate(record: Awaited<ReturnType<typeof executeResearchRun>>) {
+  if (record.run.status !== "awaiting_clarification") return null;
+
+  return {
+    tool: "clarify_run",
+    queryTemplate: ["목표: ", "대상: ", "비교: "].join("\n"),
+    guidance: "빈 칸을 채워 같은 runId로 다시 실행한다.",
+    questions: record.run.clarificationQuestions
+  };
+}
+
 function buildRunBridgePaths(projectId: string, runId: string) {
   const bridgeDir = path.join(WORKSPACE_ROOT, projectId, "runs", runId, "bridge");
   return {
@@ -522,7 +533,8 @@ function withMcpSummary(record: Awaited<ReturnType<typeof executeResearchRun>>) 
       topArtifacts: summarizeArtifacts(record.artifacts),
       paths,
       recommendedNextTools: buildRecommendedNextTools(record.run.status),
-      nextToolCall: buildNextToolCall(record)
+      nextToolCall: buildNextToolCall(record),
+      clarificationTemplate: buildClarificationTemplate(record)
     }
   };
 }

@@ -209,8 +209,9 @@ MCP can now start a research run directly instead of only reading an existing ru
   - required: `projectId`, `title`
   - optional: `query`, `naturalLanguage`, `pastedContent`, `urls`
   - behavior: creates a new run record, executes the standard research pipeline, returns the resulting run record, and appends `mcpSummary` for AI-first follow-up
-  - `mcpSummary`: `runId`, `status`, `decision`, `clarificationQuestions`, `topArtifacts`, `paths`, `recommendedNextTools`, `nextToolCall`
+  - `mcpSummary`: `runId`, `status`, `decision`, `clarificationQuestions`, `topArtifacts`, `paths`, `recommendedNextTools`, `nextToolCall`, `clarificationTemplate`
   - when status is `awaiting_clarification`, `recommendedNextTools` should lead with `clarify_run`
+  - when status is `awaiting_clarification`, `clarificationTemplate.queryTemplate` gives a ready-to-fill `query` shape for `clarify_run`
   - follow-up tools: `get_run`, `show_run_state`, `export_bundle`, `gather_for_run`
 
 - `clarify_run`

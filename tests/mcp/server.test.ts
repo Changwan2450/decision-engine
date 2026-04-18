@@ -226,7 +226,7 @@ describe("mcp server", () => {
       urls: ["https://example.com/report"]
     });
 
-    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string }>; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } } } } } }).result;
+    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string }>; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: null } } } }).result;
     const stored = await workspace.readRunRecord(project.project.id, result.structuredContent.run.id);
 
     expect(result.structuredContent.run.status).toBe("decided");
@@ -253,6 +253,7 @@ describe("mcp server", () => {
         runId: result.structuredContent.run.id
       }
     });
+    expect(result.structuredContent.mcpSummary.clarificationTemplate).toBeNull();
   });
 
   it("clarifies an existing run and re-executes on the same runId", async () => {
@@ -381,7 +382,7 @@ describe("mcp server", () => {
       query: "초기 질문"
     });
 
-    const result = (response as { result: { structuredContent: { run: { id: string; status: string }; mcpSummary: { status: string; clarificationQuestions: string[]; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } } } } } }).result;
+    const result = (response as { result: { structuredContent: { run: { id: string; status: string }; mcpSummary: { status: string; clarificationQuestions: string[]; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: { tool: string; queryTemplate: string; guidance: string; questions: string[] } } } } }).result;
 
     expect(result.structuredContent.run.status).toBe("awaiting_clarification");
     expect(result.structuredContent.mcpSummary.status).toBe("awaiting_clarification");
@@ -398,6 +399,12 @@ describe("mcp server", () => {
         projectId: project.project.id,
         runId: result.structuredContent.run.id
       }
+    });
+    expect(result.structuredContent.mcpSummary.clarificationTemplate).toEqual({
+      tool: "clarify_run",
+      queryTemplate: "목표: \n대상: \n비교: ",
+      guidance: "빈 칸을 채워 같은 runId로 다시 실행한다.",
+      questions: ["무엇을 결정하려는지 알려줘."]
     });
   });
 
