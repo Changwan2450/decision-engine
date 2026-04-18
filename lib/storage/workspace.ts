@@ -258,6 +258,18 @@ export async function listRunRecords(projectId: string): Promise<RunRecord[]> {
   return records.sort((a, b) => b.run.updatedAt.localeCompare(a.run.updatedAt));
 }
 
+export async function listWatchTargetRecords(projectId: string): Promise<WatchTargetRecord[]> {
+  await mkdir(watchTargetsDir(projectId), { recursive: true });
+  const entries = await readdir(watchTargetsDir(projectId), { withFileTypes: true });
+  const records = await Promise.all(
+    entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+      .map((entry) => readWatchTargetRecord(projectId, entry.name.replace(/\.json$/, "")))
+  );
+
+  return records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
 export async function listDigestRecords(projectId: string): Promise<DigestRecord[]> {
   await mkdir(digestsDir(projectId), { recursive: true });
   const entries = await readdir(digestsDir(projectId), { withFileTypes: true });

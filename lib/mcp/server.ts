@@ -6,7 +6,19 @@ import { sendDiscordNotifierFromFile } from "@/lib/bridge/discord-notifier";
 import { exportLinkitIngestBundle } from "@/lib/bridge/linkit-export";
 import { publishLinkitBatch } from "@/lib/bridge/linkit-publish";
 import { fetchWeb, gatherForRun } from "@/lib/orchestrator/run-research";
-import { readProjectRecord, readRunRecord } from "@/lib/storage/workspace";
+import { buildWatchDigest } from "@/lib/orchestrator/watch-digest";
+import { promoteDigestToProject } from "@/lib/orchestrator/watch-inbox";
+import { triggerWatchTarget } from "@/lib/orchestrator/watch-runtime";
+import {
+  listDigestRecords,
+  listInboxItemRecords,
+  listWatchTargetRecords,
+  readDigestRecord,
+  readProjectRecord,
+  readRunRecord,
+  readWatchTargetRecord,
+  updateInboxItemStatus
+} from "@/lib/storage/workspace";
 
 type JsonRpcId = number | string | null;
 
@@ -96,6 +108,120 @@ const TOOLS: ToolDefinition[] = [
         runId: { type: "string" }
       },
       required: ["runId"]
+    }
+  },
+  {
+    name: "list_watch_targets",
+    description: "List watch targets for a project.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" }
+      },
+      required: ["projectId"]
+    }
+  },
+  {
+    name: "get_watch_target",
+    description: "Read one watch target from the workspace.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        watchTargetId: { type: "string" }
+      },
+      required: ["projectId", "watchTargetId"]
+    }
+  },
+  {
+    name: "trigger_watch",
+    description: "Trigger a watch target and return the created run.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        watchTargetId: { type: "string" }
+      },
+      required: ["projectId", "watchTargetId"]
+    }
+  },
+  {
+    name: "list_digests",
+    description: "List digests for a project or watch target.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        watchTargetId: { type: "string" }
+      },
+      required: ["projectId"]
+    }
+  },
+  {
+    name: "get_digest",
+    description: "Read one digest from the workspace.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        digestId: { type: "string" }
+      },
+      required: ["projectId", "digestId"]
+    }
+  },
+  {
+    name: "build_watch_digest",
+    description: "Build one digest from watch-linked source runs.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        watchTargetId: { type: "string" },
+        sourceRunIds: {
+          type: "array",
+          items: { type: "string" }
+        }
+      },
+      required: ["projectId", "watchTargetId", "sourceRunIds"]
+    }
+  },
+  {
+    name: "list_inbox",
+    description: "List inbox items for a project.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        status: {
+          type: "string",
+          enum: ["unread", "read", "archived", "promoted"]
+        }
+      },
+      required: ["projectId"]
+    }
+  },
+  {
+    name: "archive_inbox_item",
+    description: "Archive one inbox item in the workspace.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        itemId: { type: "string" }
+      },
+      required: ["projectId", "itemId"]
+    }
+  },
+  {
+    name: "promote_digest_to_project",
+    description: "Promote a digest into a normal project run.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        digestId: { type: "string" }
+      },
+      required: ["projectId", "digestId"]
     }
   },
   {
@@ -219,6 +345,13 @@ function requireString(value: unknown, name: string): string {
   return value;
 }
 
+function requireStringArray(value: unknown, name: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    throw new Error(`Missing required argument: ${name}`);
+  }
+  return value;
+}
+
 function toToolResult(payload: unknown) {
   return {
     content: [
@@ -254,12 +387,19 @@ async function callTool(
   deps?: {
     fetchWeb?: typeof fetchWeb;
     gatherForRun?: typeof gatherForRun;
+    triggerWatch?: typeof triggerWatchTarget;
+    buildWatchDigest?: typeof buildWatchDigest;
+    promoteDigestToProject?: typeof promoteDigestToProject;
   }
 ) {
   const projectId = args?.projectId;
   const runId = args?.runId;
   const fetchWebFn = deps?.fetchWeb ?? fetchWeb;
   const gatherForRunFn = deps?.gatherForRun ?? gatherForRun;
+  const triggerWatchFn = deps?.triggerWatch ?? triggerWatchTarget;
+  const buildWatchDigestFn = deps?.buildWatchDigest ?? buildWatchDigest;
+  const promoteDigestToProjectFn =
+    deps?.promoteDigestToProject ?? promoteDigestToProject;
 
   switch (name) {
     case "get_project": {
@@ -312,6 +452,91 @@ async function callTool(
           ]
         });
       }
+    }
+    case "list_watch_targets": {
+      const records = await listWatchTargetRecords(requireString(projectId, "projectId"));
+      return toToolResult({ projectId, watchTargets: records });
+    }
+    case "get_watch_target": {
+      const record = await readWatchTargetRecord(
+        requireString(projectId, "projectId"),
+        requireString(args?.watchTargetId, "watchTargetId")
+      );
+      return toToolResult(record);
+    }
+    case "trigger_watch": {
+      const record = await triggerWatchFn(
+        requireString(projectId, "projectId"),
+        requireString(args?.watchTargetId, "watchTargetId")
+      );
+      return toToolResult(record);
+    }
+    case "list_digests": {
+      const targetProjectId = requireString(projectId, "projectId");
+      const watchTargetId =
+        typeof args?.watchTargetId === "string" && args.watchTargetId.length > 0
+          ? args.watchTargetId
+          : undefined;
+      const digests = await listDigestRecords(targetProjectId);
+      return toToolResult({
+        projectId: targetProjectId,
+        digests: watchTargetId
+          ? digests.filter((digest) => digest.watchTargetId === watchTargetId)
+          : digests
+      });
+    }
+    case "get_digest": {
+      const record = await readDigestRecord(
+        requireString(projectId, "projectId"),
+        requireString(args?.digestId, "digestId")
+      );
+      return toToolResult(record);
+    }
+    case "build_watch_digest": {
+      const record = await buildWatchDigestFn(
+        requireString(projectId, "projectId"),
+        requireString(args?.watchTargetId, "watchTargetId"),
+        {
+          sourceRunIds: requireStringArray(args?.sourceRunIds, "sourceRunIds")
+        }
+      );
+      return toToolResult(record);
+    }
+    case "list_inbox": {
+      const targetProjectId = requireString(projectId, "projectId");
+      const status =
+        typeof args?.status === "string" && args.status.length > 0
+          ? args.status
+          : undefined;
+      if (
+        status &&
+        status !== "unread" &&
+        status !== "read" &&
+        status !== "archived" &&
+        status !== "promoted"
+      ) {
+        throw new Error("status must be unread, read, archived, or promoted");
+      }
+      const items = await listInboxItemRecords(targetProjectId);
+      return toToolResult({
+        projectId: targetProjectId,
+        inboxItems: status ? items.filter((item) => item.status === status) : items
+      });
+    }
+    case "archive_inbox_item": {
+      const record = await updateInboxItemStatus(
+        requireString(projectId, "projectId"),
+        requireString(args?.itemId, "itemId"),
+        "archived"
+      );
+      return toToolResult(record);
+    }
+    case "promote_digest_to_project": {
+      const record = await promoteDigestToProjectFn(
+        requireString(projectId, "projectId"),
+        requireString(args?.digestId, "digestId")
+      );
+      return toToolResult(record);
     }
     case "export_bundle": {
       const bundleDir = await exportRunBundle(
@@ -380,6 +605,9 @@ async function callTool(
 export function createMcpHandler(deps?: {
   fetchWeb?: typeof fetchWeb;
   gatherForRun?: typeof gatherForRun;
+  triggerWatch?: typeof triggerWatchTarget;
+  buildWatchDigest?: typeof buildWatchDigest;
+  promoteDigestToProject?: typeof promoteDigestToProject;
 }) {
   return async function handleMcpRequest(
     request: JsonRpcRequest

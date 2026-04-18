@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -6,8 +6,62 @@ import type { SourceArtifact } from "@/lib/adapters/types";
 
 let tempRoot: string | null = null;
 
+async function setupTempWorkspace() {
+  tempRoot = await mkdtemp(path.join(os.tmpdir(), "decision-engine-mcp-"));
+  process.env.WORKSPACE_ROOT = tempRoot;
+  vi.resetModules();
+}
+
+async function callTool(name: string, args: Record<string, unknown>) {
+  const { handleMcpRequest } = await import("@/lib/mcp/server");
+  return callToolWithHandler(handleMcpRequest, name, args);
+}
+
+async function callToolWithHandler(
+  handleMcpRequest: (request: {
+    jsonrpc: "2.0";
+    id: number;
+    method: "tools/call";
+    params: {
+      name: string;
+      arguments: Record<string, unknown>;
+    };
+  }) => Promise<unknown>,
+  name: string,
+  args: Record<string, unknown>
+) {
+  return handleMcpRequest({
+    jsonrpc: "2.0",
+    id: 100,
+    method: "tools/call",
+    params: {
+      name,
+      arguments: args
+    }
+  });
+}
+
+async function createWatchFixture() {
+  const workspace = await import("@/lib/storage/workspace");
+  const project = await workspace.createProjectRecord({
+    name: "Watchable",
+    description: "watch mcp test"
+  });
+  const watchTarget = await workspace.createWatchTargetRecord(project.project.id, {
+    title: "Short-form watch",
+    naturalLanguage: "track short-form creator signals"
+  });
+
+  return {
+    workspace,
+    project,
+    watchTarget
+  };
+}
+
 describe("mcp server", () => {
   afterEach(async () => {
+    vi.restoreAllMocks();
     if (tempRoot) {
       await rm(tempRoot, { recursive: true, force: true });
       tempRoot = null;
@@ -46,7 +100,7 @@ describe("mcp server", () => {
     });
   });
 
-  it("lists the minimum AI-first tools", async () => {
+  it("lists the current MCP tools including watch tools", async () => {
     const { handleMcpRequest } = await import("@/lib/mcp/server");
 
     const response = await handleMcpRequest({
@@ -63,6 +117,15 @@ describe("mcp server", () => {
       "show_run_state",
       "fetch_web",
       "gather_for_run",
+      "list_watch_targets",
+      "get_watch_target",
+      "trigger_watch",
+      "list_digests",
+      "get_digest",
+      "build_watch_digest",
+      "list_inbox",
+      "archive_inbox_item",
+      "promote_digest_to_project",
       "export_bundle",
       "export_linkit_ingest",
       "publish_linkit_batch",
@@ -75,12 +138,9 @@ describe("mcp server", () => {
   });
 
   it("calls get_run and returns structured content", async () => {
-    tempRoot = await mkdtemp(path.join(os.tmpdir(), "decision-engine-mcp-"));
-    process.env.WORKSPACE_ROOT = tempRoot;
+    await setupTempWorkspace();
 
     const { createProjectRecord, createRunRecord } = await import("@/lib/storage/workspace");
-    const { handleMcpRequest } = await import("@/lib/mcp/server");
-
     const project = await createProjectRecord({
       name: "Decision Engine",
       description: "AI-first"
@@ -90,17 +150,9 @@ describe("mcp server", () => {
       naturalLanguage: "시장 진입 여부 판단"
     });
 
-    const response = await handleMcpRequest({
-      jsonrpc: "2.0",
-      id: 3,
-      method: "tools/call",
-      params: {
-        name: "get_run",
-        arguments: {
-          projectId: project.project.id,
-          runId: run.run.id
-        }
-      }
+    const response = await callTool("get_run", {
+      projectId: project.project.id,
+      runId: run.run.id
     });
 
     const result = (response as { result: { structuredContent: { run: { id: string } } } }).result;
@@ -178,15 +230,347 @@ describe("mcp server", () => {
     expect(result.structuredContent.artifacts[0]?.title).toBe("run:run-123");
   });
 
+  it("lists watch targets for a project", async () => {
+    await setupTempWorkspace();
+    const { project, watchTarget } = await createWatchFixture();
+
+    const response = await callTool("list_watch_targets", {
+      projectId: project.project.id
+    });
+
+    const result = (response as { result: { structuredContent: { watchTargets: Array<{ id: string }> } } }).result;
+    expect(result.structuredContent.watchTargets.map((item) => item.id)).toContain(watchTarget.id);
+  });
+
+  it("gets a single watch target", async () => {
+    await setupTempWorkspace();
+    const { project, watchTarget } = await createWatchFixture();
+
+    const response = await callTool("get_watch_target", {
+      projectId: project.project.id,
+      watchTargetId: watchTarget.id
+    });
+
+    const result = (response as { result: { structuredContent: { id: string; title: string } } }).result;
+    expect(result.structuredContent.id).toBe(watchTarget.id);
+    expect(result.structuredContent.title).toBe("Short-form watch");
+  });
+
+  it("triggers a watch target into a run with watchContext", async () => {
+    await setupTempWorkspace();
+    const { project, watchTarget } = await createWatchFixture();
+    const { readRunRecord } = await import("@/lib/storage/workspace");
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+    const { triggerWatchTarget } = await import("@/lib/orchestrator/watch-runtime");
+    const handleMcpRequest = createMcpHandler({
+      triggerWatch: (projectId, watchTargetId) =>
+        triggerWatchTarget(projectId, watchTargetId, {
+          executeRun: async (p, r) => readRunRecord(p, r)
+        })
+    });
+
+    const response = await callToolWithHandler(handleMcpRequest, "trigger_watch", {
+      projectId: project.project.id,
+      watchTargetId: watchTarget.id
+    });
+
+    const result = (response as { result: { structuredContent: { watchContext: { watchTargetId: string } } } }).result;
+    expect(result.structuredContent.watchContext.watchTargetId).toBe(watchTarget.id);
+  });
+
+  it("lists digests and supports watchTarget filtering", async () => {
+    await setupTempWorkspace();
+    const { workspace, project, watchTarget } = await createWatchFixture();
+
+    const run = await workspace.createRunRecord(project.project.id, {
+      title: "tick",
+      urls: []
+    });
+    await workspace.updateRunRecord(project.project.id, run.run.id, (record) => ({
+      ...record,
+      watchContext: { watchTargetId: watchTarget.id, digestId: null }
+    }));
+    const digest = await (await import("@/lib/orchestrator/watch-digest")).buildWatchDigest(
+      project.project.id,
+      watchTarget.id,
+      { sourceRunIds: [run.run.id] }
+    );
+
+    const response = await callTool("list_digests", {
+      projectId: project.project.id,
+      watchTargetId: watchTarget.id
+    });
+
+    const result = (response as { result: { structuredContent: { digests: Array<{ id: string }> } } }).result;
+    expect(result.structuredContent.digests.map((item) => item.id)).toEqual([digest.id]);
+  });
+
+  it("gets a single digest", async () => {
+    await setupTempWorkspace();
+    const { workspace, project, watchTarget } = await createWatchFixture();
+
+    const run = await workspace.createRunRecord(project.project.id, {
+      title: "tick",
+      urls: []
+    });
+    await workspace.updateRunRecord(project.project.id, run.run.id, (record) => ({
+      ...record,
+      watchContext: { watchTargetId: watchTarget.id, digestId: null }
+    }));
+    const digest = await (await import("@/lib/orchestrator/watch-digest")).buildWatchDigest(
+      project.project.id,
+      watchTarget.id,
+      { sourceRunIds: [run.run.id] }
+    );
+
+    const response = await callTool("get_digest", {
+      projectId: project.project.id,
+      digestId: digest.id
+    });
+
+    const result = (response as { result: { structuredContent: { id: string; watchTargetId: string } } }).result;
+    expect(result.structuredContent.id).toBe(digest.id);
+    expect(result.structuredContent.watchTargetId).toBe(watchTarget.id);
+  });
+
+  it("builds a watch digest from source runs", async () => {
+    await setupTempWorkspace();
+    const { workspace, project, watchTarget } = await createWatchFixture();
+
+    const run = await workspace.createRunRecord(project.project.id, {
+      title: "tick",
+      urls: []
+    });
+    await workspace.updateRunRecord(project.project.id, run.run.id, (record) => ({
+      ...record,
+      watchContext: { watchTargetId: watchTarget.id, digestId: null }
+    }));
+
+    const response = await callTool("build_watch_digest", {
+      projectId: project.project.id,
+      watchTargetId: watchTarget.id,
+      sourceRunIds: [run.run.id]
+    });
+
+    const result = (response as { result: { structuredContent: { sourceRunIds: string[]; status: string } } }).result;
+    expect(result.structuredContent.sourceRunIds).toEqual([run.run.id]);
+    expect(result.structuredContent.status).toBe("built");
+  });
+
+  it("lists inbox items and supports status filtering", async () => {
+    await setupTempWorkspace();
+    const { workspace, project, watchTarget } = await createWatchFixture();
+
+    const run = await workspace.createRunRecord(project.project.id, {
+      title: "tick",
+      urls: []
+    });
+    await workspace.updateRunRecord(project.project.id, run.run.id, (record) => ({
+      ...record,
+      watchContext: { watchTargetId: watchTarget.id, digestId: null }
+    }));
+    await (await import("@/lib/orchestrator/watch-digest")).buildWatchDigest(
+      project.project.id,
+      watchTarget.id,
+      { sourceRunIds: [run.run.id] }
+    );
+
+    const response = await callTool("list_inbox", {
+      projectId: project.project.id,
+      status: "unread"
+    });
+
+    const result = (response as { result: { structuredContent: { inboxItems: Array<{ status: string }> } } }).result;
+    expect(result.structuredContent.inboxItems).toHaveLength(1);
+    expect(result.structuredContent.inboxItems[0]?.status).toBe("unread");
+  });
+
+  it("archives an inbox item", async () => {
+    await setupTempWorkspace();
+    const { workspace, project, watchTarget } = await createWatchFixture();
+
+    const run = await workspace.createRunRecord(project.project.id, {
+      title: "tick",
+      urls: []
+    });
+    await workspace.updateRunRecord(project.project.id, run.run.id, (record) => ({
+      ...record,
+      watchContext: { watchTargetId: watchTarget.id, digestId: null }
+    }));
+    await (await import("@/lib/orchestrator/watch-digest")).buildWatchDigest(
+      project.project.id,
+      watchTarget.id,
+      { sourceRunIds: [run.run.id] }
+    );
+    const inboxItems = await workspace.listInboxItemRecords(project.project.id);
+
+    const response = await callTool("archive_inbox_item", {
+      projectId: project.project.id,
+      itemId: inboxItems[0]?.id
+    });
+
+    const result = (response as { result: { structuredContent: { status: string } } }).result;
+    expect(result.structuredContent.status).toBe("archived");
+  });
+
+  it("promotes a digest into a project run", async () => {
+    await setupTempWorkspace();
+    const { workspace, project, watchTarget } = await createWatchFixture();
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+    const { promoteDigestToProject } = await import("@/lib/orchestrator/watch-inbox");
+
+    const run = await workspace.createRunRecord(project.project.id, {
+      title: "tick",
+      urls: []
+    });
+    await workspace.updateRunRecord(project.project.id, run.run.id, (record) => ({
+      ...record,
+      watchContext: { watchTargetId: watchTarget.id, digestId: null }
+    }));
+    const digest = await (await import("@/lib/orchestrator/watch-digest")).buildWatchDigest(
+      project.project.id,
+      watchTarget.id,
+      { sourceRunIds: [run.run.id] }
+    );
+    const handleMcpRequest = createMcpHandler({
+      promoteDigestToProject: (projectId, digestId) =>
+        promoteDigestToProject(projectId, digestId, {
+          executeRun: async (p, r) => workspace.readRunRecord(p, r)
+        })
+    });
+
+    const response = await callToolWithHandler(handleMcpRequest, "promote_digest_to_project", {
+      projectId: project.project.id,
+      digestId: digest.id
+    });
+
+    const result = (response as { result: { structuredContent: { projectOrigin: { digestId: string } } } }).result;
+    expect(result.structuredContent.projectOrigin.digestId).toBe(digest.id);
+  });
+
+  it("returns an error for a missing watch target", async () => {
+    await setupTempWorkspace();
+    const { project } = await createWatchFixture();
+
+    const response = await callTool("get_watch_target", {
+      projectId: project.project.id,
+      watchTargetId: "missing-watch-target"
+    });
+
+    expect(response).toMatchObject({
+      error: {
+        code: -32000
+      }
+    });
+  });
+
+  it("returns an error for a missing digest", async () => {
+    await setupTempWorkspace();
+    const { project } = await createWatchFixture();
+
+    const response = await callTool("get_digest", {
+      projectId: project.project.id,
+      digestId: "missing-digest"
+    });
+
+    expect(response).toMatchObject({
+      error: {
+        code: -32000
+      }
+    });
+  });
+
+  it("returns an error for an invalid inbox status", async () => {
+    await setupTempWorkspace();
+    const { project } = await createWatchFixture();
+
+    const response = await callTool("list_inbox", {
+      projectId: project.project.id,
+      status: "bad-status"
+    });
+
+    expect(response).toMatchObject({
+      error: {
+        code: -32000,
+        message: "status must be unread, read, archived, or promoted"
+      }
+    });
+  });
+
+  it("runs the watch MCP flow end-to-end", async () => {
+    await setupTempWorkspace();
+    const { workspace, project, watchTarget } = await createWatchFixture();
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+    const { triggerWatchTarget } = await import("@/lib/orchestrator/watch-runtime");
+    const { promoteDigestToProject } = await import("@/lib/orchestrator/watch-inbox");
+    const handleMcpRequest = createMcpHandler({
+      triggerWatch: (projectId, watchTargetId) =>
+        triggerWatchTarget(projectId, watchTargetId, {
+          executeRun: async (p, r) => workspace.readRunRecord(p, r)
+        }),
+      promoteDigestToProject: (projectId, digestId) =>
+        promoteDigestToProject(projectId, digestId, {
+          executeRun: async (p, r) => workspace.readRunRecord(p, r)
+        })
+    });
+
+    const triggerResponse = await callToolWithHandler(handleMcpRequest, "trigger_watch", {
+      projectId: project.project.id,
+      watchTargetId: watchTarget.id
+    });
+    const triggered = (triggerResponse as { result: { structuredContent: { run: { id: string } } } }).result.structuredContent;
+
+    const emptyDigestList = await callToolWithHandler(handleMcpRequest, "list_digests", {
+      projectId: project.project.id,
+      watchTargetId: watchTarget.id
+    });
+    expect(
+      (emptyDigestList as { result: { structuredContent: { digests: unknown[] } } }).result.structuredContent.digests
+    ).toEqual([]);
+
+    const buildResponse = await callToolWithHandler(handleMcpRequest, "build_watch_digest", {
+      projectId: project.project.id,
+      watchTargetId: watchTarget.id,
+      sourceRunIds: [triggered.run.id]
+    });
+    const builtDigest = (buildResponse as { result: { structuredContent: { id: string } } }).result.structuredContent;
+
+    const digestList = await callToolWithHandler(handleMcpRequest, "list_digests", {
+      projectId: project.project.id,
+      watchTargetId: watchTarget.id
+    });
+    expect(
+      (digestList as { result: { structuredContent: { digests: Array<{ id: string }> } } }).result
+        .structuredContent.digests[0]?.id
+    ).toBe(builtDigest.id);
+
+    const inboxList = await callToolWithHandler(handleMcpRequest, "list_inbox", {
+      projectId: project.project.id
+    });
+    const inboxItems = (inboxList as { result: { structuredContent: { inboxItems: Array<{ id: string; refId: string }> } } }).result.structuredContent.inboxItems;
+    expect(inboxItems[0]?.refId).toBe(builtDigest.id);
+
+    const promoteResponse = await callToolWithHandler(handleMcpRequest, "promote_digest_to_project", {
+      projectId: project.project.id,
+      digestId: builtDigest.id
+    });
+    const promoted = (promoteResponse as { result: { structuredContent: { run: { id: string } } } }).result.structuredContent;
+    const promotedRun = await workspace.readRunRecord(project.project.id, promoted.run.id);
+
+    expect(promotedRun.projectOrigin).toEqual({
+      source: "watch_digest",
+      watchTargetId: watchTarget.id,
+      digestId: builtDigest.id,
+      inboxItemId: expect.any(String),
+      sourceRunIds: [triggered.run.id]
+    });
+  });
+
   it("calls query_events and returns grouped counts", async () => {
-    tempRoot = await mkdtemp(path.join(os.tmpdir(), "decision-engine-mcp-"));
-    process.env.WORKSPACE_ROOT = tempRoot;
-    vi.resetModules();
+    await setupTempWorkspace();
 
     const { createProjectRecord, createRunRecord } = await import("@/lib/storage/workspace");
     const { appendRunEvent } = await import("@/lib/bridge/cli-file");
-    const { handleMcpRequest } = await import("@/lib/mcp/server");
-
     const project = await createProjectRecord({
       name: "Decision Engine",
       description: "AI-first"
@@ -204,16 +588,8 @@ describe("mcp server", () => {
       at: "2026-04-10T00:00:00.000Z"
     });
 
-    const response = await handleMcpRequest({
-      jsonrpc: "2.0",
-      id: 4,
-      method: "tools/call",
-      params: {
-        name: "query_events",
-        arguments: {
-          sql: "SELECT type, COUNT(*)::BIGINT AS count FROM events GROUP BY type"
-        }
-      }
+    const response = await callTool("query_events", {
+      sql: "SELECT type, COUNT(*)::BIGINT AS count FROM events GROUP BY type"
     });
 
     const result = (response as { result: { structuredContent: { rows: Array<{ type: string; count: number }> } } }).result;
@@ -227,13 +603,9 @@ describe("mcp server", () => {
   });
 
   it("exports linkit ingest files from run artifacts", async () => {
-    tempRoot = await mkdtemp(path.join(os.tmpdir(), "decision-engine-mcp-"));
-    process.env.WORKSPACE_ROOT = tempRoot;
-    vi.resetModules();
+    await setupTempWorkspace();
 
     const { createProjectRecord, createRunRecord, updateRunRecord } = await import("@/lib/storage/workspace");
-    const { handleMcpRequest } = await import("@/lib/mcp/server");
-
     const project = await createProjectRecord({
       name: "Decision Engine",
       description: "AI-first"
@@ -266,17 +638,9 @@ describe("mcp server", () => {
       artifacts
     }));
 
-    const response = await handleMcpRequest({
-      jsonrpc: "2.0",
-      id: 5,
-      method: "tools/call",
-      params: {
-        name: "export_linkit_ingest",
-        arguments: {
-          projectId: project.project.id,
-          runId: run.run.id
-        }
-      }
+    const response = await callTool("export_linkit_ingest", {
+      projectId: project.project.id,
+      runId: run.run.id
     });
 
     const result = (response as { result: { structuredContent: { normalizedCount: number; readyCount: number } } }).result;
@@ -285,13 +649,9 @@ describe("mcp server", () => {
   });
 
   it("publishes a linkit batch through MCP", async () => {
-    tempRoot = await mkdtemp(path.join(os.tmpdir(), "decision-engine-mcp-"));
-    process.env.WORKSPACE_ROOT = tempRoot;
-    vi.resetModules();
+    await setupTempWorkspace();
 
     const { createProjectRecord, createRunRecord, updateRunRecord } = await import("@/lib/storage/workspace");
-    const { handleMcpRequest } = await import("@/lib/mcp/server");
-
     const project = await createProjectRecord({
       name: "Decision Engine",
       description: "AI-first"
@@ -342,20 +702,12 @@ describe("mcp server", () => {
       )
     ) as typeof fetch;
 
-    const response = await handleMcpRequest({
-      jsonrpc: "2.0",
-      id: 6,
-      method: "tools/call",
-      params: {
-        name: "publish_linkit_batch",
-        arguments: {
-          projectId: project.project.id,
-          runId: run.run.id,
-          apiBaseUrl: "https://linkit.test",
-          siteUrl: "https://linkit.site",
-          actorEmail: "ops@example.com"
-        }
-      }
+    const response = await callTool("publish_linkit_batch", {
+      projectId: project.project.id,
+      runId: run.run.id,
+      apiBaseUrl: "https://linkit.test",
+      siteUrl: "https://linkit.site",
+      actorEmail: "ops@example.com"
     });
 
     const result = (response as { result: { structuredContent: { published: number; notifierPath: string } } }).result;
@@ -364,14 +716,9 @@ describe("mcp server", () => {
   });
 
   it("sends a discord notifier through MCP", async () => {
-    tempRoot = await mkdtemp(path.join(os.tmpdir(), "decision-engine-mcp-"));
-    process.env.WORKSPACE_ROOT = tempRoot;
-    vi.resetModules();
+    await setupTempWorkspace();
 
-    const { mkdir, writeFile } = await import("node:fs/promises");
-    const { handleMcpRequest } = await import("@/lib/mcp/server");
-
-    const bridgeDir = path.join(tempRoot, "project-1", "runs", "run-1", "bridge");
+    const bridgeDir = path.join(tempRoot!, "project-1", "runs", "run-1", "bridge");
     await mkdir(bridgeDir, { recursive: true });
     await writeFile(
       path.join(bridgeDir, "discord-notifier.json"),
@@ -401,18 +748,10 @@ describe("mcp server", () => {
       )
     ) as typeof fetch;
 
-    const response = await handleMcpRequest({
-      jsonrpc: "2.0",
-      id: 7,
-      method: "tools/call",
-      params: {
-        name: "send_discord_notifier",
-        arguments: {
-          projectId: "project-1",
-          runId: "run-1",
-          webhookUrl: "https://discord.com/api/webhooks/test"
-        }
-      }
+    const response = await callTool("send_discord_notifier", {
+      projectId: "project-1",
+      runId: "run-1",
+      webhookUrl: "https://discord.com/api/webhooks/test"
     });
 
     const result = (response as { result: { structuredContent: { webhookMessageId: string | null; resultPath: string } } }).result;
