@@ -444,7 +444,7 @@ function summarizeArtifacts(artifacts: SourceArtifact[]) {
 
 function buildRecommendedNextTools(status: string) {
   if (status === "awaiting_clarification") {
-    return ["get_run", "run_research"];
+    return ["clarify_run", "get_run"];
   }
   if (status === "decided") {
     return ["show_run_state", "export_bundle", "get_run"];

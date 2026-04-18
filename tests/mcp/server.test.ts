@@ -340,6 +340,53 @@ describe("mcp server", () => {
     expect(result.structuredContent.mcpSummary.topArtifacts[0]?.title).toBe("보강된 시장 근거");
   });
 
+  it("recommends clarify_run when a run is awaiting clarification", async () => {
+    await setupTempWorkspace();
+
+    const workspace = await import("@/lib/storage/workspace");
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+    const project = await workspace.createProjectRecord({
+      name: "Decision Engine",
+      description: "AI-first"
+    });
+
+    const handleMcpRequest = createMcpHandler({
+      executeResearchRun: async (projectId, runId) =>
+        workspace.updateRunRecord(projectId, runId, (record) => ({
+          ...record,
+          run: {
+            ...record.run,
+            status: "awaiting_clarification",
+            clarificationQuestions: ["무엇을 결정하려는지 알려줘."]
+          },
+          normalizedInput: {
+            title: record.run.title,
+            naturalLanguage: record.run.input.naturalLanguage ?? "",
+            pastedContent: record.run.input.pastedContent ?? "",
+            urls: record.run.input.urls
+          }
+        }))
+    });
+
+    const response = await callToolWithHandler(handleMcpRequest, "run_research", {
+      projectId: project.project.id,
+      title: "시장 진입 판단",
+      query: "초기 질문"
+    });
+
+    const result = (response as { result: { structuredContent: { run: { status: string }; mcpSummary: { status: string; clarificationQuestions: string[]; recommendedNextTools: string[] } } } }).result;
+
+    expect(result.structuredContent.run.status).toBe("awaiting_clarification");
+    expect(result.structuredContent.mcpSummary.status).toBe("awaiting_clarification");
+    expect(result.structuredContent.mcpSummary.clarificationQuestions).toEqual([
+      "무엇을 결정하려는지 알려줘."
+    ]);
+    expect(result.structuredContent.mcpSummary.recommendedNextTools).toEqual([
+      "clarify_run",
+      "get_run"
+    ]);
+  });
+
   it("returns a single artifact from fetch_web and never throws", async () => {
     const { createMcpHandler } = await import("@/lib/mcp/server");
 
