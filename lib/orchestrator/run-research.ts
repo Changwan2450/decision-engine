@@ -363,10 +363,12 @@ export async function executeResearchRun(
     gather?: (plan: ResearchPlan) => Promise<SourceArtifact[]>;
   }
 ) {
+  const now = deps?.now ?? new Date().toISOString();
+  const nowDate = new Date(now);
   const initialRecord = await readRunRecord(projectId, runId);
   const projectRecord = await readProjectRecord(projectId);
   const existingRunRecords = await listRunRecords(projectId);
-  const normalizedInputForContext = planRun(initialRecord).normalizedInput;
+  const normalizedInputForContext = planRun(initialRecord, null, { now: nowDate }).normalizedInput;
   const kbContext = await buildKnowledgeContext({
     record: {
       ...initialRecord,
@@ -380,9 +382,9 @@ export async function executeResearchRun(
       ...initialRecord,
       normalizedInput: normalizedInputForContext
     },
-    kbContext
+    kbContext,
+    { now: nowDate }
   );
-  const now = deps?.now ?? new Date().toISOString();
   const clarificationQuestions = buildClarificationQuestions(plan.normalizedInput);
 
   if (shouldClarifyRun(plan.normalizedInput)) {
@@ -391,6 +393,7 @@ export async function executeResearchRun(
       return {
         ...record,
         normalizedInput: plan.normalizedInput,
+        expansion: plan.expansion,
         kbContext: plan.kbContext,
         run: {
           ...record.run,
@@ -407,6 +410,7 @@ export async function executeResearchRun(
     return {
       ...record,
       normalizedInput: plan.normalizedInput,
+      expansion: plan.expansion,
       kbContext: plan.kbContext,
       run: {
         ...record.run,

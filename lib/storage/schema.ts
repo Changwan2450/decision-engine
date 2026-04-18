@@ -9,6 +9,7 @@ import {
 import { decisionSchema, prdSeedSchema } from "@/lib/domain/decision";
 import { projectSchema } from "@/lib/domain/projects";
 import { runSchema } from "@/lib/domain/runs";
+import type { ExpansionAxis, ExpandedSource } from "@/lib/orchestrator/query-expansion";
 
 export const normalizedRunInputSchema = z.object({
   title: z.string().min(1),
@@ -42,6 +43,25 @@ export const knowledgeContextSchema = z.object({
   queryExpansion: z.array(z.string()).default([]),
   duplicateWarnings: z.array(z.string()).default([]),
   freshEvidenceFocus: z.array(z.string()).default([])
+});
+
+export const expandedQuerySchema = z.object({
+  axis: z.custom<ExpansionAxis>((value) =>
+    value === "official" ||
+    value === "recent" ||
+    value === "comparison" ||
+    value === "counter"
+  ),
+  query: z.string().min(1),
+  source: z.custom<ExpandedSource>((value) =>
+    value === "jina-search" || value === "reddit-search" || value === "hn-algolia"
+  ),
+  url: z.string().url()
+});
+
+export const expansionResultSchema = z.object({
+  expanded: z.array(expandedQuerySchema).default([]),
+  dropped: z.number().int().nonnegative().default(0)
 });
 
 export const projectInsightSchema = z.object({
@@ -171,6 +191,7 @@ export const runRecordSchema = z.object({
   watchContext: watchContextSchema.nullable().default(null),
   projectOrigin: projectOriginSchema.nullable().default(null),
   normalizedInput: normalizedRunInputSchema.nullable().default(null),
+  expansion: expansionResultSchema.nullable().default(null),
   kbContext: knowledgeContextSchema.nullable().default(null),
   decision: decisionSchema.nullable().default(null),
   prdSeed: prdSeedSchema.nullable().default(null),

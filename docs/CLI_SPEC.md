@@ -212,8 +212,8 @@ should be treated as the baseline operator surface for Claude/Codex flows.
 - `run_research`
   - required: `projectId`, `title`
   - optional: `query`, `naturalLanguage`, `pastedContent`, `urls`
-  - behavior: creates a new run record, executes the standard research pipeline, returns the resulting run record, and appends `mcpSummary` for AI-first follow-up
-  - `mcpSummary`: `runId`, `status`, `decision`, `clarificationQuestions`, `topArtifacts`, `paths`, `recommendedNextTools`, `nextToolCall`, `clarificationTemplate`
+  - behavior: creates a new run record, executes the standard research pipeline, applies rule-based query expansion by default on `official` + `recent` axes, returns the resulting run record, and appends `mcpSummary` for AI-first follow-up
+  - `mcpSummary`: `runId`, `status`, `decision`, `clarificationQuestions`, `topArtifacts`, `expandedQueries`, `expansionDropped`, `paths`, `recommendedNextTools`, `nextToolCall`, `clarificationTemplate`
   - when status is `awaiting_clarification`, `recommendedNextTools` should lead with `clarify_run`
   - when status is `awaiting_clarification`, `clarificationTemplate.queryTemplate` gives a ready-to-fill `query` shape for `clarify_run`, prefilled with current title, current input, and current pasted content
   - `clarificationTemplate.fieldHints` maps each clarification question to a suggested field such as `goal`, `target`, or `comparisonAxis`

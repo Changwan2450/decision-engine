@@ -550,6 +550,8 @@ function withMcpSummary(record: Awaited<ReturnType<typeof executeResearchRun>>) 
         : null,
       clarificationQuestions: record.run.clarificationQuestions,
       topArtifacts: summarizeArtifacts(record.artifacts),
+      expandedQueries: record.expansion?.expanded ?? [],
+      expansionDropped: record.expansion?.dropped ?? 0,
       paths,
       recommendedNextTools: buildRecommendedNextTools(record.run.status),
       nextToolCall: buildNextToolCall(record),

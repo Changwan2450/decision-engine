@@ -186,6 +186,17 @@ describe("mcp server", () => {
             target: "시장",
             comparisonAxis: "대안"
           },
+          expansion: {
+            expanded: [
+              {
+                axis: "official",
+                query: "시장 진입 판단",
+                source: "jina-search",
+                url: "https://s.jina.ai/?q=%EC%8B%9C%EC%9E%A5+%EC%A7%84%EC%9E%85+%ED%8C%90%EB%8B%A8"
+              }
+            ],
+            dropped: 2
+          },
           artifacts: [
             {
               id: "artifact-1",
@@ -226,7 +237,7 @@ describe("mcp server", () => {
       urls: ["https://example.com/report"]
     });
 
-    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string }>; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: null } } } }).result;
+    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string }>; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: null; expandedQueries: Array<{ axis: string; source: string; url: string }>; expansionDropped: number } } } }).result;
     const stored = await workspace.readRunRecord(project.project.id, result.structuredContent.run.id);
 
     expect(result.structuredContent.run.status).toBe("decided");
@@ -254,6 +265,15 @@ describe("mcp server", () => {
       }
     });
     expect(result.structuredContent.mcpSummary.clarificationTemplate).toBeNull();
+    expect(result.structuredContent.mcpSummary.expandedQueries).toEqual([
+      {
+        axis: "official",
+        query: "시장 진입 판단",
+        source: "jina-search",
+        url: "https://s.jina.ai/?q=%EC%8B%9C%EC%9E%A5+%EC%A7%84%EC%9E%85+%ED%8C%90%EB%8B%A8"
+      }
+    ]);
+    expect(result.structuredContent.mcpSummary.expansionDropped).toBe(2);
   });
 
   it("clarifies an existing run and re-executes on the same runId", async () => {

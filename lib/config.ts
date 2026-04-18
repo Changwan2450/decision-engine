@@ -14,6 +14,7 @@ export type ResearchBudgetConfig = {
   perAdapterMs: number;
   perUrlMs: number;
   fallbackBudgetRatio: number;
+  maxUrlsPerRun: number;
 };
 
 export function getResearchBudgetConfig(): ResearchBudgetConfig {
@@ -21,7 +22,8 @@ export function getResearchBudgetConfig(): ResearchBudgetConfig {
     totalMs: readPositiveInt("RESEARCH_TOTAL_MS", 30_000),
     perAdapterMs: readPositiveInt("RESEARCH_PER_ADAPTER_MS", 12_000),
     perUrlMs: readPositiveInt("RESEARCH_PER_URL_MS", 15_000),
-    fallbackBudgetRatio: readRatio("RESEARCH_FALLBACK_BUDGET_RATIO", 0.4)
+    fallbackBudgetRatio: readRatio("RESEARCH_FALLBACK_BUDGET_RATIO", 0.4),
+    maxUrlsPerRun: readPositiveInt("RESEARCH_MAX_URLS_PER_RUN", 20)
   };
 }
 

@@ -189,6 +189,8 @@ describe("executeResearchRun", () => {
     const storedProject = await readProjectRecord(project.project.id);
 
     expect(storedRun.run.status).toBe("decided");
+    expect(storedRun.expansion).not.toBeNull();
+    expect(storedRun.expansion?.expanded.length).toBeGreaterThan(0);
     expect(storedRun.normalizedInput).toMatchObject({
       goal: "숏츠 시장 진입 여부 판단",
       target: "20대 크리에이터",
@@ -212,6 +214,55 @@ describe("executeResearchRun", () => {
     expect(storedProject.insights.competitorSignals).toContain(
       "릴스가 편집 자동화를 밀고 있다"
     );
+  });
+
+  it("persists expansion once at collecting and keeps it stable across later stages", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "research-expansion-"));
+    tempVault = await mkdtemp(path.join(os.tmpdir(), "research-vault-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+    process.env.OBSIDIAN_VAULT_PATH = tempVault;
+    setQmdClientForTests({
+      async operatorNotes() {
+        return [];
+      },
+      async queryNotes() {
+        return [];
+      }
+    });
+
+    const { createProjectRecord, createRunRecord, readRunRecord } = await import(
+      "@/lib/storage/workspace"
+    );
+    const { executeResearchRun } = await import("@/lib/orchestrator/run-research");
+
+    const project = await createProjectRecord({
+      name: "Expansion",
+      description: "expansion persistence"
+    });
+    const run = await createRunRecord(project.project.id, {
+      title: "OpenAI pricing",
+      naturalLanguage: "목표: 가격 파악\n대상: 개발자\n비교: Anthropic, Google",
+      urls: ["https://example.com/original"]
+    });
+
+    const observedExpansions: string[] = [];
+
+    await executeResearchRun(project.project.id, run.run.id, {
+      now: "2026-04-18T00:00:00.000Z",
+      gather: async () => {
+        const { readRunRecord: readCurrentRun } = await import("@/lib/storage/workspace");
+        const current = await readCurrentRun(project.project.id, run.run.id);
+        observedExpansions.push(JSON.stringify(current.expansion));
+        return [];
+      }
+    });
+
+    const storedRun = await readRunRecord(project.project.id, run.run.id);
+
+    expect(storedRun.expansion).not.toBeNull();
+    expect(storedRun.expansion?.expanded.some((entry) => entry.axis === "official")).toBe(true);
+    expect(observedExpansions).toHaveLength(1);
+    expect(JSON.parse(observedExpansions[0] ?? "null")).toEqual(storedRun.expansion);
   });
 });
 
