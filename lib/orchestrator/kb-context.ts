@@ -154,11 +154,21 @@ async function qmdMultiGet(vaultRoot: string, files: string[]): Promise<Knowledg
     ["multi-get", files.map((file) => toQmdPath(file)).join(","), "--json"],
     vaultRoot
   );
-  const rows = JSON.parse(stdout) as QmdDocumentRow[];
-  return rows
-    .filter((row) => typeof row.file === "string" && typeof row.body === "string")
-    .map((row) => noteFromMarkdown(row.body ?? "", row.file, row.title ?? ""))
-    .filter((note) => note.title.length > 0);
+  try {
+    const rows = JSON.parse(stdout) as QmdDocumentRow[];
+    return rows
+      .filter((row) => typeof row.file === "string" && typeof row.body === "string")
+      .map((row) => noteFromMarkdown(row.body ?? "", row.file, row.title ?? ""))
+      .filter((note) => note.title.length > 0);
+  } catch {
+    const notes = await Promise.all(
+      files.map(async (file) => {
+        const markdown = await runQmd(["get", toQmdPath(file)], vaultRoot);
+        return noteFromMarkdown(markdown, file);
+      })
+    );
+    return notes.filter((note) => note.title.length > 0);
+  }
 }
 
 function buildDefaultQmdClient(vaultRoot: string): QmdClient {
