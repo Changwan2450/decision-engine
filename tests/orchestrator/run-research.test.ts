@@ -11,7 +11,7 @@ import type {
   ResearchPlan,
   SourceArtifact
 } from "@/lib/adapters/types";
-import { setQmdClientForTests } from "@/lib/orchestrator/kb-context";
+import { setQmdClientForTests, setQmdRunnerForTests } from "@/lib/orchestrator/kb-context";
 
 let tempRoot: string | null = null;
 let tempVault: string | null = null;
@@ -50,6 +50,7 @@ function makeAdapter(
 describe("executeResearchRun", () => {
   afterEach(async () => {
     setQmdClientForTests(null);
+    setQmdRunnerForTests(null);
     if (tempRoot) {
       await rm(tempRoot, { recursive: true, force: true });
       tempRoot = null;
@@ -351,6 +352,95 @@ describe("executeResearchRun", () => {
       "analysis",
       "official"
     ]);
+  });
+
+  it("falls back to per-file get when qmd multi-get returns invalid json", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "research-qmd-fallback-"));
+    tempVault = await mkdtemp(path.join(os.tmpdir(), "research-qmd-fallback-vault-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+    process.env.OBSIDIAN_VAULT_PATH = tempVault;
+
+    const getCalls: string[] = [];
+    setQmdRunnerForTests(async (args) => {
+      if (args[0] === "query") {
+        return JSON.stringify([
+          {
+            file: "qmd://wiki/topics/example-topic.md",
+            title: "Example Topic"
+          }
+        ]);
+      }
+
+      if (args[0] === "multi-get") {
+        return '[{"file":"qmd://wiki/topics/example-topic.md","body":"# Example Topic';
+      }
+
+      if (args[0] === "get") {
+        getCalls.push(args[1] ?? "");
+        if (args[1] === "qmd://wiki/concepts/user-working-profile.md") {
+          return [
+            "# User Working Profile",
+            "",
+            "## Summary",
+            "",
+            "operator summary",
+            "",
+            "## Reusable Claims",
+            "",
+            "- operator claim"
+          ].join("\n");
+        }
+
+        if (args[1] === "qmd://wiki/topics/example-topic.md") {
+        return [
+          "# Example Topic",
+          "",
+          "## Summary",
+          "",
+          "fallback summary",
+          "",
+          "## Reusable Claims",
+          "",
+          "- fallback claim"
+        ].join("\n");
+        }
+      }
+
+      throw new Error(`unexpected qmd args: ${args.join(" ")}`);
+    });
+
+    const { createProjectRecord, createRunRecord, readRunRecord } = await import(
+      "@/lib/storage/workspace"
+    );
+    const { executeResearchRun } = await import("@/lib/orchestrator/run-research");
+
+    const project = await createProjectRecord({
+      name: "QMD Fallback",
+      description: "qmd fallback"
+    });
+    const run = await createRunRecord(project.project.id, {
+      title: "fallback run",
+      naturalLanguage: "목표: 판단\n대상: 개발자\n비교: 기존 방식",
+      urls: ["https://example.com/source"]
+    });
+
+    await executeResearchRun(project.project.id, run.run.id, {
+      now: "2026-04-19T00:00:00.000Z",
+      gather: async () => []
+    });
+
+    const storedRun = await readRunRecord(project.project.id, run.run.id);
+    expect(storedRun.run.status).toBe("decided");
+    expect(getCalls).toContain("qmd://wiki/concepts/user-working-profile.md");
+    expect(getCalls).toContain("qmd://wiki/topics/example-topic.md");
+    expect(storedRun.kbContext?.wikiNotes[0]).toMatchObject({
+      title: "Example Topic",
+      summary: "fallback summary"
+    });
+    expect(storedRun.kbContext?.operatorNotes[0]).toMatchObject({
+      title: "User Working Profile",
+      summary: "operator summary"
+    });
   });
 });
 

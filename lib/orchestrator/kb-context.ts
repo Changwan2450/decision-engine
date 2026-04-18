@@ -19,6 +19,8 @@ type QmdClient = {
   operatorNotes: () => Promise<KnowledgeContextNote[]>;
 };
 
+type QmdRunner = (args: string[], vaultRoot: string) => Promise<string>;
+
 type QmdQueryRow = {
   file: string;
   title?: string;
@@ -31,6 +33,7 @@ type QmdDocumentRow = {
 };
 
 let qmdClientOverride: QmdClient | null = null;
+let qmdRunnerOverride: QmdRunner | null = null;
 let resolvedQmdRuntime:
   | {
       nodePath: string;
@@ -120,6 +123,9 @@ async function resolveQmdRuntime(): Promise<{
 }
 
 async function runQmd(args: string[], vaultRoot: string): Promise<string> {
+  if (qmdRunnerOverride) {
+    return qmdRunnerOverride(args, vaultRoot);
+  }
   const runtime = await resolveQmdRuntime();
   const commandArgs =
     args[0] === "query" && !args.includes("--no-rerank") ? [...args, "--no-rerank"] : args;
@@ -212,6 +218,10 @@ function getQmdClient(vaultRoot: string): QmdClient {
 
 export function setQmdClientForTests(client: QmdClient | null): void {
   qmdClientOverride = client;
+}
+
+export function setQmdRunnerForTests(runner: QmdRunner | null): void {
+  qmdRunnerOverride = runner;
 }
 
 export async function buildKnowledgeContext(params: {
