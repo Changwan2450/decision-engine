@@ -29,4 +29,12 @@ describe("inferSourceTier", () => {
   it("classifies jina reader as aggregator", () => {
     expect(inferSourceTier("https://r.jina.ai/http://example.com")).toBe("aggregator");
   });
+
+  it("classifies kb.local as internal", () => {
+    expect(inferSourceTier("https://kb.local/wiki/some-id")).toBe("internal");
+  });
+
+  it("classifies kb.local with arbitrary path and query as internal", () => {
+    expect(inferSourceTier("https://kb.local/anything?x=1")).toBe("internal");
+  });
 });

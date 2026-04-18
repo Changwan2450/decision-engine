@@ -455,6 +455,7 @@ function buildTierDistribution(artifacts: SourceArtifact[]): Record<SourceTier, 
     {
       official: 0,
       primary: 0,
+      internal: 0,
       community: 0,
       aggregator: 0,
       unknown: 0

@@ -238,7 +238,7 @@ describe("mcp server", () => {
       urls: ["https://example.com/report"]
     });
 
-    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string; sourceTier: string }>; tierDistribution: { official: number; primary: number; community: number; aggregator: number; unknown: number }; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: null; expandedQueries: Array<{ axis: string; source: string; url: string }>; expansionDropped: number } } } }).result;
+    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string; sourceTier: string }>; tierDistribution: { official: number; primary: number; internal: number; community: number; aggregator: number; unknown: number }; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: null; expandedQueries: Array<{ axis: string; source: string; url: string }>; expansionDropped: number } } } }).result;
     const stored = await workspace.readRunRecord(project.project.id, result.structuredContent.run.id);
 
     expect(result.structuredContent.run.status).toBe("decided");
@@ -255,6 +255,7 @@ describe("mcp server", () => {
     expect(result.structuredContent.mcpSummary.tierDistribution).toEqual({
       official: 0,
       primary: 0,
+      internal: 0,
       community: 1,
       aggregator: 0,
       unknown: 0
@@ -286,6 +287,82 @@ describe("mcp server", () => {
     expect(stored.artifacts[0]?.sourceTier).toBe(
       result.structuredContent.mcpSummary.topArtifacts[0]?.sourceTier
     );
+  });
+
+  it("reports kb.local artifacts as internal in tier distribution", async () => {
+    await setupTempWorkspace();
+
+    const workspace = await import("@/lib/storage/workspace");
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+    const project = await workspace.createProjectRecord({
+      name: "Decision Engine",
+      description: "AI-first"
+    });
+
+    const handleMcpRequest = createMcpHandler({
+      executeResearchRun: async (projectId, runId) =>
+        workspace.updateRunRecord(projectId, runId, (record) => ({
+          ...record,
+          normalizedInput: {
+            title: record.run.title,
+            naturalLanguage: record.run.input.naturalLanguage ?? "",
+            pastedContent: record.run.input.pastedContent ?? "",
+            urls: record.run.input.urls,
+            goal: "판단",
+            target: "시장",
+            comparisonAxis: "대안"
+          },
+          artifacts: [
+            {
+              id: "artifact-kb",
+              adapter: "kb-preread",
+              sourceType: "kb",
+              title: "KB Wiki Prior",
+              url: "https://kb.local/wiki/run-1",
+              snippet: "internal prior",
+              content: "body",
+              sourcePriority: "analysis",
+              sourceTier: "internal",
+              metadata: {
+                fetcher: "kb-preread",
+                fetch_status: "success",
+                block_reason: "unknown",
+                bypass_level: "none",
+                login_required: "false"
+              }
+            }
+          ],
+          decision: {
+            value: "go",
+            confidence: "high",
+            why: "내부 prior가 있음",
+            blockingUnknowns: [],
+            nextActions: []
+          },
+          run: {
+            ...record.run,
+            status: "decided"
+          }
+        }))
+    });
+
+    const response = await callToolWithHandler(handleMcpRequest, "run_research", {
+      projectId: project.project.id,
+      title: "내부 KB 점검",
+      query: "kb.local 내부 prior 확인"
+    });
+
+    const result = (response as { result: { structuredContent: { mcpSummary: { topArtifacts: Array<{ sourceTier: string }>; tierDistribution: { official: number; primary: number; internal: number; community: number; aggregator: number; unknown: number } } } } }).result;
+
+    expect(result.structuredContent.mcpSummary.topArtifacts[0]?.sourceTier).toBe("internal");
+    expect(result.structuredContent.mcpSummary.tierDistribution).toEqual({
+      official: 0,
+      primary: 0,
+      internal: 1,
+      community: 0,
+      aggregator: 0,
+      unknown: 0
+    });
   });
 
   it("clarifies an existing run and re-executes on the same runId", async () => {

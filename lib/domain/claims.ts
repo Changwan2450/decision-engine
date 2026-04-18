@@ -20,6 +20,7 @@ export const sourcePrioritySchema = z.enum([
 export const sourceTierSchema = z.enum([
   "official",
   "primary",
+  "internal",
   "community",
   "aggregator",
   "unknown"

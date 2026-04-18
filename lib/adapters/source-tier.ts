@@ -1,5 +1,9 @@
 import type { SourceTier } from "@/lib/domain/claims";
 
+const INTERNAL_HOSTS = new Set([
+  "kb.local"
+]);
+
 const AGGREGATOR_HOSTS = new Set([
   "s.jina.ai",
   "r.jina.ai"
@@ -21,6 +25,7 @@ export function inferSourceTier(url: string): SourceTier {
   try {
     const host = new URL(url).hostname.toLowerCase();
 
+    if (INTERNAL_HOSTS.has(host)) return "internal";
     if (OFFICIAL_HOSTS.has(host)) return "official";
     if (PRIMARY_HOSTS.has(host)) return "primary";
     if (AGGREGATOR_HOSTS.has(host)) return "aggregator";
