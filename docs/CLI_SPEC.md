@@ -162,6 +162,7 @@ tools layered on top of it.
 - `get_project`
 - `get_run`
 - `show_run_state`
+- `run_research`
 - `export_bundle`
 - `ingest_advisory`
 
@@ -199,3 +200,13 @@ The current policy is intentionally engine-native, not plugin-native.
 - Generic web keeps `scrapling` as primary and `markitdown` as fallback.
 - This policy is where `insane-search`-style strategy is absorbed: public endpoint, alternate URL/feed, and mirror-aware routing.
 - The engine does not package the external plugin itself.
+
+## MCP Execution Surface
+
+MCP can now start a research run directly instead of only reading an existing run.
+
+- `run_research`
+  - required: `projectId`, `title`
+  - optional: `query`, `naturalLanguage`, `pastedContent`, `urls`
+  - behavior: creates a new run record, executes the standard research pipeline, and returns the resulting run record
+  - follow-up tools: `get_run`, `show_run_state`, `export_bundle`, `gather_for_run`

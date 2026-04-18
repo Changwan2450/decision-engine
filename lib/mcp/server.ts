@@ -5,12 +5,13 @@ import { exportRunBundle, ingestAdvisoryFromFile, writeRunStateSnapshot } from "
 import { sendDiscordNotifierFromFile } from "@/lib/bridge/discord-notifier";
 import { exportLinkitIngestBundle } from "@/lib/bridge/linkit-export";
 import { publishLinkitBatch } from "@/lib/bridge/linkit-publish";
-import { fetchWeb, gatherForRun } from "@/lib/orchestrator/run-research";
+import { executeResearchRun, fetchWeb, gatherForRun } from "@/lib/orchestrator/run-research";
 import { buildWatchDigest } from "@/lib/orchestrator/watch-digest";
 import { promoteDigestToProject } from "@/lib/orchestrator/watch-inbox";
 import { runSchedulerTick } from "@/lib/orchestrator/watch-scheduler";
 import { triggerWatchTarget } from "@/lib/orchestrator/watch-runtime";
 import {
+  createRunRecord,
   listDigestRecords,
   listInboxItemRecords,
   listWatchTargetRecords,
@@ -86,6 +87,25 @@ const TOOLS: ToolDefinition[] = [
         runId: { type: "string" }
       },
       required: ["projectId", "runId"]
+    }
+  },
+  {
+    name: "run_research",
+    description: "Create a run from MCP inputs, execute research, and return the resulting run record.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        title: { type: "string" },
+        query: { type: "string" },
+        naturalLanguage: { type: "string" },
+        pastedContent: { type: "string" },
+        urls: {
+          type: "array",
+          items: { type: "string" }
+        }
+      },
+      required: ["projectId", "title"]
     }
   },
   {
@@ -363,6 +383,18 @@ function requireStringArray(value: unknown, name: string): string[] {
   return value;
 }
 
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function optionalStringArray(value: unknown, name: string): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || item.length === 0)) {
+    throw new Error(`${name} must be a non-empty string array`);
+  }
+  return value;
+}
+
 function toToolResult(payload: unknown) {
   return {
     content: [
@@ -396,6 +428,7 @@ async function callTool(
   name: string,
   args: Record<string, unknown> | undefined,
   deps?: {
+    executeResearchRun?: typeof executeResearchRun;
     fetchWeb?: typeof fetchWeb;
     gatherForRun?: typeof gatherForRun;
     triggerWatch?: typeof triggerWatchTarget;
@@ -406,6 +439,7 @@ async function callTool(
 ) {
   const projectId = args?.projectId;
   const runId = args?.runId;
+  const executeResearchRunFn = deps?.executeResearchRun ?? executeResearchRun;
   const fetchWebFn = deps?.fetchWeb ?? fetchWeb;
   const gatherForRunFn = deps?.gatherForRun ?? gatherForRun;
   const triggerWatchFn = deps?.triggerWatch ?? triggerWatchTarget;
@@ -432,6 +466,16 @@ async function callTool(
         requireString(runId, "runId")
       );
       return toToolResult({ projectId, runId, snapshotPath });
+    }
+    case "run_research": {
+      const createdRun = await createRunRecord(requireString(projectId, "projectId"), {
+        title: requireString(args?.title, "title"),
+        naturalLanguage: optionalString(args?.query) ?? optionalString(args?.naturalLanguage),
+        pastedContent: optionalString(args?.pastedContent),
+        urls: optionalStringArray(args?.urls, "urls")
+      });
+      const record = await executeResearchRunFn(createdRun.run.projectId, createdRun.run.id);
+      return toToolResult(record);
     }
     case "fetch_web": {
       const url = requireString(args?.url, "url");
@@ -625,6 +669,7 @@ async function callTool(
 }
 
 export function createMcpHandler(deps?: {
+  executeResearchRun?: typeof executeResearchRun;
   fetchWeb?: typeof fetchWeb;
   gatherForRun?: typeof gatherForRun;
   triggerWatch?: typeof triggerWatchTarget;

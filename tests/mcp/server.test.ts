@@ -115,6 +115,7 @@ describe("mcp server", () => {
       "get_project",
       "get_run",
       "show_run_state",
+      "run_research",
       "fetch_web",
       "gather_for_run",
       "list_watch_targets",
@@ -159,6 +160,51 @@ describe("mcp server", () => {
     const result = (response as { result: { structuredContent: { run: { id: string } } } }).result;
 
     expect(result.structuredContent.run.id).toBe(run.run.id);
+  });
+
+  it("creates and executes a run through run_research", async () => {
+    await setupTempWorkspace();
+
+    const workspace = await import("@/lib/storage/workspace");
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+    const project = await workspace.createProjectRecord({
+      name: "Decision Engine",
+      description: "AI-first"
+    });
+
+    const handleMcpRequest = createMcpHandler({
+      executeResearchRun: async (projectId, runId) =>
+        workspace.updateRunRecord(projectId, runId, (record) => ({
+          ...record,
+          normalizedInput: {
+            title: record.run.title,
+            naturalLanguage: record.run.input.naturalLanguage ?? "",
+            pastedContent: record.run.input.pastedContent ?? "",
+            urls: record.run.input.urls,
+            goal: "판단",
+            target: "시장",
+            comparisonAxis: "대안"
+          },
+          run: {
+            ...record.run,
+            status: "decided"
+          }
+        }))
+    });
+
+    const response = await callToolWithHandler(handleMcpRequest, "run_research", {
+      projectId: project.project.id,
+      title: "시장 진입 판단",
+      query: "시장 진입 여부 판단",
+      urls: ["https://example.com/report"]
+    });
+
+    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string } } } }).result;
+    const stored = await workspace.readRunRecord(project.project.id, result.structuredContent.run.id);
+
+    expect(result.structuredContent.run.status).toBe("decided");
+    expect(result.structuredContent.normalizedInput.naturalLanguage).toBe("시장 진입 여부 판단");
+    expect(stored.run.input.urls).toEqual(["https://example.com/report"]);
   });
 
   it("returns a single artifact from fetch_web and never throws", async () => {
