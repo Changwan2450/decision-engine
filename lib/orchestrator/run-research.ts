@@ -1,6 +1,7 @@
 import { buildFailureArtifact } from "@/lib/adapters/contract";
 import { createAdapterRegistry, type AdapterRegistry } from "@/lib/adapters/registry";
 import { routeUrl, type AdapterChain, type AdapterName } from "@/lib/adapters/router";
+import { inferSourceTier } from "@/lib/adapters/source-tier";
 import type { ResearchPlan, SourceArtifact, SourceTarget } from "@/lib/adapters/types";
 import { getResearchBudgetConfig, type ResearchBudgetConfig } from "@/lib/config";
 import { assertRunTransition } from "@/lib/domain/runs";
@@ -355,6 +356,13 @@ function selectRepresentativeArtifact(
   });
 }
 
+function attachSourceTiers(artifacts: SourceArtifact[]): SourceArtifact[] {
+  return artifacts.map((artifact) => ({
+    ...artifact,
+    sourceTier: artifact.sourceTier ?? inferSourceTier(artifact.canonicalUrl ?? artifact.url)
+  }));
+}
+
 export async function executeResearchRun(
   projectId: string,
   runId: string,
@@ -393,7 +401,7 @@ export async function executeResearchRun(
       return {
         ...record,
         normalizedInput: plan.normalizedInput,
-        expansion: plan.expansion,
+        expansion: plan.expansion ?? null,
         kbContext: plan.kbContext,
         run: {
           ...record.run,
@@ -410,7 +418,7 @@ export async function executeResearchRun(
     return {
       ...record,
       normalizedInput: plan.normalizedInput,
-      expansion: plan.expansion,
+      expansion: plan.expansion ?? null,
       kbContext: plan.kbContext,
       run: {
         ...record.run,
@@ -424,10 +432,10 @@ export async function executeResearchRun(
   try {
     const gather = deps?.gather ?? runResearch;
     const gatheredArtifacts = await gather(plan);
-    const artifacts = [
+    const artifacts = attachSourceTiers([
       ...buildKnowledgeArtifacts(plan.kbContext, plan.runId),
       ...gatheredArtifacts
-    ];
+    ]);
 
     await updateRunRecord(projectId, runId, (record) => {
       assertRunTransition(record.run.status, "synthesizing");
@@ -457,6 +465,7 @@ export async function executeResearchRun(
       target: plan.normalizedInput.target,
       comparisonAxis: plan.normalizedInput.comparisonAxis
     });
+    const synthesizedArtifacts = attachSourceTiers(synthesis.artifacts);
 
     const finalRecord = await updateRunRecord(projectId, runId, (record) => {
       assertRunTransition(record.run.status, "decided");
@@ -464,7 +473,7 @@ export async function executeResearchRun(
         ...record,
         normalizedInput: plan.normalizedInput,
         kbContext: plan.kbContext,
-        artifacts: synthesis.artifacts,
+        artifacts: synthesizedArtifacts,
         claims: synthesis.claims,
         citations: synthesis.citations,
         contradictions: synthesis.contradictions,

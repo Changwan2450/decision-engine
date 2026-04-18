@@ -17,6 +17,14 @@ export const sourcePrioritySchema = z.enum([
   "community"
 ]);
 
+export const sourceTierSchema = z.enum([
+  "official",
+  "primary",
+  "community",
+  "aggregator",
+  "unknown"
+]);
+
 // ---- Fetcher outcome enums (Milestone 1 / PR 1) -------------------------
 // Every adapter should populate metadata.fetch_status. block_reason and
 // bypass_level are populated when relevant (blocked fetchers, protected sites).
@@ -74,6 +82,7 @@ export const sourceArtifactSchema = z.object({
   snippet: z.string(),
   content: z.string(),
   sourcePriority: sourcePrioritySchema,
+  sourceTier: sourceTierSchema.optional(),
   retrievedAt: z.string().datetime().optional(),
   language: artifactLanguageSchema.optional(),
   confidence: z.number().min(0).max(1).optional(),
@@ -122,6 +131,7 @@ export const evidenceSummarySchema = z.object({
 });
 
 export type SourceArtifactRecord = z.infer<typeof sourceArtifactSchema>;
+export type SourceTier = z.infer<typeof sourceTierSchema>;
 export type Citation = z.infer<typeof citationSchema>;
 export type Claim = z.infer<typeof claimSchema>;
 export type Contradiction = z.infer<typeof contradictionSchema>;

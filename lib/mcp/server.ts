@@ -8,6 +8,7 @@ import { sendDiscordNotifierFromFile } from "@/lib/bridge/discord-notifier";
 import { exportLinkitIngestBundle } from "@/lib/bridge/linkit-export";
 import { publishLinkitBatch } from "@/lib/bridge/linkit-publish";
 import { WORKSPACE_ROOT } from "@/lib/config";
+import type { SourceTier } from "@/lib/domain/claims";
 import { executeResearchRun, fetchWeb, gatherForRun } from "@/lib/orchestrator/run-research";
 import { buildWatchDigest } from "@/lib/orchestrator/watch-digest";
 import { promoteDigestToProject } from "@/lib/orchestrator/watch-inbox";
@@ -437,9 +438,28 @@ function summarizeArtifacts(artifacts: SourceArtifact[]) {
     url: artifact.url,
     adapter: artifact.adapter,
     sourceType: artifact.sourceType,
+    sourcePriority: artifact.sourcePriority,
+    sourceTier: artifact.sourceTier ?? "unknown",
     fetchStatus: artifact.metadata.fetch_status,
     snippet: artifact.snippet
   }));
+}
+
+function buildTierDistribution(artifacts: SourceArtifact[]): Record<SourceTier, number> {
+  return artifacts.reduce<Record<SourceTier, number>>(
+    (acc, artifact) => {
+      const tier = artifact.sourceTier ?? "unknown";
+      acc[tier] += 1;
+      return acc;
+    },
+    {
+      official: 0,
+      primary: 0,
+      community: 0,
+      aggregator: 0,
+      unknown: 0
+    }
+  );
 }
 
 function buildRecommendedNextTools(status: string) {
@@ -550,6 +570,7 @@ function withMcpSummary(record: Awaited<ReturnType<typeof executeResearchRun>>) 
         : null,
       clarificationQuestions: record.run.clarificationQuestions,
       topArtifacts: summarizeArtifacts(record.artifacts),
+      tierDistribution: buildTierDistribution(record.artifacts),
       expandedQueries: record.expansion?.expanded ?? [],
       expansionDropped: record.expansion?.dropped ?? 0,
       paths,

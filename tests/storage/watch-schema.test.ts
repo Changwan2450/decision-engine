@@ -150,4 +150,39 @@ describe("watch schemas", () => {
     expect(parsed.watchContext).toEqual(input.watchContext);
     expect(runRecordSchema.parse(JSON.parse(JSON.stringify(parsed)))).toEqual(parsed);
   });
+
+  it("parses persisted artifacts without sourceTier", () => {
+    const parsed = runRecordSchema.parse({
+      run: {
+        id: "run-legacy",
+        projectId: "project-1",
+        title: "legacy run",
+        mode: "standard",
+        status: "decided",
+        clarificationQuestions: [],
+        input: {
+          urls: ["https://example.com/source"]
+        },
+        createdAt: "2026-04-17T00:00:00.000Z",
+        updatedAt: "2026-04-17T00:00:00.000Z"
+      },
+      artifacts: [
+        {
+          id: "artifact-1",
+          adapter: "scrapling",
+          sourceType: "web",
+          title: "legacy artifact",
+          url: "https://example.com/source",
+          snippet: "",
+          content: "",
+          sourcePriority: "analysis",
+          metadata: {
+            fetch_status: "success"
+          }
+        }
+      ]
+    });
+
+    expect(parsed.artifacts[0]?.sourceTier).toBeUndefined();
+  });
 });

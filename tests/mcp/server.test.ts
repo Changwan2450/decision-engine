@@ -207,6 +207,7 @@ describe("mcp server", () => {
               snippet: "시장 신호 요약",
               content: "body",
               sourcePriority: "analysis",
+              sourceTier: "community",
               metadata: {
                 fetcher: "scrapling",
                 fetch_status: "success",
@@ -237,7 +238,7 @@ describe("mcp server", () => {
       urls: ["https://example.com/report"]
     });
 
-    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string }>; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: null; expandedQueries: Array<{ axis: string; source: string; url: string }>; expansionDropped: number } } } }).result;
+    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string; sourceTier: string }>; tierDistribution: { official: number; primary: number; community: number; aggregator: number; unknown: number }; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: null; expandedQueries: Array<{ axis: string; source: string; url: string }>; expansionDropped: number } } } }).result;
     const stored = await workspace.readRunRecord(project.project.id, result.structuredContent.run.id);
 
     expect(result.structuredContent.run.status).toBe("decided");
@@ -250,6 +251,14 @@ describe("mcp server", () => {
       confidence: "high"
     });
     expect(result.structuredContent.mcpSummary.topArtifacts[0]?.title).toBe("시장 보고서");
+    expect(result.structuredContent.mcpSummary.topArtifacts[0]?.sourceTier).toBe("community");
+    expect(result.structuredContent.mcpSummary.tierDistribution).toEqual({
+      official: 0,
+      primary: 0,
+      community: 1,
+      aggregator: 0,
+      unknown: 0
+    });
     expect(result.structuredContent.mcpSummary.paths.bundlePath).toContain(`${project.project.id}/runs/${result.structuredContent.run.id}/bridge/bundle.md`);
     expect(result.structuredContent.mcpSummary.paths.snapshotPath).toContain(`${project.project.id}/runs/${result.structuredContent.run.id}/bridge/run-state.json`);
     expect(result.structuredContent.mcpSummary.recommendedNextTools).toEqual([
@@ -274,6 +283,9 @@ describe("mcp server", () => {
       }
     ]);
     expect(result.structuredContent.mcpSummary.expansionDropped).toBe(2);
+    expect(stored.artifacts[0]?.sourceTier).toBe(
+      result.structuredContent.mcpSummary.topArtifacts[0]?.sourceTier
+    );
   });
 
   it("clarifies an existing run and re-executes on the same runId", async () => {

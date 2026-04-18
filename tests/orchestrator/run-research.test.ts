@@ -202,6 +202,9 @@ describe("executeResearchRun", () => {
     expect(storedRun.kbContext?.wikiNotes[0]?.title).toBe("Short-Form Entry Decision Patterns");
     expect(storedRun.artifacts).toHaveLength(2);
     expect(storedRun.artifacts[0]?.adapter).toBe("kb-preread");
+    expect(storedRun.artifacts.every((artifact) => artifact.sourceTier)).toBe(true);
+    expect(storedRun.artifacts[0]?.sourceTier).toBe("unknown");
+    expect(storedRun.artifacts[1]?.sourceTier).toBe("unknown");
     expect(storedRun.claims.some((claim) => claim.artifactId.startsWith("kb-preread-"))).toBe(true);
     expect(storedRun.decision?.value).toBe("go");
     expect(storedRun.prdSeed?.targetUser).toBe("20대 크리에이터");
@@ -263,6 +266,91 @@ describe("executeResearchRun", () => {
     expect(storedRun.expansion?.expanded.some((entry) => entry.axis === "official")).toBe(true);
     expect(observedExpansions).toHaveLength(1);
     expect(JSON.parse(observedExpansions[0] ?? "null")).toEqual(storedRun.expansion);
+  });
+
+  it("adds source tiers without mutating source priority", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "research-tier-"));
+    tempVault = await mkdtemp(path.join(os.tmpdir(), "research-tier-vault-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+    process.env.OBSIDIAN_VAULT_PATH = tempVault;
+    setQmdClientForTests({
+      async operatorNotes() {
+        return [];
+      },
+      async queryNotes() {
+        return [];
+      }
+    });
+
+    const { createProjectRecord, createRunRecord, readRunRecord } = await import(
+      "@/lib/storage/workspace"
+    );
+    const { executeResearchRun } = await import("@/lib/orchestrator/run-research");
+
+    const project = await createProjectRecord({
+      name: "Tier Project",
+      description: "tier tagging"
+    });
+    const run = await createRunRecord(project.project.id, {
+      title: "tier tagging run",
+      naturalLanguage: "목표: 시장 판단\n대상: 개발자\n비교: 기존 검색",
+      urls: ["https://www.reddit.com/search.json?q=test"]
+    });
+
+    await executeResearchRun(project.project.id, run.run.id, {
+      now: "2026-04-18T00:00:00.000Z",
+      gather: async () => [
+        {
+          id: "artifact-0",
+          adapter: "scrapling",
+          sourceType: "community",
+          title: "reddit hit",
+          url: "https://www.reddit.com/search.json?q=test",
+          snippet: "community signal",
+          content: "body",
+          sourcePriority: "analysis",
+          metadata: {
+            fetcher: "scrapling",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        },
+        {
+          id: "artifact-1",
+          adapter: "scrapling",
+          sourceType: "web",
+          title: "jina hit",
+          url: "https://s.jina.ai/?q=test",
+          snippet: "aggregated signal",
+          content: "body",
+          sourcePriority: "official",
+          metadata: {
+            fetcher: "scrapling",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        }
+      ]
+    });
+
+    const storedRun = await readRunRecord(project.project.id, run.run.id);
+    expect(storedRun.run.status).toBe("decided");
+    const persistedArtifacts = storedRun.artifacts.filter(
+      (artifact) => artifact.adapter !== "kb-preread"
+    );
+
+    expect(persistedArtifacts.map((artifact) => artifact.sourceTier)).toEqual([
+      "community",
+      "aggregator"
+    ]);
+    expect(persistedArtifacts.map((artifact) => artifact.sourcePriority)).toEqual([
+      "analysis",
+      "official"
+    ]);
   });
 });
 

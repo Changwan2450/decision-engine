@@ -3,7 +3,8 @@ import type {
   ArtifactLanguage,
   BlockReason,
   BypassLevel,
-  FetchStatus
+  FetchStatus,
+  SourceTier
 } from "@/lib/domain/claims";
 import type { NormalizedRunInput } from "@/lib/orchestrator/clarify";
 import type { ExpansionResult } from "@/lib/orchestrator/query-expansion";
@@ -64,7 +65,7 @@ export type ResearchPlan = {
   title: string;
   mode: RunMode;
   normalizedInput: NormalizedRunInput;
-  expansion: ExpansionResult | null;
+  expansion?: ExpansionResult | null;
   sourceTargets: SourceTarget[];
   kbContext: KnowledgeContext | null;
 };
@@ -87,6 +88,7 @@ export type SourceArtifact = {
   snippet: string;
   content: string;
   sourcePriority: SourcePriority;
+  sourceTier?: SourceTier;
   /** ISO8601 timestamp the artifact was fetched. Basis for freshness / TTL. */
   retrievedAt?: string;
   /** Artifact language. `unknown` permitted until language detection lands. */
