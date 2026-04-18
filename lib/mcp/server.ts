@@ -452,7 +452,7 @@ function buildRecommendedNextTools(status: string) {
   if (status === "failed") {
     return ["get_run"];
   }
-  return ["show_run_state", "get_run"];
+  return ["get_run", "show_run_state"];
 }
 
 function buildNextToolCall(record: Awaited<ReturnType<typeof executeResearchRun>>) {
@@ -500,7 +500,8 @@ function buildClarificationTemplate(record: Awaited<ReturnType<typeof executeRes
 
   const contextLines = [
     `현재 제목: ${record.run.title}`,
-    `현재 입력: ${record.run.input.naturalLanguage ?? ""}`.trimEnd()
+    `현재 입력: ${record.run.input.naturalLanguage ?? ""}`.trimEnd(),
+    `현재 pastedContent: ${record.run.input.pastedContent ?? ""}`.trimEnd()
   ];
 
   return {
