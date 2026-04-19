@@ -85,6 +85,63 @@ describe("claim inference", () => {
       expect(anchors).not.toContain("server components");
       expect(anchors).not.toContain("components");
     });
+
+    it("strips full URLs before extracting anchors", () => {
+      const anchors = extractTopicAnchors(
+        [
+          "Check https://reddit.com/r/singapore/apr_singapore_concerts",
+          "Review https://reddit.com/r/singapore/apr_singapore_concerts"
+        ],
+        { minOccurrences: 2, maxAnchors: 10 }
+      );
+
+      expect(anchors).not.toContain("https");
+      expect(anchors).not.toContain("com");
+      expect(anchors).not.toContain("apr");
+      expect(anchors).not.toContain("singapore");
+      expect(anchors).not.toContain("concerts");
+    });
+
+    it("filters url protocol tokens while keeping nearby natural language", () => {
+      const anchors = extractTopicAnchors(
+        [
+          "the https protocol is fine for monorepo",
+          "https should not affect monorepo debate"
+        ],
+        { minOccurrences: 2, maxAnchors: 10 }
+      );
+
+      expect(anchors).not.toContain("https");
+      expect(anchors).toContain("monorepo");
+    });
+
+    it("filters www and tld tokens", () => {
+      const anchors = extractTopicAnchors(
+        [
+          "www.example.com is slow but monorepo is fine",
+          "www.example.com often appears in monorepo examples"
+        ],
+        { minOccurrences: 2, maxAnchors: 10 }
+      );
+
+      expect(anchors).not.toContain("www");
+      expect(anchors).not.toContain("com");
+      expect(anchors).toContain("monorepo");
+    });
+
+    it("preserves meaningful product tokens after url filtering", () => {
+      const anchors = extractTopicAnchors(
+        [
+          "monorepo vs polyrepo authentication",
+          "polyrepo and monorepo both affect authentication"
+        ],
+        { minOccurrences: 2, maxAnchors: 10 }
+      );
+
+      expect(anchors).toContain("monorepo");
+      expect(anchors).toContain("polyrepo");
+      expect(anchors).toContain("authentication");
+    });
   });
 
   describe("assignTopicKey", () => {

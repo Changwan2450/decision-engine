@@ -98,6 +98,31 @@ const STOPWORDS = new Set([
   "하는"
 ]);
 
+const URL_TOKEN_DENY = new Set([
+  "http",
+  "https",
+  "www",
+  "com",
+  "org",
+  "net",
+  "io",
+  "co",
+  "kr",
+  "jp",
+  "de",
+  "uk",
+  "api",
+  "json",
+  "html",
+  "xml",
+  "pdf",
+  "jpg",
+  "png",
+  "svg",
+  "gif",
+  "webp"
+]);
+
 function normalize(value: string): string {
   return value.normalize("NFKC").toLowerCase();
 }
@@ -149,7 +174,11 @@ export function inferClaimStance(text: string): Claim["stance"] {
 }
 
 function tokenize(text: string): string[] {
-  return normalize(text).match(/[\p{L}\p{N}]+/gu) ?? [];
+  const normalized = normalize(text)
+    .replace(/https?:\/\/\S+/gu, " ")
+    .replace(/www\.\S+/gu, " ");
+
+  return normalized.match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
 export function extractTopicAnchors(
@@ -162,7 +191,11 @@ export function extractTopicAnchors(
 
   for (const text of claimTexts) {
     const tokens = tokenize(text).filter(
-      (token) => token.length >= 2 && !STOPWORDS.has(token) && !/^\d+$/u.test(token)
+      (token) =>
+        token.length >= 2 &&
+        !STOPWORDS.has(token) &&
+        !URL_TOKEN_DENY.has(token) &&
+        !/^\d+$/u.test(token)
     );
     const seen = new Set<string>();
 
