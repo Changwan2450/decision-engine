@@ -201,4 +201,111 @@ describe("evidence synthesis", () => {
     expect(synthesis.claims[1].topicKey).toBe("react-server-components");
     expect(synthesis.contradictions).toHaveLength(1);
   });
+
+  it("excludes non-anchor prior claims from contradiction pairing while keeping external pairs", () => {
+    const artifacts: SourceArtifact[] = [
+      {
+        id: "artifact-prior",
+        adapter: "kb-preread",
+        sourceType: "kb",
+        title: "KB Wiki Prior",
+        url: "https://kb.local/wiki/test",
+        snippet: "",
+        content: "",
+        sourcePriority: "analysis",
+        metadata: {
+          claims_json: JSON.stringify([
+            {
+              text: "쇼츠 파이프라인은 안정적이다",
+              topicKey: "project-prior",
+              stance: "support"
+            }
+          ])
+        }
+      },
+      {
+        id: "artifact-support",
+        adapter: "scrapling",
+        sourceType: "community",
+        title: "Reddit: RSC authentication success",
+        url: "https://example.com/reddit-support",
+        snippet: "",
+        content: "- I'd recommend RSC authentication in production",
+        sourcePriority: "community",
+        metadata: {}
+      },
+      {
+        id: "artifact-oppose",
+        adapter: "scrapling",
+        sourceType: "community",
+        title: "Reddit: RSC authentication nightmare",
+        url: "https://example.com/reddit-oppose",
+        snippet: "",
+        content: "- RSC authentication is a nightmare",
+        sourcePriority: "community",
+        metadata: {}
+      }
+    ];
+
+    const synthesis = synthesizeEvidenceFromArtifacts(artifacts, {
+      now: "2026-04-19T00:00:00.000Z",
+      recencySensitive: false
+    });
+
+    expect(synthesis.claims[0].topicKey).toBe("project-prior");
+    expect(synthesis.claims[1].topicKey).toBe("rsc-authentication");
+    expect(synthesis.claims[2].topicKey).toBe("rsc-authentication");
+    expect(synthesis.contradictions).toHaveLength(1);
+    expect(synthesis.contradictions[0].claimIds).toEqual(["claim-1", "claim-2"]);
+  });
+
+  it("skips contradictions when both claims use topic keys outside the run anchors", () => {
+    const artifacts: SourceArtifact[] = [
+      {
+        id: "artifact-support",
+        adapter: "kb-preread",
+        sourceType: "kb",
+        title: "KB Wiki Prior",
+        url: "https://kb.local/wiki/support",
+        snippet: "",
+        content: "",
+        sourcePriority: "analysis",
+        metadata: {
+          claims_json: JSON.stringify([
+            {
+              text: "alpha growth",
+              topicKey: "project-prior",
+              stance: "support"
+            }
+          ])
+        }
+      },
+      {
+        id: "artifact-oppose",
+        adapter: "kb-preread",
+        sourceType: "kb",
+        title: "KB Wiki Prior",
+        url: "https://kb.local/wiki/oppose",
+        snippet: "",
+        content: "",
+        sourcePriority: "analysis",
+        metadata: {
+          claims_json: JSON.stringify([
+            {
+              text: "beta decline",
+              topicKey: "project-prior",
+              stance: "oppose"
+            }
+          ])
+        }
+      }
+    ];
+
+    const synthesis = synthesizeEvidenceFromArtifacts(artifacts, {
+      now: "2026-04-19T00:00:00.000Z",
+      recencySensitive: false
+    });
+
+    expect(synthesis.contradictions).toHaveLength(0);
+  });
 });

@@ -151,8 +151,14 @@ export function synthesizeEvidenceFromArtifacts(
     const artifact = artifactById.get(seed.artifactId);
     return `${seed.text} ${artifact?.title ?? ""}`.trim();
   });
-  const inferredAnchors = extractTopicAnchors(seededClaims.map((seed) => seed.text));
   const topicAliases = buildTopicAliasMap(artifacts);
+  const inferredAnchors = extractTopicAnchors(seededClaims.map((seed) => seed.text));
+  const anchorSet = new Set(
+    inferredAnchors.map((anchor) => {
+      const slug = slugify(anchor);
+      return topicAliases.get(slug) ?? slug;
+    })
+  );
   const claims: Claim[] = seededClaims.map((seed) => ({
     id: `claim-${claimIndex++}`,
     artifactId: seed.artifactId,
@@ -172,11 +178,15 @@ export function synthesizeEvidenceFromArtifacts(
   const contradictions: Contradiction[] = [];
 
   for (let i = 0; i < claims.length; i += 1) {
+    const left = claims[i];
+    if (!left.topicKey || !anchorSet.has(left.topicKey)) {
+      continue;
+    }
+
     for (let j = i + 1; j < claims.length; j += 1) {
-      const left = claims[i];
       const right = claims[j];
 
-      if (!left.topicKey || left.topicKey !== right.topicKey) {
+      if (!right.topicKey || !anchorSet.has(right.topicKey) || left.topicKey !== right.topicKey) {
         continue;
       }
 
