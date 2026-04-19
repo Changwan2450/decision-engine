@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { deriveTitleFromUrl } from "@/lib/adapters/contract";
 import type { SourceArtifact } from "@/lib/adapters/types";
 import {
   synthesizeEvidenceFromArtifacts,
@@ -307,5 +308,82 @@ describe("evidence synthesis", () => {
     });
 
     expect(synthesis.contradictions).toHaveLength(0);
+  });
+
+  it("does not use url-derived titles as anchor context", () => {
+    const derivedUrl = "https://reddit.com/react_server_components";
+    const artifacts: SourceArtifact[] = [
+      {
+        id: "artifact-anchor",
+        adapter: "scrapling",
+        sourceType: "community",
+        title: "React Server Components guide",
+        url: "https://example.com/rsc-guide",
+        snippet: "",
+        content: [
+          "- React Server Components help with large apps",
+          "- React Server Components reduce client bundle size"
+        ].join("\n"),
+        sourcePriority: "community",
+        metadata: {}
+      },
+      {
+        id: "artifact-derived",
+        adapter: "community-search-json",
+        sourceType: "community",
+        title: deriveTitleFromUrl(derivedUrl),
+        url: derivedUrl,
+        snippet: "",
+        content: "- I support this approach",
+        sourcePriority: "community",
+        metadata: {}
+      }
+    ];
+
+    const synthesis = synthesizeEvidenceFromArtifacts(artifacts, {
+      now: "2026-04-19T00:00:00.000Z",
+      recencySensitive: false
+    });
+
+    expect(synthesis.claims[0].topicKey).toBe("react-server-components");
+    expect(synthesis.claims[1].topicKey).toBe("react-server-components");
+    expect(synthesis.claims[2].topicKey).toBeUndefined();
+  });
+
+  it("keeps real titles in anchor context", () => {
+    const artifacts: SourceArtifact[] = [
+      {
+        id: "artifact-anchor",
+        adapter: "scrapling",
+        sourceType: "community",
+        title: "React Server Components guide",
+        url: "https://example.com/rsc-guide",
+        snippet: "",
+        content: [
+          "- React Server Components help with large apps",
+          "- React Server Components reduce client bundle size"
+        ].join("\n"),
+        sourcePriority: "community",
+        metadata: {}
+      },
+      {
+        id: "artifact-real-title",
+        adapter: "community-search-json",
+        sourceType: "community",
+        title: "React Server Components tradeoffs",
+        url: "https://reddit.com/r/example/comments/abc",
+        snippet: "",
+        content: "- I support this approach",
+        sourcePriority: "community",
+        metadata: {}
+      }
+    ];
+
+    const synthesis = synthesizeEvidenceFromArtifacts(artifacts, {
+      now: "2026-04-19T00:00:00.000Z",
+      recencySensitive: false
+    });
+
+    expect(synthesis.claims[2].topicKey).toBe("react-server-components");
   });
 });

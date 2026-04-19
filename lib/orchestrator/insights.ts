@@ -1,3 +1,4 @@
+import { deriveTitleFromUrl } from "@/lib/adapters/contract";
 import type { SourceArtifact } from "@/lib/adapters/types";
 import {
   assignTopicKey,
@@ -149,7 +150,12 @@ export function synthesizeEvidenceFromArtifacts(
   });
   const composedClaimTexts = seededClaims.map((seed) => {
     const artifact = artifactById.get(seed.artifactId);
-    return `${seed.text} ${artifact?.title ?? ""}`.trim();
+    if (!artifact) return seed.text;
+
+    const titleIsUrlDerived = artifact.title === deriveTitleFromUrl(artifact.url);
+    if (titleIsUrlDerived) return seed.text;
+
+    return `${seed.text} ${artifact.title ?? ""}`.trim();
   });
   const topicAliases = buildTopicAliasMap(artifacts);
   const inferredAnchors = extractTopicAnchors(seededClaims.map((seed) => seed.text));
