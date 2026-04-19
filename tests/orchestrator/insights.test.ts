@@ -157,4 +157,48 @@ describe("evidence synthesis", () => {
     expect(new Set(keyedClaims.map((claim) => claim.topicKey))).toContain("rsc");
     expect(synthesis.contradictions.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("reassigns topic keys from run-level anchors using artifact title context", () => {
+    const artifacts: SourceArtifact[] = [
+      {
+        id: "artifact-support",
+        adapter: "kb-preread",
+        sourceType: "kb",
+        title: "React Server Components - Ecosystem Thoughts",
+        url: "https://kb.local/wiki/test",
+        snippet: "",
+        content: "",
+        sourcePriority: "analysis",
+        metadata: {
+          claims_json: JSON.stringify([
+            {
+              text: "RSC is great for large apps",
+              topicKey: "topic",
+              stance: "support"
+            }
+          ])
+        }
+      },
+      {
+        id: "artifact-oppose",
+        adapter: "scrapling",
+        sourceType: "community",
+        title: "Reddit: RSC authentication nightmare",
+        url: "https://example.com/reddit",
+        snippet: "",
+        content: "- authentication with RSC is a nightmare",
+        sourcePriority: "community",
+        metadata: {}
+      }
+    ];
+
+    const synthesis = synthesizeEvidenceFromArtifacts(artifacts, {
+      now: "2026-04-19T00:00:00.000Z",
+      recencySensitive: false
+    });
+
+    expect(synthesis.claims[0].topicKey).toBe("react-server-components");
+    expect(synthesis.claims[1].topicKey).toBe("react-server-components");
+    expect(synthesis.contradictions).toHaveLength(1);
+  });
 });

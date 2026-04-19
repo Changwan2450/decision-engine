@@ -13,6 +13,7 @@ const OPPOSE_PATTERNS = [
   "do not recommend",
   "regret",
   "mental overhead",
+  "nightmare",
   "overhead",
   "bloat",
   "over-engineered",
@@ -108,6 +109,14 @@ function slugify(value: string): string {
     .replace(/[^\p{L}\p{N}-]/gu, "");
 }
 
+function buildAcronym(value: string): string {
+  return value
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part[0] ?? "")
+    .join("");
+}
+
 function countLiteralMatches(text: string, patterns: readonly string[]): number {
   return patterns.reduce((count, pattern) => count + (text.includes(pattern) ? 1 : 0), 0);
 }
@@ -152,7 +161,9 @@ export function extractTopicAnchors(
   const counts = new Map<string, number>();
 
   for (const text of claimTexts) {
-    const tokens = tokenize(text).filter((token) => token.length >= 2 && !STOPWORDS.has(token));
+    const tokens = tokenize(text).filter(
+      (token) => token.length >= 2 && !STOPWORDS.has(token) && !/^\d+$/u.test(token)
+    );
     const seen = new Set<string>();
 
     for (let start = 0; start < tokens.length; start += 1) {
@@ -165,7 +176,7 @@ export function extractTopicAnchors(
     }
   }
 
-  return Array.from(counts.entries())
+  const sorted = Array.from(counts.entries())
     .filter(([, count]) => count >= minOccurrences)
     .sort((left, right) => {
       const countDiff = right[1] - left[1];
@@ -173,9 +184,24 @@ export function extractTopicAnchors(
       const wordDiff = right[0].split(" ").length - left[0].split(" ").length;
       if (wordDiff !== 0) return wordDiff;
       return left[0].localeCompare(right[0]);
-    })
-    .slice(0, maxAnchors)
-    .map(([anchor]) => anchor);
+    });
+
+  const nestedDeduped = sorted.filter(([anchor, count], index) => {
+    const normalizedAnchor = anchor.trim();
+    return !sorted.some(([candidate, candidateCount], candidateIndex) => {
+      if (candidateIndex === index || candidateCount !== count) {
+        return false;
+      }
+
+      const normalizedCandidate = candidate.trim();
+      return (
+        normalizedCandidate.length > normalizedAnchor.length &&
+        normalizedCandidate.includes(normalizedAnchor)
+      );
+    });
+  });
+
+  return nestedDeduped.slice(0, maxAnchors).map(([anchor]) => anchor);
 }
 
 export function assignTopicKey(text: string, anchors: string[]): string | undefined {
@@ -186,7 +212,14 @@ export function assignTopicKey(text: string, anchors: string[]): string | undefi
       if (wordDiff !== 0) return wordDiff;
       return right.length - left.length;
     })
-    .find((anchor) => normalized.includes(anchor));
+    .find((anchor) => {
+      if (normalized.includes(anchor)) {
+        return true;
+      }
+
+      const acronym = buildAcronym(anchor);
+      return acronym.length >= 2 && new RegExp(`\\b${acronym}\\b`, "u").test(normalized);
+    });
 
   return match ? slugify(match) : undefined;
 }

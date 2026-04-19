@@ -52,6 +52,36 @@ function slugify(value: string): string {
     .toLowerCase();
 }
 
+function tokenizeForAlias(text: string): string[] {
+  return text
+    .normalize("NFKC")
+    .toLowerCase()
+    .match(/[\p{L}\p{N}]+/gu)
+    ?.filter((token) => token.length >= 2 && !/^\d+$/u.test(token)) ?? [];
+}
+
+function buildTopicAliasMap(artifacts: SourceArtifact[]): Map<string, string> {
+  const aliases = new Map<string, string>();
+
+  for (const artifact of artifacts) {
+    const tokens = tokenizeForAlias(artifact.title ?? "");
+    for (let start = 0; start < tokens.length; start += 1) {
+      for (let size = 2; size <= 3 && start + size <= tokens.length; size += 1) {
+        const phraseTokens = tokens.slice(start, start + size);
+        const alias = phraseTokens.map((token) => token[0] ?? "").join("");
+        if (alias.length < 2) continue;
+        const phrase = slugify(phraseTokens.join(" "));
+        const current = aliases.get(alias);
+        if (!current || phrase.length > current.length) {
+          aliases.set(alias, phrase);
+        }
+      }
+    }
+  }
+
+  return aliases;
+}
+
 function parseClaimSeeds(artifact: SourceArtifact): ClaimSeed[] {
   const serialized = artifact.metadata.claims_json;
 
@@ -92,6 +122,7 @@ export function synthesizeEvidenceFromArtifacts(
   }
 ): EvidenceSynthesis {
   let claimIndex = 0;
+  const artifactById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
   const citations: Citation[] = artifacts
     .map((artifact, index) => ({
       id: `citation-${index}`,
@@ -116,17 +147,27 @@ export function synthesizeEvidenceFromArtifacts(
       citationIds: citation ? [citation.id] : [`missing-citation-${index}`]
     }));
   });
-  const inferredAnchors = extractTopicAnchors(
-    seededClaims.filter((seed) => !seed.topicKey).map((seed) => seed.text)
-  );
+  const composedClaimTexts = seededClaims.map((seed) => {
+    const artifact = artifactById.get(seed.artifactId);
+    return `${seed.text} ${artifact?.title ?? ""}`.trim();
+  });
+  const inferredAnchors = extractTopicAnchors(seededClaims.map((seed) => seed.text));
+  const topicAliases = buildTopicAliasMap(artifacts);
   const claims: Claim[] = seededClaims.map((seed) => ({
     id: `claim-${claimIndex++}`,
     artifactId: seed.artifactId,
     text: seed.text,
-    topicKey: seed.topicKey ?? assignTopicKey(seed.text, inferredAnchors),
+    topicKey: seed.topicKey,
     stance: seed.stance ?? "neutral",
     citationIds: seed.citationIds
   }));
+
+  for (const [index, claim] of claims.entries()) {
+    const matchedTopicKey = assignTopicKey(composedClaimTexts[index], inferredAnchors);
+    if (matchedTopicKey) {
+      claim.topicKey = topicAliases.get(matchedTopicKey) ?? matchedTopicKey;
+    }
+  }
 
   const contradictions: Contradiction[] = [];
 

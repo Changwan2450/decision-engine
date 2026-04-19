@@ -44,8 +44,7 @@ describe("claim inference", () => {
         { minOccurrences: 2, maxAnchors: 5 }
       );
 
-      expect(anchors).toContain("rsc");
-      expect(anchors).toContain("complexity");
+      expect(anchors).toContain("rsc complexity");
       expect(anchors).not.toContain("the");
     });
 
@@ -56,6 +55,35 @@ describe("claim inference", () => {
       );
 
       expect(anchors).toEqual([]);
+    });
+
+    it("drops numeric-only tokens from anchors", () => {
+      const anchors = extractTopicAnchors(
+        [
+          "React server components 15 are worth considering",
+          "React server components 20 have different trade-offs"
+        ],
+        { minOccurrences: 2, maxAnchors: 10 }
+      );
+
+      expect(anchors).not.toContain("15");
+      expect(anchors).not.toContain("20");
+    });
+
+    it("dedupes nested anchors when counts are identical", () => {
+      const anchors = extractTopicAnchors(
+        [
+          "react server components are useful",
+          "react server components can get complex",
+          "react server components need care"
+        ],
+        { minOccurrences: 3, maxAnchors: 10 }
+      );
+
+      expect(anchors).toContain("react server components");
+      expect(anchors).not.toContain("react server");
+      expect(anchors).not.toContain("server components");
+      expect(anchors).not.toContain("components");
     });
   });
 
