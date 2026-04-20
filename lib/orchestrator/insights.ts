@@ -175,6 +175,10 @@ export function synthesizeEvidenceFromArtifacts(
   }));
 
   for (const [index, claim] of claims.entries()) {
+    if (claim.topicKey === "project-prior-decision") {
+      continue;
+    }
+
     const matchedTopicKey = assignTopicKey(composedClaimTexts[index], inferredAnchors);
     if (matchedTopicKey) {
       claim.topicKey = topicAliases.get(matchedTopicKey) ?? matchedTopicKey;

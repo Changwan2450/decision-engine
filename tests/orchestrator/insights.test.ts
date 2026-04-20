@@ -310,6 +310,57 @@ describe("evidence synthesis", () => {
     expect(synthesis.contradictions).toHaveLength(0);
   });
 
+  it("preserves project-prior-decision topic keys instead of reassigning them from evidence-gap text", () => {
+    const artifacts: SourceArtifact[] = [
+      {
+        id: "artifact-prior-decision",
+        adapter: "kb-preread",
+        sourceType: "kb",
+        title: "Decision History Prior",
+        url: "https://kb.local/decision-history/test",
+        snippet: "",
+        content: "",
+        sourcePriority: "analysis",
+        metadata: {
+          claims_json: JSON.stringify([
+            {
+              text: "monorepo vs polyrepo — solo 개발자 선택: 저장소 전략 결정을 확정하기에는 증거 공백이 남아 있다.",
+              topicKey: "project-prior-decision",
+              stance: "neutral"
+            }
+          ])
+        }
+      },
+      {
+        id: "artifact-community",
+        adapter: "community-search-json",
+        sourceType: "community",
+        title: "Monorepo vs Polyrepo for AI-driven development",
+        url: "https://reddit.com/r/ExperiencedDevs/comments/1siqkc5/monorepo_vs_polyrepo_for_aidriven_development/",
+        snippet: "",
+        content: "Short background: our system has always been in a monorepo.",
+        sourcePriority: "community",
+        metadata: {
+          claims_json: JSON.stringify([
+            {
+              text: "Monorepo improves AI effectiveness.",
+              topicKey: "monorepo",
+              stance: "support"
+            }
+          ])
+        }
+      }
+    ];
+
+    const synthesis = synthesizeEvidenceFromArtifacts(artifacts, {
+      now: "2026-04-20T00:00:00.000Z",
+      recencySensitive: false
+    });
+
+    expect(synthesis.claims[0].topicKey).toBe("project-prior-decision");
+    expect(synthesis.claims[1].topicKey).toBe("monorepo");
+  });
+
   it("does not use url-derived titles as anchor context", () => {
     const derivedUrl = "https://reddit.com/react_server_components";
     const artifacts: SourceArtifact[] = [
