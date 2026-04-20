@@ -738,6 +738,76 @@ describe("mcp server", () => {
     );
   });
 
+  it("falls back to template wording when contradiction claims are low-signal", async () => {
+    await setupTempWorkspace();
+
+    const workspace = await import("@/lib/storage/workspace");
+    const project = await workspace.createProjectRecord({
+      name: "Decision Engine",
+      description: "AI-first"
+    });
+    const run = await workspace.createRunRecord(project.project.id, {
+      title: "monorepo vs polyrepo — solo 개발자 선택",
+      naturalLanguage: "저장소 전략 결정"
+    });
+
+    await workspace.updateRunRecord(project.project.id, run.run.id, (record) => ({
+      ...record,
+      normalizedInput: {
+        title: record.run.title,
+        naturalLanguage: "저장소 전략 결정",
+        pastedContent: "",
+        urls: [],
+        goal: "저장소 전략 결정",
+        target: "solo 개발자",
+        comparisonAxis: "개발 경험, 유지보수 비용"
+      },
+      claims: [
+        {
+          id: "claim-1",
+          artifactId: "artifact-1",
+          text: "monorepo는 AI-driven development에 유리하다.",
+          topicKey: "monorepo",
+          stance: "support",
+          citationIds: ["citation-1"]
+        },
+        {
+          id: "claim-2",
+          artifactId: "artifact-2",
+          text: "{\"kind\":\"Listing\",\"data\":{\"children\":[]}}",
+          topicKey: "monorepo",
+          stance: "oppose",
+          citationIds: ["citation-2"]
+        }
+      ],
+      contradictions: [
+        {
+          id: "contradiction-1",
+          claimIds: ["claim-1", "claim-2"],
+          status: "flagged",
+          resolution: "unresolved",
+          kind: "mixed",
+          tierA: "community",
+          tierB: "aggregator"
+        }
+      ]
+    }));
+
+    const response = await callTool("suggest_followup_run", {
+      projectId: project.project.id,
+      runId: run.run.id,
+      contradictionId: "contradiction-1"
+    });
+    const result = (response as { result: { structuredContent: { followup: { suggestedTitle: string; suggestedComparisonAxis: string; suggestedNaturalLanguage: string } } } }).result;
+
+    expect(result.structuredContent.followup).toEqual({
+      suggestedTitle: "monorepo vs polyrepo — solo 개발자 선택 — 상충 근거 추가 조사",
+      suggestedNaturalLanguage:
+        "목표: 복수 tier에서 상충 주장. 범위 좁혀 재조사.\n대상: solo 개발자\n비교: 긍정 근거, 부정 근거",
+      suggestedComparisonAxis: "긍정 근거, 부정 근거"
+    });
+  });
+
   it("returns gathered artifacts for gather_for_run", async () => {
     const { createMcpHandler } = await import("@/lib/mcp/server");
 

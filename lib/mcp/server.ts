@@ -628,6 +628,15 @@ function formatTopicKeyForTitle(topicKey: string): string {
   return topicKey.replace(/[-_]+/g, " ").trim();
 }
 
+function isLowSignalFollowupClaim(claim: Claim): boolean {
+  const text = claim.text.trim();
+  if (text.startsWith("{") || text.startsWith("[")) {
+    return true;
+  }
+
+  return /"kind"\s*:\s*"Listing"|AuthenticationRequiredError|"children"\s*:/u.test(text);
+}
+
 function buildFollowupFocus(params: {
   title: string;
   contradiction: Contradiction;
@@ -640,6 +649,9 @@ function buildFollowupFocus(params: {
 
   if (contradictionClaims.length === 2) {
     const [left, right] = contradictionClaims;
+    if (isLowSignalFollowupClaim(left) || isLowSignalFollowupClaim(right)) {
+      return params.title;
+    }
     if (left.topicKey && left.topicKey === right.topicKey) {
       return formatTopicKeyForTitle(left.topicKey);
     }
@@ -662,6 +674,9 @@ function buildSemanticComparisonAxis(params: {
   }
 
   const [left, right] = contradictionClaims;
+  if (isLowSignalFollowupClaim(left) || isLowSignalFollowupClaim(right)) {
+    return null;
+  }
   if (!left.topicKey || left.topicKey !== right.topicKey) {
     return null;
   }
