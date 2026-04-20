@@ -142,6 +142,96 @@ describe("claim inference", () => {
       expect(anchors).toContain("polyrepo");
       expect(anchors).toContain("authentication");
     });
+
+    it("drops generic english anchors like vs", () => {
+      const anchors = extractTopicAnchors(
+        [
+          "vs is a common word",
+          "vs should not be an anchor",
+          "vs appears everywhere"
+        ],
+        { minOccurrences: 2, maxAnchors: 10 }
+      );
+
+      expect(anchors).not.toContain("vs");
+    });
+
+    it("drops repeated pronouns and modal verbs", () => {
+      const anchors = extractTopicAnchors(
+        [
+          "you can move faster with monorepo",
+          "you will see clearer ownership in monorepo",
+          "you should evaluate monorepo carefully"
+        ],
+        { minOccurrences: 2, maxAnchors: 10 }
+      );
+
+      expect(anchors).not.toContain("you");
+      expect(anchors).not.toContain("can");
+      expect(anchors).not.toContain("will");
+      expect(anchors).not.toContain("should");
+      expect(anchors).toContain("monorepo");
+    });
+
+    it("drops generic korean anchors", () => {
+      const anchors = extractTopicAnchors(
+        [
+          "그리고 좋다",
+          "그리고 나쁘다",
+          "그리고 또한 고민이다"
+        ],
+        { minOccurrences: 2, maxAnchors: 10 }
+      );
+
+      expect(anchors).not.toContain("그리고");
+      expect(anchors).not.toContain("또한");
+    });
+
+    it("keeps code as a tech-ambiguous topic token", () => {
+      const anchors = extractTopicAnchors(
+        [
+          "React code is fast",
+          "writing code in Rust",
+          "code review matters"
+        ],
+        { minOccurrences: 2, maxAnchors: 10 }
+      );
+
+      expect(anchors).toContain("code");
+    });
+
+    it("keeps files, message, and project as tech-ambiguous topic tokens", () => {
+      const anchors = extractTopicAnchors(
+        [
+          "files shape the build project message",
+          "message routing depends on files in the project",
+          "project docs describe message flow across files"
+        ],
+        { minOccurrences: 2, maxAnchors: 20 }
+      );
+
+      expect(anchors).toContain("files");
+      expect(anchors).toContain("message");
+      expect(anchors).toContain("project");
+    });
+
+    it("keeps topical anchors while dropping generic helpers in mixed text", () => {
+      const anchors = extractTopicAnchors(
+        [
+          "monorepo vs polyrepo",
+          "monorepo vs single repo",
+          "you can use monorepo for your project"
+        ],
+        { minOccurrences: 2, maxAnchors: 10 }
+      );
+
+      expect(anchors).toContain("monorepo");
+      expect(anchors).not.toContain("vs");
+      expect(anchors).not.toContain("you");
+      expect(anchors).not.toContain("can");
+      expect(anchors).not.toContain("use");
+      expect(anchors).not.toContain("your");
+    });
   });
 
   describe("assignTopicKey", () => {
