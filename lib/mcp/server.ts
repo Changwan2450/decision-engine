@@ -692,11 +692,36 @@ function buildSemanticComparisonAxis(params: {
   return null;
 }
 
+function buildSemanticReason(params: {
+  contradiction: Contradiction;
+  claims: Claim[];
+}): string | null {
+  const claimById = new Map(params.claims.map((claim) => [claim.id, claim]));
+  const contradictionClaims = params.contradiction.claimIds
+    .map((claimId) => claimById.get(claimId))
+    .filter((claim): claim is Claim => Boolean(claim));
+
+  if (contradictionClaims.length !== 2) {
+    return null;
+  }
+
+  const [left, right] = contradictionClaims;
+  if (isLowSignalFollowupClaim(left) || isLowSignalFollowupClaim(right)) {
+    return null;
+  }
+  if (!left.topicKey || left.topicKey !== right.topicKey) {
+    return null;
+  }
+
+  return `${formatTopicKeyForTitle(left.topicKey)}에 대해 찬반 근거가 갈리는 조건 재검증.`;
+}
+
 function buildFollowupSuggestion(params: {
   title: string;
   contradiction: Contradiction;
   claims: Claim[];
   target?: string;
+  comparisonAxis?: string;
 }) {
   const kind = params.contradiction.kind ?? "mixed";
   const template = FOLLOWUP_TEMPLATES[kind];
@@ -710,6 +735,11 @@ function buildFollowupSuggestion(params: {
       contradiction: params.contradiction,
       claims: params.claims
     }) ?? template.comparisonAxis(params.title);
+  const suggestedReason =
+    buildSemanticReason({
+      contradiction: params.contradiction,
+      claims: params.claims
+    }) ?? template.reason;
   return {
     contradictionId: params.contradiction.id,
     kind,
@@ -722,9 +752,10 @@ function buildFollowupSuggestion(params: {
         })
       ),
       suggestedNaturalLanguage: [
-        `목표: ${template.reason}`,
+        `목표: ${suggestedReason}`,
         `대상: ${params.target ?? "추가 검토 대상"}`,
-        `비교: ${suggestedComparisonAxis}`
+        `비교: ${suggestedComparisonAxis}`,
+        ...(params.comparisonAxis ? [`관점: ${params.comparisonAxis}`] : [])
       ].join("\n"),
       suggestedComparisonAxis
     }
@@ -886,7 +917,8 @@ async function callTool(
           title: record.run.title,
           contradiction,
           claims: record.claims,
-          target: record.normalizedInput?.target
+          target: record.normalizedInput?.target,
+          comparisonAxis: record.normalizedInput?.comparisonAxis
         }) ?? {
           contradictionId,
           kind: contradiction.kind ?? "mixed",

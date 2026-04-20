@@ -702,7 +702,7 @@ describe("mcp server", () => {
     expect(followupResult.structuredContent.followup).toEqual({
       suggestedTitle: "시장 진입 — 내 KB 대비 최신 커뮤니티 의견 재검증",
       suggestedNaturalLanguage:
-        "목표: 내부 지식과 커뮤니티 의견이 충돌. 내 KB가 stale일 가능성.\n대상: solo 개발자\n비교: 시장 진입 찬성 근거, 시장 진입 반대 근거",
+        "목표: 시장 진입에 대해 찬반 근거가 갈리는 조건 재검증.\n대상: solo 개발자\n비교: 시장 진입 찬성 근거, 시장 진입 반대 근거\n관점: 기존 채널",
       suggestedComparisonAxis: "시장 진입 찬성 근거, 시장 진입 반대 근거"
     });
 
@@ -803,7 +803,7 @@ describe("mcp server", () => {
     expect(result.structuredContent.followup).toEqual({
       suggestedTitle: "monorepo vs polyrepo — solo 개발자 선택 — 상충 근거 추가 조사",
       suggestedNaturalLanguage:
-        "목표: 복수 tier에서 상충 주장. 범위 좁혀 재조사.\n대상: solo 개발자\n비교: 긍정 근거, 부정 근거",
+        "목표: 복수 tier에서 상충 주장. 범위 좁혀 재조사.\n대상: solo 개발자\n비교: 긍정 근거, 부정 근거\n관점: 개발 경험, 유지보수 비용",
       suggestedComparisonAxis: "긍정 근거, 부정 근거"
     });
   });
