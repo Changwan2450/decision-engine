@@ -632,8 +632,8 @@ describe("createCommunitySearchJsonAdapter()", () => {
       ])
     );
 
-    expect(artifacts).toHaveLength(2);
-    expect(artifacts[0].metadata.community_filter_tokens).toBe("rust;go");
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].metadata.community_filter_tokens).toBe("rust");
     expect(artifacts[0].metadata.community_filter_mode).toBe("short_fallback");
   });
 
@@ -864,7 +864,7 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts[0].title).toBe(
       "Go vs Rust for long-term systems/finance infrastructure"
     );
-    expect(artifacts[0].metadata.community_filter_tokens).toBe("rust;go");
+    expect(artifacts[0].metadata.community_filter_tokens).toBe("rust");
     expect(artifacts[0].metadata.community_filter_generics_dropped).toBe("5");
     expect(artifacts[0].metadata.community_filter_mode).toBe("short_fallback");
   });
@@ -999,5 +999,135 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts[0].metadata.community_filter_tokens).toBe("rsc");
     expect(artifacts[0].metadata.community_filter_mode).toBe("short_fallback");
     expect(artifacts[0].metadata.community_filter_generics_dropped).toBe("2");
+  });
+
+  it("treats rust as the only distinctive token for Rust vs Go queries", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a0",
+                  title: "2026 Ferrari Roma Spider finally arrived",
+                  selftext: "sports car overview",
+                  permalink: "/r/cars/comments/a0/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Let's GO! James Fox",
+                  selftext: "release announcement",
+                  permalink: "/r/UFOs/comments/a1/example",
+                  created_utc: 1_700_000_100
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a2",
+                  title: "Go vs Rust for long-term systems/finance infrastructure",
+                  selftext: "",
+                  permalink: "/r/golang/comments/a2/example",
+                  created_utc: 1_700_000_200
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=Rust+vs+Go+for+systems+programming+%ED%8C%80+%EB%8F%84%EC%9E%85+%EA%B2%B0%EC%A0%95"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe(
+      "Go vs Rust for long-term systems/finance infrastructure"
+    );
+    expect(artifacts[0].metadata.community_filter_tokens).toBe("rust");
+    expect(artifacts[0].metadata.community_filter_mode).toBe("short_fallback");
+  });
+
+  it("keeps rsc alongside long non-generic tokens", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "RSC authentication migration notes",
+                  selftext: "",
+                  permalink: "/r/reactjs/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=rsc+authentication+%ED%8C%80+%EB%8F%84%EC%9E%85"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].metadata.community_filter_tokens).toBe("rsc;authentication");
+  });
+
+  it("drops ambiguous allowlist-only queries into noop mode", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Anything goes",
+                  selftext: "random body",
+                  permalink: "/r/test/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const [artifact] = await adapter.execute(
+      makePlan(["https://www.reddit.com/search.json?q=go+rest+rag+cd+pm+mvp+r"])
+    );
+
+    expect(artifact.metadata.community_filter_tokens).toBeUndefined();
+    expect(artifact.metadata.community_filter_mode).toBe("noop");
   });
 });

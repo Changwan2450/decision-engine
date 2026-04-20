@@ -98,18 +98,15 @@ const QUERY_STOPWORDS = new Set([
 
 const SHORT_TOKEN_ALLOWLIST = new Set([
   "rust",
-  "go",
   "vue",
   "ruby",
   "php",
-  "r",
   "lua",
   "rsc",
   "spa",
   "ssr",
   "csr",
   "pwa",
-  "rest",
   "grpc",
   "http2",
   "ai",
@@ -117,10 +114,8 @@ const SHORT_TOKEN_ALLOWLIST = new Set([
   "nlp",
   "llm",
   "gpt",
-  "rag",
   "llms",
   "ci",
-  "cd",
   "qa",
   "k8s",
   "aws",
@@ -136,12 +131,10 @@ const SHORT_TOKEN_ALLOWLIST = new Set([
   "orm",
   "etl",
   "db",
-  "mvp",
   "seo",
   "kpi",
   "ops",
   "dev",
-  "pm"
 ]);
 
 const GENERIC_LONG_TOKEN_DENY = new Set([
