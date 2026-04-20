@@ -209,6 +209,9 @@ describe("buildWatchDigest", () => {
     expect(digest.headline).toContain("1 contradictions");
     expect(digest.summary).toContain("focus: monorepo");
     expect(digest.summary).toContain("contradictions: 1");
+    expect(digest.summary).toContain(
+      "next: investigate conflicting evidence on monorepo"
+    );
 
     await expect(listInboxItemRecords(project.project.id)).resolves.toEqual(
       expect.arrayContaining([
@@ -381,7 +384,11 @@ describe("buildWatchDigest", () => {
     await expect(listInboxItemRecords(project.project.id)).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: "digest", refId: digest.id }),
-        expect.objectContaining({ kind: "alert", refId: digest.id })
+        expect.objectContaining({
+          kind: "alert",
+          refId: digest.id,
+          summary: digest.summary
+        })
       ])
     );
   });

@@ -117,7 +117,7 @@ async function createInboxItems(input: {
         digestId: input.digest.id,
         kind: "alert",
         title: `${input.title} alert`,
-        summary: `${input.novelCount} novel items detected`,
+        summary: input.digest.summary,
         now: input.digest.updatedAt
       })
     );
@@ -170,6 +170,7 @@ function normalizeArtifactUrl(artifact: SourceArtifact): string | null {
 function buildDigestSignal(runs: RunRecord[]): {
   focusTopic: string | null;
   contradictionCount: number;
+  nextAction: string | null;
 } {
   const contradictionCount = runs.reduce(
     (sum, run) => sum + run.contradictions.length,
@@ -181,7 +182,11 @@ function buildDigestSignal(runs: RunRecord[]): {
 
   return {
     focusTopic: focusTopic ? formatTopicKey(focusTopic) : null,
-    contradictionCount
+    contradictionCount,
+    nextAction: buildNextAction({
+      focusTopic: focusTopic ? formatTopicKey(focusTopic) : null,
+      contradictionCount
+    })
   };
 }
 
@@ -233,6 +238,7 @@ function buildDigestHeadline(input: {
   signal: {
     focusTopic: string | null;
     contradictionCount: number;
+    nextAction: string | null;
   };
 }): string {
   if (input.signal.focusTopic && input.signal.contradictionCount > 0) {
@@ -252,6 +258,7 @@ function buildDigestSummary(input: {
   signal: {
     focusTopic: string | null;
     contradictionCount: number;
+    nextAction: string | null;
   };
 }): string {
   const parts = [
@@ -266,5 +273,24 @@ function buildDigestSummary(input: {
     parts.push(`contradictions: ${input.signal.contradictionCount}`);
   }
 
+  if (input.signal.nextAction) {
+    parts.push(`next: ${input.signal.nextAction}`);
+  }
+
   return parts.join("; ");
+}
+
+function buildNextAction(input: {
+  focusTopic: string | null;
+  contradictionCount: number;
+}): string | null {
+  if (input.focusTopic && input.contradictionCount > 0) {
+    return `investigate conflicting evidence on ${input.focusTopic}`;
+  }
+
+  if (input.focusTopic) {
+    return `review new evidence on ${input.focusTopic}`;
+  }
+
+  return null;
 }
