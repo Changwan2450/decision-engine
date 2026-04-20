@@ -400,10 +400,12 @@ function pickRawPayload(
 
 function isJinaAuthError(url: string, payload: string): boolean {
   if (hostnameOf(url) !== "s.jina.ai") return false;
-  const trimmed = payload.trim();
-  if (!trimmed.startsWith("{")) return false;
+  // Real scrapling CLI wraps JSON auth failures as <html><body>{...}</body></html>.
+  // Keep supporting raw-JSON fixtures / alternate executors too.
+  const match = payload.match(/\{[\s\S]*\}/);
+  if (!match) return false;
   try {
-    const parsed = JSON.parse(trimmed) as { code?: unknown; data?: unknown };
+    const parsed = JSON.parse(match[0]) as { code?: unknown };
     return typeof parsed.code === "number" && parsed.code >= 400;
   } catch {
     return false;
