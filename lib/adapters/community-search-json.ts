@@ -144,6 +144,19 @@ const SHORT_TOKEN_ALLOWLIST = new Set([
   "pm"
 ]);
 
+function isLongToken(token: string): boolean {
+  return (
+    token.length >= 5 ||
+    /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(
+      token
+    )
+  );
+}
+
+function isShortAllowlistToken(token: string): boolean {
+  return !isLongToken(token) && SHORT_TOKEN_ALLOWLIST.has(token);
+}
+
 export function isCommunitySearchJsonUrl(url: string): boolean {
   const host = hostnameOf(url);
   const pathname = safePathname(url);
@@ -263,6 +276,7 @@ async function fetchSearchUrl(args: {
   let droppedCount = 0;
   const query = extractQueryFromUrl(url);
   const tokens = query ? extractDistinctiveTokens(query) : [];
+  const filterMode = getCommunityFilterMode(tokens);
   try {
     const parsed = parseSearchBody(url, response.body);
     const filtered = parsed.items.filter((item) =>
@@ -273,6 +287,7 @@ async function fetchSearchUrl(args: {
       ...item,
       extra: {
         ...item.extra,
+        community_filter_mode: filterMode,
         community_filter_tokens: tokens.join(";"),
         community_filter_dropped: String(droppedCount)
       }
@@ -308,6 +323,7 @@ async function fetchSearchUrl(args: {
         rateLimitBucket: "community-search-json/search",
         extra: {
           error: "no posts matched relevance filter",
+          community_filter_mode: filterMode,
           community_filter_tokens: tokens.join(";"),
           community_filter_dropped: String(droppedCount)
         }
@@ -460,6 +476,7 @@ async function parsedItemToArtifact(args: {
     sourceLabel: "community/success",
     rateLimitBucket: "community-search-json/search",
     extra: {
+      community_filter_mode: "noop",
       community_filter_tokens: "",
       community_filter_dropped: "0",
       ...item.extra
@@ -566,11 +583,8 @@ function extractDistinctiveTokens(query: string): string[] {
 
   const distinct = new Set<string>();
   for (const token of tokens) {
-    const isHangulOrCjk = /[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(
-      token
-    );
     if (QUERY_STOPWORDS.has(token)) continue;
-    if (!(token.length >= 5 || isHangulOrCjk || SHORT_TOKEN_ALLOWLIST.has(token))) continue;
+    if (!(isLongToken(token) || isShortAllowlistToken(token))) continue;
     distinct.add(token);
   }
 
@@ -580,5 +594,14 @@ function extractDistinctiveTokens(query: string): string[] {
 function isPostRelevant(title: string, body: string, tokens: string[]): boolean {
   if (tokens.length === 0) return true;
   const haystack = `${title} ${body}`.normalize("NFKC").toLowerCase();
+  const longTokens = tokens.filter(isLongToken);
+  if (longTokens.length > 0) {
+    return longTokens.some((token) => haystack.includes(token.toLowerCase()));
+  }
   return tokens.some((token) => haystack.includes(token.toLowerCase()));
+}
+
+function getCommunityFilterMode(tokens: string[]): "noop" | "long_anchor" | "short_fallback" {
+  if (tokens.length === 0) return "noop";
+  return tokens.some(isLongToken) ? "long_anchor" : "short_fallback";
 }

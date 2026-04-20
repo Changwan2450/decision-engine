@@ -600,6 +600,16 @@ describe("createCommunitySearchJsonAdapter()", () => {
               {
                 kind: "t3",
                 data: {
+                  id: "a0",
+                  title: "Let's go to the store",
+                  selftext: "",
+                  permalink: "/r/programming/comments/a0/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
                   id: "a1",
                   title: "Rust vs Go in backend systems",
                   selftext: "rust and go are both viable",
@@ -623,9 +633,11 @@ describe("createCommunitySearchJsonAdapter()", () => {
     );
 
     expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("Rust vs Go in backend systems");
     expect(artifacts[0].metadata.community_filter_tokens).toBe(
       "rust;go;systems;programming"
     );
+    expect(artifacts[0].metadata.community_filter_mode).toBe("long_anchor");
   });
 
   it("keeps short allowlisted spa token alongside longer topic terms", async () => {
@@ -698,6 +710,7 @@ describe("createCommunitySearchJsonAdapter()", () => {
 
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0].metadata.community_filter_tokens).toBe("ai;ml");
+    expect(artifacts[0].metadata.community_filter_mode).toBe("short_fallback");
   });
 
   it("preserves monorepo regression behavior", async () => {
@@ -736,6 +749,7 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts[0].metadata.community_filter_tokens).toBe(
       "monorepo;polyrepo;개발자;선택"
     );
+    expect(artifacts[0].metadata.community_filter_mode).toBe("long_anchor");
   });
 
   it("still drops generic words that are not allowlisted", async () => {
@@ -771,5 +785,39 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifact.metadata.fetch_status).toBe("partial");
     expect(artifact.metadata.community_filter_tokens).toBe("stale");
     expect(artifact.metadata.community_filter_dropped).toBe("1");
+    expect(artifact.metadata.community_filter_mode).toBe("long_anchor");
+  });
+
+  it("marks noop mode when filtering is disabled", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Anything goes",
+                  selftext: "random body",
+                  permalink: "/r/test/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const [artifact] = await adapter.execute(
+      makePlan(["https://www.reddit.com/search.json?q=vs+or+the"])
+    );
+
+    expect(artifact.metadata.community_filter_mode).toBe("noop");
   });
 });
