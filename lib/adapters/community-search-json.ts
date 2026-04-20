@@ -144,6 +144,38 @@ const SHORT_TOKEN_ALLOWLIST = new Set([
   "pm"
 ]);
 
+const GENERIC_LONG_TOKEN_DENY = new Set([
+  "systems",
+  "programming",
+  "framework",
+  "platform",
+  "development",
+  "software",
+  "technology",
+  "solution",
+  "approach",
+  "design",
+  "feature",
+  "service",
+  "project",
+  "architecture",
+  "implementation",
+  "application",
+  "performance",
+  "팀",
+  "도입",
+  "결정",
+  "선택",
+  "사용",
+  "개발",
+  "서비스",
+  "시스템",
+  "프로젝트",
+  "기술",
+  "성능",
+  "구현"
+]);
+
 function isLongToken(token: string): boolean {
   return (
     token.length >= 5 ||
@@ -275,7 +307,9 @@ async function fetchSearchUrl(args: {
   let items: ParsedItem[];
   let droppedCount = 0;
   const query = extractQueryFromUrl(url);
-  const tokens = query ? extractDistinctiveTokens(query) : [];
+  const { tokens, genericsDropped } = query
+    ? extractDistinctiveTokens(query)
+    : { tokens: [], genericsDropped: 0 };
   const filterMode = getCommunityFilterMode(tokens);
   try {
     const parsed = parseSearchBody(url, response.body);
@@ -289,6 +323,7 @@ async function fetchSearchUrl(args: {
         ...item.extra,
         community_filter_mode: filterMode,
         community_filter_tokens: tokens.join(";"),
+        community_filter_generics_dropped: String(genericsDropped),
         community_filter_dropped: String(droppedCount)
       }
     }));
@@ -325,6 +360,7 @@ async function fetchSearchUrl(args: {
           error: "no posts matched relevance filter",
           community_filter_mode: filterMode,
           community_filter_tokens: tokens.join(";"),
+          community_filter_generics_dropped: String(genericsDropped),
           community_filter_dropped: String(droppedCount)
         }
       })
@@ -478,6 +514,7 @@ async function parsedItemToArtifact(args: {
     extra: {
       community_filter_mode: "noop",
       community_filter_tokens: "",
+      community_filter_generics_dropped: "0",
       community_filter_dropped: "0",
       ...item.extra
     }
@@ -577,18 +614,29 @@ function extractQueryFromUrl(url: string): string | null {
   }
 }
 
-function extractDistinctiveTokens(query: string): string[] {
+function extractDistinctiveTokens(query: string): {
+  tokens: string[];
+  genericsDropped: number;
+} {
   const tokens =
     query.normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 
   const distinct = new Set<string>();
+  const genericsDropped = new Set<string>();
   for (const token of tokens) {
     if (QUERY_STOPWORDS.has(token)) continue;
     if (!(isLongToken(token) || isShortAllowlistToken(token))) continue;
+    if (GENERIC_LONG_TOKEN_DENY.has(token)) {
+      genericsDropped.add(token);
+      continue;
+    }
     distinct.add(token);
   }
 
-  return [...distinct];
+  return {
+    tokens: [...distinct],
+    genericsDropped: genericsDropped.size
+  };
 }
 
 function isPostRelevant(title: string, body: string, tokens: string[]): boolean {

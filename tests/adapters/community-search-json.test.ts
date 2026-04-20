@@ -632,12 +632,9 @@ describe("createCommunitySearchJsonAdapter()", () => {
       ])
     );
 
-    expect(artifacts).toHaveLength(1);
-    expect(artifacts[0].title).toBe("Rust vs Go in backend systems");
-    expect(artifacts[0].metadata.community_filter_tokens).toBe(
-      "rust;go;systems;programming"
-    );
-    expect(artifacts[0].metadata.community_filter_mode).toBe("long_anchor");
+    expect(artifacts).toHaveLength(2);
+    expect(artifacts[0].metadata.community_filter_tokens).toBe("rust;go");
+    expect(artifacts[0].metadata.community_filter_mode).toBe("short_fallback");
   });
 
   it("keeps short allowlisted spa token alongside longer topic terms", async () => {
@@ -674,7 +671,7 @@ describe("createCommunitySearchJsonAdapter()", () => {
 
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0].metadata.community_filter_tokens).toBe(
-      "react;server;components;spa;도입;후회"
+      "react;server;components;spa;후회"
     );
   });
 
@@ -747,7 +744,7 @@ describe("createCommunitySearchJsonAdapter()", () => {
 
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0].metadata.community_filter_tokens).toBe(
-      "monorepo;polyrepo;개발자;선택"
+      "monorepo;polyrepo;개발자"
     );
     expect(artifacts[0].metadata.community_filter_mode).toBe("long_anchor");
   });
@@ -819,5 +816,188 @@ describe("createCommunitySearchJsonAdapter()", () => {
     );
 
     expect(artifact.metadata.community_filter_mode).toBe("noop");
+  });
+
+  it("drops generic long tokens from rust/go queries", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a0",
+                  title: "2026 Ferrari Roma Spider finally arrived",
+                  selftext: "talks about systems",
+                  permalink: "/r/cars/comments/a0/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Go vs Rust for long-term systems/finance infrastructure",
+                  selftext: "",
+                  permalink: "/r/golang/comments/a1/example",
+                  created_utc: 1_700_000_100
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=Rust+vs+Go+for+systems+programming+%ED%8C%80+%EB%8F%84%EC%9E%85+%EA%B2%B0%EC%A0%95"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe(
+      "Go vs Rust for long-term systems/finance infrastructure"
+    );
+    expect(artifacts[0].metadata.community_filter_tokens).toBe("rust;go");
+    expect(artifacts[0].metadata.community_filter_generics_dropped).toBe("5");
+    expect(artifacts[0].metadata.community_filter_mode).toBe("short_fallback");
+  });
+
+  it("drops Korean generic tokens from monorepo queries", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "monorepo setup guide",
+                  selftext: "",
+                  permalink: "/r/programming/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a2",
+                  title: "unrelated post",
+                  selftext: "generic body",
+                  permalink: "/r/programming/comments/a2/example",
+                  created_utc: 1_700_000_100
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=monorepo+vs+polyrepo+%EA%B0%9C%EB%B0%9C%EC%9E%90+%EC%84%A0%ED%83%9D"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("monorepo setup guide");
+    expect(artifacts[0].metadata.community_filter_tokens).toBe("monorepo;polyrepo;개발자");
+    expect(artifacts[0].metadata.community_filter_generics_dropped).toBe("1");
+  });
+
+  it("falls back to noop when all tokens are generic", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Anything goes",
+                  selftext: "random body",
+                  permalink: "/r/test/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const [artifact] = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=%ED%8C%80+%EB%8F%84%EC%9E%85+%EA%B2%B0%EC%A0%95+%EC%84%A0%ED%83%9D+%EC%82%AC%EC%9A%A9"
+      ])
+    );
+
+    expect(artifact.metadata.community_filter_tokens).toBeUndefined();
+    expect(artifact.metadata.community_filter_mode).toBe("noop");
+    expect(artifact.metadata.community_filter_generics_dropped).toBe("5");
+  });
+
+  it("keeps short allowlist token after generic long tokens are removed", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "RSC migration notes",
+                  selftext: "",
+                  permalink: "/r/reactjs/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a2",
+                  title: "marketing copy",
+                  selftext: "",
+                  permalink: "/r/marketing/comments/a2/example",
+                  created_utc: 1_700_000_100
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan(["https://www.reddit.com/search.json?q=rsc+systems+performance"])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("RSC migration notes");
+    expect(artifacts[0].metadata.community_filter_tokens).toBe("rsc");
+    expect(artifacts[0].metadata.community_filter_mode).toBe("short_fallback");
+    expect(artifacts[0].metadata.community_filter_generics_dropped).toBe("2");
   });
 });
