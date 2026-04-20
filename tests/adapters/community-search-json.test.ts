@@ -580,6 +580,96 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts).toEqual([]);
   });
 
+  it("drops long-anchor posts that match only one broad title token", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Windows Server 2025 setup guide",
+                  selftext: "server administration walkthrough",
+                  permalink: "/r/sysadmin/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a2",
+                  title: "React Server Components vs SPA in production",
+                  selftext: "tradeoffs from a real migration",
+                  permalink: "/r/reactjs/comments/a2/example",
+                  created_utc: 1_700_000_100
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan(["https://www.reddit.com/search.json?q=React+Server+Components+vs+SPA"])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("React Server Components vs SPA in production");
+    expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
+  });
+
+  it("drops long-anchor posts that match only one long token from a multi-token query", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "TypeScript utility patterns for config loading",
+                  selftext: "generic TypeScript tips",
+                  permalink: "/r/typescript/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a2",
+                  title: "Monolith vs Microservices in TypeScript teams",
+                  selftext: "architecture tradeoffs in practice",
+                  permalink: "/r/softwarearchitecture/comments/a2/example",
+                  created_utc: 1_700_000_100
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan(["https://www.reddit.com/search.json?q=TypeScript+monolith+vs+microservices"])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("Monolith vs Microservices in TypeScript teams");
+    expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
+  });
+
   it("keeps Korean posts using Hangul tokens", async () => {
     const adapter = createCommunitySearchJsonAdapter({
       exec: async () => ({

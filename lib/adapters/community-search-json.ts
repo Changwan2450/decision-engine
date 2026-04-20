@@ -167,6 +167,14 @@ const GENERIC_LONG_TOKEN_DENY = new Set([
   "구현"
 ]);
 
+const AMBIGUOUS_LONG_TOKEN_GUARD = new Set([
+  "react",
+  "server",
+  "component",
+  "components",
+  "typescript"
+]);
+
 function isLongToken(token: string): boolean {
   return (
     token.length >= 5 ||
@@ -605,7 +613,16 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
   const normalizedTitle = title.normalize("NFKC").toLowerCase();
   const longTokens = tokens.filter(isLongToken);
   if (longTokens.length > 0) {
-    return longTokens.some((token) => matchesToken(normalizedTitle, token));
+    const matchedLongTokens = longTokens.filter((token) =>
+      matchesToken(normalizedTitle, token)
+    );
+    if (matchedLongTokens.length === 0) {
+      return false;
+    }
+    if (longTokens.some((token) => AMBIGUOUS_LONG_TOKEN_GUARD.has(token))) {
+      return new Set(matchedLongTokens).size >= 2;
+    }
+    return true;
   }
   return tokens.some((token) => matchesToken(normalizedTitle, token));
 }
