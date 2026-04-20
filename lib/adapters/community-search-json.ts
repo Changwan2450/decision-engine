@@ -96,6 +96,54 @@ const QUERY_STOPWORDS = new Set([
   "를"
 ]);
 
+const SHORT_TOKEN_ALLOWLIST = new Set([
+  "rust",
+  "go",
+  "vue",
+  "ruby",
+  "php",
+  "r",
+  "lua",
+  "rsc",
+  "spa",
+  "ssr",
+  "csr",
+  "pwa",
+  "rest",
+  "grpc",
+  "http2",
+  "ai",
+  "ml",
+  "nlp",
+  "llm",
+  "gpt",
+  "rag",
+  "llms",
+  "ci",
+  "cd",
+  "qa",
+  "k8s",
+  "aws",
+  "gcp",
+  "iam",
+  "vpc",
+  "css",
+  "js",
+  "ts",
+  "jsx",
+  "tsx",
+  "sql",
+  "orm",
+  "etl",
+  "db",
+  "mvp",
+  "seo",
+  "kpi",
+  "ops",
+  "dev",
+  "pm"
+]);
+
 export function isCommunitySearchJsonUrl(url: string): boolean {
   const host = hostnameOf(url);
   const pathname = safePathname(url);
@@ -522,7 +570,7 @@ function extractDistinctiveTokens(query: string): string[] {
       token
     );
     if (QUERY_STOPWORDS.has(token)) continue;
-    if (!(token.length >= 5 || isHangulOrCjk)) continue;
+    if (!(token.length >= 5 || isHangulOrCjk || SHORT_TOKEN_ALLOWLIST.has(token))) continue;
     distinct.add(token);
   }
 

@@ -589,4 +589,187 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0].title).toBe("개발자 선택 기준");
   });
+
+  it("keeps short allowlisted rust and go tokens", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Rust vs Go in backend systems",
+                  selftext: "rust and go are both viable",
+                  permalink: "/r/programming/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=Rust+vs+Go+for+systems+programming"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].metadata.community_filter_tokens).toBe(
+      "rust;go;systems;programming"
+    );
+  });
+
+  it("keeps short allowlisted spa token alongside longer topic terms", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "React Server Components vs SPA tradeoffs",
+                  selftext: "spa migration regret",
+                  permalink: "/r/reactjs/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=React+Server+Components+vs+SPA+%EB%8F%84%EC%9E%85+%ED%9B%84%ED%9A%8C"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].metadata.community_filter_tokens).toBe(
+      "react;server;components;spa;도입;후회"
+    );
+  });
+
+  it("keeps short allowlisted ai and ml tokens", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "AI vs ML in 2026",
+                  selftext: "ai and ml are often confused",
+                  permalink: "/r/MachineLearning/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan(["https://www.reddit.com/search.json?q=AI+vs+ML+in+2026"])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].metadata.community_filter_tokens).toBe("ai;ml");
+  });
+
+  it("preserves monorepo regression behavior", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Monorepo vs polyrepo in practice",
+                  selftext: "solo 개발자 선택 기준",
+                  permalink: "/r/programming/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=monorepo+vs+polyrepo+solo+개발자+선택"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].metadata.community_filter_tokens).toBe(
+      "monorepo;polyrepo;개발자;선택"
+    );
+  });
+
+  it("still drops generic words that are not allowlisted", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Random topic",
+                  selftext: "nothing relevant here",
+                  permalink: "/r/test/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const [artifact] = await adapter.execute(
+      makePlan(["https://www.reddit.com/search.json?q=bad+or+old+stale"])
+    );
+
+    expect(artifact.metadata.fetch_status).toBe("partial");
+    expect(artifact.metadata.community_filter_tokens).toBe("stale");
+    expect(artifact.metadata.community_filter_dropped).toBe("1");
+  });
 });
