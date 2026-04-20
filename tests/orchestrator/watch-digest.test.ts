@@ -121,6 +121,106 @@ describe("buildWatchDigest", () => {
     ]);
   });
 
+  it("surfaces focus topic and contradictions in digest summary and inbox", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "watch-digest-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+
+    const {
+      createProjectRecord,
+      createWatchTargetRecord,
+      createRunRecord,
+      updateRunRecord,
+      listInboxItemRecords
+    } = await import("@/lib/storage/workspace");
+    const { buildWatchDigest } = await import("@/lib/orchestrator/watch-digest");
+
+    const project = await createProjectRecord({
+      name: "Actionable",
+      description: "digest signal test"
+    });
+    const watchTarget = await createWatchTargetRecord(project.project.id, {
+      title: "Architecture watch",
+      naturalLanguage: "track architecture tradeoffs",
+      urls: ["https://example.com/source"]
+    });
+
+    const run = await createRunRecord(project.project.id, {
+      title: "tick 1",
+      urls: ["https://example.com/source"]
+    });
+    await updateRunRecord(project.project.id, run.run.id, (record) => ({
+      ...record,
+      watchContext: { watchTargetId: watchTarget.id, digestId: null },
+      artifacts: [
+        {
+          id: "artifact-1",
+          adapter: "community-search-json",
+          sourceType: "community",
+          title: "Monorepo vs Polyrepo for AI-driven development",
+          url: "https://example.com/source",
+          canonicalUrl: "https://example.com/source",
+          snippet: "Signal",
+          content: "Signal body",
+          sourcePriority: "analysis",
+          metadata: {
+            fetcher: "community-search-json",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        }
+      ],
+      claims: [
+        {
+          id: "claim-1",
+          artifactId: "artifact-1",
+          text: "Monorepo helps AI-driven development",
+          topicKey: "monorepo",
+          stance: "support",
+          citationIds: ["citation-1"]
+        },
+        {
+          id: "claim-2",
+          artifactId: "artifact-1",
+          text: "Large monorepos add CI cost",
+          topicKey: "monorepo",
+          stance: "oppose",
+          citationIds: ["citation-2"]
+        }
+      ],
+      contradictions: [
+        {
+          id: "contradiction-1",
+          claimIds: ["claim-1", "claim-2"],
+          status: "flagged",
+          resolution: "unresolved",
+          kind: "community_only"
+        }
+      ]
+    }));
+
+    const digest = await buildWatchDigest(project.project.id, watchTarget.id, {
+      sourceRunIds: [run.run.id],
+      now: "2026-04-18T00:00:00.000Z"
+    });
+
+    expect(digest.headline).toContain("monorepo");
+    expect(digest.headline).toContain("1 contradictions");
+    expect(digest.summary).toContain("focus: monorepo");
+    expect(digest.summary).toContain("contradictions: 1");
+
+    await expect(listInboxItemRecords(project.project.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "digest",
+          refId: digest.id,
+          summary: digest.summary
+        })
+      ])
+    );
+  });
+
   it("treats already-digested URLs as non-novel for later digests", async () => {
     tempRoot = await mkdtemp(path.join(os.tmpdir(), "watch-digest-"));
     process.env.WORKSPACE_ROOT = tempRoot;

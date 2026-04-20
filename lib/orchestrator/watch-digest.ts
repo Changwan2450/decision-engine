@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { SourceArtifact } from "@/lib/adapters/types";
+import type { Claim } from "@/lib/domain/claims";
 import type { DigestRecord, InboxItemRecord, RunRecord } from "@/lib/storage/schema";
 import {
   listDigestRecords,
@@ -51,11 +52,20 @@ export async function buildWatchDigest(
   const currentUrls = collectArtifactUrls(runs);
   const novelUrls = Array.from(currentUrls).filter((url) => !previousUrls.has(url));
   const watchTarget = await readWatchTargetRecord(projectId, watchTargetId);
+  const digestSignal = buildDigestSignal(runs);
 
   const built: DigestRecord = {
     ...pending,
-    headline: `${deps.sourceRunIds.length} runs, ${novelUrls.length} novel urls`,
-    summary: `${novelUrls.length} novel urls across ${deps.sourceRunIds.length} source runs`,
+    headline: buildDigestHeadline({
+      runCount: deps.sourceRunIds.length,
+      novelCount: novelUrls.length,
+      signal: digestSignal
+    }),
+    summary: buildDigestSummary({
+      runCount: deps.sourceRunIds.length,
+      novelCount: novelUrls.length,
+      signal: digestSignal
+    }),
     status: "built",
     updatedAt: now
   };
@@ -155,4 +165,106 @@ function collectArtifactUrls(runs: RunRecord[]): Set<string> {
 function normalizeArtifactUrl(artifact: SourceArtifact): string | null {
   const url = artifact.canonicalUrl ?? artifact.url;
   return url && url.length > 0 ? url : null;
+}
+
+function buildDigestSignal(runs: RunRecord[]): {
+  focusTopic: string | null;
+  contradictionCount: number;
+} {
+  const contradictionCount = runs.reduce(
+    (sum, run) => sum + run.contradictions.length,
+    0
+  );
+  const focusTopic =
+    pickTopTopicKey(collectContradictionClaims(runs)) ??
+    pickTopTopicKey(runs.flatMap((run) => run.claims));
+
+  return {
+    focusTopic: focusTopic ? formatTopicKey(focusTopic) : null,
+    contradictionCount
+  };
+}
+
+function collectContradictionClaims(runs: RunRecord[]): Claim[] {
+  const claims: Claim[] = [];
+
+  for (const run of runs) {
+    const claimById = new Map(run.claims.map((claim) => [claim.id, claim]));
+    for (const contradiction of run.contradictions) {
+      for (const claimId of contradiction.claimIds) {
+        const claim = claimById.get(claimId);
+        if (claim) {
+          claims.push(claim);
+        }
+      }
+    }
+  }
+
+  return claims;
+}
+
+function pickTopTopicKey(claims: Claim[]): string | null {
+  const counts = new Map<string, number>();
+
+  for (const claim of claims) {
+    if (!claim.topicKey) continue;
+    counts.set(claim.topicKey, (counts.get(claim.topicKey) ?? 0) + 1);
+  }
+
+  let topTopic: string | null = null;
+  let topCount = 0;
+  for (const [topicKey, count] of counts.entries()) {
+    if (count > topCount) {
+      topTopic = topicKey;
+      topCount = count;
+    }
+  }
+
+  return topTopic;
+}
+
+function formatTopicKey(topicKey: string): string {
+  return topicKey.replace(/[-_]+/g, " ").trim();
+}
+
+function buildDigestHeadline(input: {
+  runCount: number;
+  novelCount: number;
+  signal: {
+    focusTopic: string | null;
+    contradictionCount: number;
+  };
+}): string {
+  if (input.signal.focusTopic && input.signal.contradictionCount > 0) {
+    return `${input.signal.focusTopic}: ${input.signal.contradictionCount} contradictions, ${input.novelCount} novel urls`;
+  }
+
+  if (input.signal.focusTopic) {
+    return `${input.signal.focusTopic}: ${input.novelCount} novel urls across ${input.runCount} runs`;
+  }
+
+  return `${input.runCount} runs, ${input.novelCount} novel urls`;
+}
+
+function buildDigestSummary(input: {
+  runCount: number;
+  novelCount: number;
+  signal: {
+    focusTopic: string | null;
+    contradictionCount: number;
+  };
+}): string {
+  const parts = [
+    `${input.novelCount} novel urls across ${input.runCount} source runs`
+  ];
+
+  if (input.signal.focusTopic) {
+    parts.push(`focus: ${input.signal.focusTopic}`);
+  }
+
+  if (input.signal.contradictionCount > 0) {
+    parts.push(`contradictions: ${input.signal.contradictionCount}`);
+  }
+
+  return parts.join("; ");
 }
