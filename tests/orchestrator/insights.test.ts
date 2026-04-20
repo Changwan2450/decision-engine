@@ -401,6 +401,58 @@ describe("evidence synthesis", () => {
     expect(synthesis.claims[2].topicKey).toBeUndefined();
   });
 
+  it("suppresses fallback claims for blocked artifacts without claims_json", () => {
+    const artifacts: SourceArtifact[] = [
+      {
+        id: "artifact-blocked",
+        adapter: "scrapling",
+        sourceType: "web",
+        title: "s.jina.ai",
+        url: "https://s.jina.ai/?q=monorepo",
+        snippet: "",
+        content: "{\"data\":null,\"code\":401,\"message\":\"Authentication is required\"}",
+        sourcePriority: "analysis",
+        metadata: {
+          fetch_status: "blocked",
+          block_reason: "login",
+          login_required: "true"
+        }
+      }
+    ];
+
+    const synthesis = synthesizeEvidenceFromArtifacts(artifacts, {
+      now: "2026-04-20T00:00:00.000Z",
+      recencySensitive: false
+    });
+
+    expect(synthesis.claims).toHaveLength(0);
+    expect(synthesis.contradictions).toHaveLength(0);
+  });
+
+  it("suppresses fallback claims for raw listing-style JSON bodies", () => {
+    const artifacts: SourceArtifact[] = [
+      {
+        id: "artifact-json",
+        adapter: "scrapling",
+        sourceType: "web",
+        title: "search listing",
+        url: "https://example.com/listing",
+        snippet: "",
+        content: "{\"kind\":\"Listing\",\"data\":{\"children\":[]}}",
+        sourcePriority: "analysis",
+        metadata: {}
+      }
+    ];
+
+    const synthesis = synthesizeEvidenceFromArtifacts(artifacts, {
+      now: "2026-04-20T00:00:00.000Z",
+      recencySensitive: false
+    });
+
+    expect(synthesis.claims).toHaveLength(0);
+    expect(synthesis.contradictions).toHaveLength(0);
+  });
+
   it("keeps real titles in anchor context", () => {
     const artifacts: SourceArtifact[] = [
       {

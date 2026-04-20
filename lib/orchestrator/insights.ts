@@ -83,12 +83,34 @@ function buildTopicAliasMap(artifacts: SourceArtifact[]): Map<string, string> {
   return aliases;
 }
 
+function isLowSignalFallbackClaimText(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    return true;
+  }
+
+  return /"kind"\s*:\s*"Listing"|AuthenticationRequiredError|"children"\s*:/u.test(trimmed);
+}
+
+function shouldSuppressFallbackClaims(artifact: SourceArtifact): boolean {
+  const fetchStatus = artifact.metadata.fetch_status;
+  return (
+    fetchStatus === "blocked" ||
+    fetchStatus === "error" ||
+    fetchStatus === "timeout"
+  );
+}
+
 function parseClaimSeeds(artifact: SourceArtifact): ClaimSeed[] {
   const serialized = artifact.metadata.claims_json;
 
   if (serialized) {
     const parsed = JSON.parse(serialized) as ClaimSeed[];
     return parsed;
+  }
+
+  if (shouldSuppressFallbackClaims(artifact)) {
+    return [];
   }
 
   const raw = artifact.content || artifact.snippet;
@@ -102,7 +124,11 @@ function parseClaimSeeds(artifact: SourceArtifact): ClaimSeed[] {
     return lines.map((text) => ({ text, stance: inferClaimStance(text) }));
   }
 
-  return raw ? [{ text: raw, stance: inferClaimStance(raw) }] : [];
+  if (!raw || isLowSignalFallbackClaimText(raw)) {
+    return [];
+  }
+
+  return [{ text: raw, stance: inferClaimStance(raw) }];
 }
 
 function comparePriority(left: Citation, right: Citation): number {
