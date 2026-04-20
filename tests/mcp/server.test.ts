@@ -596,6 +596,78 @@ describe("mcp server", () => {
         target: "solo 개발자",
         comparisonAxis: "기존 채널"
       },
+      artifacts: [
+        {
+          id: "artifact-1",
+          adapter: "kb-preread",
+          sourceType: "kb",
+          title: "시장 진입 prior",
+          url: "https://example.com/internal",
+          snippet: "",
+          content: "내부 prior",
+          sourcePriority: "analysis",
+          sourceTier: "internal",
+          metadata: {
+            fetcher: "kb-preread",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        },
+        {
+          id: "artifact-2",
+          adapter: "community-search-json",
+          sourceType: "community",
+          title: "시장 진입 운영 후기",
+          url: "https://reddit.com/example",
+          snippet: "",
+          content: "커뮤니티 의견",
+          sourcePriority: "community",
+          sourceTier: "community",
+          metadata: {
+            fetcher: "community-search-json",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        }
+      ],
+      citations: [
+        {
+          id: "citation-1",
+          artifactId: "artifact-1",
+          url: "https://example.com/internal",
+          title: "시장 진입 prior",
+          priority: "analysis"
+        },
+        {
+          id: "citation-2",
+          artifactId: "artifact-2",
+          url: "https://reddit.com/example",
+          title: "시장 진입 운영 후기",
+          priority: "community"
+        }
+      ],
+      claims: [
+        {
+          id: "claim-1",
+          artifactId: "artifact-1",
+          text: "시장 진입은 지금이 적기다.",
+          topicKey: "시장-진입",
+          stance: "support",
+          citationIds: ["citation-1"]
+        },
+        {
+          id: "claim-2",
+          artifactId: "artifact-2",
+          text: "시장 진입은 아직 이르다.",
+          topicKey: "시장-진입",
+          stance: "oppose",
+          citationIds: ["citation-2"]
+        }
+      ],
       contradictions: [
         {
           id: "contradiction-1",
@@ -628,7 +700,7 @@ describe("mcp server", () => {
     expect(followupResult.structuredContent.contradictionId).toBe("contradiction-1");
     expect(followupResult.structuredContent.kind).toBe("internal_vs_community");
     expect(followupResult.structuredContent.followup).toEqual({
-      suggestedTitle: "시장 진입 판단 — 내 KB 대비 최신 커뮤니티 의견 재검증",
+      suggestedTitle: "시장 진입 — 내 KB 대비 최신 커뮤니티 의견 재검증",
       suggestedNaturalLanguage:
         "목표: 내부 지식과 커뮤니티 의견이 충돌. 내 KB가 stale일 가능성.\n대상: solo 개발자\n비교: 내 KB 기준, 커뮤니티 최신 의견",
       suggestedComparisonAxis: "내 KB 기준, 커뮤니티 최신 의견"

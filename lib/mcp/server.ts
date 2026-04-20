@@ -8,7 +8,7 @@ import { sendDiscordNotifierFromFile } from "@/lib/bridge/discord-notifier";
 import { exportLinkitIngestBundle } from "@/lib/bridge/linkit-export";
 import { publishLinkitBatch } from "@/lib/bridge/linkit-publish";
 import { WORKSPACE_ROOT } from "@/lib/config";
-import type { Contradiction, ContradictionKind, SourceTier } from "@/lib/domain/claims";
+import type { Claim, Contradiction, ContradictionKind, SourceTier } from "@/lib/domain/claims";
 import { executeResearchRun, fetchWeb, gatherForRun } from "@/lib/orchestrator/run-research";
 import { buildWatchDigest } from "@/lib/orchestrator/watch-digest";
 import { promoteDigestToProject } from "@/lib/orchestrator/watch-inbox";
@@ -624,9 +624,34 @@ function buildContradictionSignals(contradictions: Contradiction[]) {
   });
 }
 
+function formatTopicKeyForTitle(topicKey: string): string {
+  return topicKey.replace(/[-_]+/g, " ").trim();
+}
+
+function buildFollowupFocus(params: {
+  title: string;
+  contradiction: Contradiction;
+  claims: Claim[];
+}): string {
+  const claimById = new Map(params.claims.map((claim) => [claim.id, claim]));
+  const contradictionClaims = params.contradiction.claimIds
+    .map((claimId) => claimById.get(claimId))
+    .filter((claim): claim is Claim => Boolean(claim));
+
+  if (contradictionClaims.length === 2) {
+    const [left, right] = contradictionClaims;
+    if (left.topicKey && left.topicKey === right.topicKey) {
+      return formatTopicKeyForTitle(left.topicKey);
+    }
+  }
+
+  return params.title;
+}
+
 function buildFollowupSuggestion(params: {
   title: string;
   contradiction: Contradiction;
+  claims: Claim[];
   target?: string;
 }) {
   const kind = params.contradiction.kind ?? "mixed";
@@ -641,7 +666,13 @@ function buildFollowupSuggestion(params: {
     contradictionId: params.contradiction.id,
     kind,
     followup: {
-      suggestedTitle: template.suggestedTitle(params.title),
+      suggestedTitle: template.suggestedTitle(
+        buildFollowupFocus({
+          title: params.title,
+          contradiction: params.contradiction,
+          claims: params.claims
+        })
+      ),
       suggestedNaturalLanguage: [
         `목표: ${template.reason}`,
         `대상: ${params.target ?? "추가 검토 대상"}`,
@@ -806,6 +837,7 @@ async function callTool(
         buildFollowupSuggestion({
           title: record.run.title,
           contradiction,
+          claims: record.claims,
           target: record.normalizedInput?.target
         }) ?? {
           contradictionId,
