@@ -439,6 +439,101 @@ describe("executeResearchRun", () => {
     });
   });
 
+  it("dedupes gathered artifacts by canonicalUrl before synthesis", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "research-dedup-"));
+    tempVault = await mkdtemp(path.join(os.tmpdir(), "research-dedup-vault-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+    process.env.OBSIDIAN_VAULT_PATH = tempVault;
+    setQmdClientForTests({
+      async operatorNotes() {
+        return [];
+      },
+      async queryNotes() {
+        return [];
+      }
+    });
+
+    const { createProjectRecord, createRunRecord, readRunRecord } = await import(
+      "@/lib/storage/workspace"
+    );
+    const { executeResearchRun } = await import("@/lib/orchestrator/run-research");
+
+    const project = await createProjectRecord({
+      name: "Artifact Dedup",
+      description: "artifact dedupe"
+    });
+    const run = await createRunRecord(project.project.id, {
+      title: "artifact dedupe run",
+      naturalLanguage: "목표: 중복 제거\n대상: 개발자\n비교: monorepo, polyrepo"
+    });
+
+    await executeResearchRun(project.project.id, run.run.id, {
+      now: "2026-04-20T00:00:00.000Z",
+      gather: async () => [
+        {
+          id: "artifact-0",
+          adapter: "community-search-json",
+          sourceType: "community",
+          sourcePriority: "community",
+          title: "Monorepo vs Polyrepo for AI-driven development",
+          url: "https://reddit.com/r/ExperiencedDevs/comments/1siqkc5/monorepo_vs_polyrepo_for_aidriven_development/",
+          canonicalUrl:
+            "https://reddit.com/r/ExperiencedDevs/comments/1siqkc5/monorepo_vs_polyrepo_for_aidriven_development",
+          snippet: "duplicate A",
+          content: "Short background: our system has always been in a monorepo.",
+          metadata: {
+            fetcher: "community-search-json",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false",
+            claims_json: JSON.stringify([
+              { text: "Monorepo improves AI effectiveness.", topicKey: "monorepo", stance: "support" }
+            ])
+          }
+        },
+        {
+          id: "artifact-1",
+          adapter: "community-search-json",
+          sourceType: "community",
+          sourcePriority: "community",
+          title: "Monorepo vs Polyrepo for AI-driven development",
+          url: "https://reddit.com/r/ExperiencedDevs/comments/1siqkc5/monorepo_vs_polyrepo_for_aidriven_development/",
+          canonicalUrl:
+            "https://reddit.com/r/ExperiencedDevs/comments/1siqkc5/monorepo_vs_polyrepo_for_aidriven_development",
+          snippet: "duplicate B",
+          content:
+            "Short background: our system has always been in a monorepo. I feel that for AI-driven development, a monorepo is even more advantageous.",
+          metadata: {
+            fetcher: "community-search-json",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false",
+            claims_json: JSON.stringify([
+              { text: "Monorepo improves AI effectiveness.", topicKey: "monorepo", stance: "support" }
+            ])
+          }
+        }
+      ]
+    });
+
+    const storedRun = await readRunRecord(project.project.id, run.run.id);
+    const gathered = storedRun.artifacts.filter(
+      (artifact) => artifact.adapter === "community-search-json"
+    );
+
+    expect(gathered).toHaveLength(1);
+    expect(gathered[0]?.id).toBe("artifact-1");
+    expect(
+      storedRun.claims.filter(
+        (claim) =>
+          claim.artifactId === "artifact-1" &&
+          claim.text.includes("Monorepo improves AI effectiveness.")
+      )
+    ).toHaveLength(1);
+  });
+
   it("falls back to per-file get when qmd multi-get returns invalid json", async () => {
     tempRoot = await mkdtemp(path.join(os.tmpdir(), "research-qmd-fallback-"));
     tempVault = await mkdtemp(path.join(os.tmpdir(), "research-qmd-fallback-vault-"));

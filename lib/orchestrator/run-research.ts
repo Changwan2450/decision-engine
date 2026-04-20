@@ -365,6 +365,61 @@ function attachSourceTiers(artifacts: SourceArtifact[]): SourceArtifact[] {
   }));
 }
 
+function dedupeGatheredArtifacts(artifacts: SourceArtifact[]): SourceArtifact[] {
+  const deduped = new Map<string, SourceArtifact>();
+
+  for (const artifact of artifacts) {
+    const dedupeKey = artifact.canonicalUrl ?? artifact.url;
+    if (!dedupeKey) {
+      continue;
+    }
+
+    const existing = deduped.get(dedupeKey);
+    if (!existing) {
+      deduped.set(dedupeKey, artifact);
+      continue;
+    }
+
+    deduped.set(dedupeKey, pickPreferredArtifact(existing, artifact));
+  }
+
+  return Array.from(deduped.values());
+}
+
+function pickPreferredArtifact(current: SourceArtifact, candidate: SourceArtifact): SourceArtifact {
+  const currentRank = fetchStatusRank(current.metadata.fetch_status);
+  const candidateRank = fetchStatusRank(candidate.metadata.fetch_status);
+
+  if (candidateRank !== currentRank) {
+    return candidateRank > currentRank ? candidate : current;
+  }
+
+  if (candidate.content.length !== current.content.length) {
+    return candidate.content.length > current.content.length ? candidate : current;
+  }
+
+  if (candidate.snippet.length !== current.snippet.length) {
+    return candidate.snippet.length > current.snippet.length ? candidate : current;
+  }
+
+  return candidate;
+}
+
+function fetchStatusRank(status: string | undefined): number {
+  switch (status) {
+    case "success":
+      return 4;
+    case "partial":
+      return 3;
+    case "blocked":
+      return 2;
+    case "timeout":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
 function resolveTierForClaim(
   claim: Claim | undefined,
   citationById: Map<string, Citation>,
@@ -483,7 +538,7 @@ export async function executeResearchRun(
     const gatheredArtifacts = await gather(plan);
     const artifacts = attachSourceTiers([
       ...buildKnowledgeArtifacts(plan.kbContext, plan.runId),
-      ...gatheredArtifacts
+      ...dedupeGatheredArtifacts(gatheredArtifacts)
     ]);
 
     await updateRunRecord(projectId, runId, (record) => {
