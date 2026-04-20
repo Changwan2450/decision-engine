@@ -222,6 +222,76 @@ describe("createScraplingAdapter() — blocked path", () => {
     expect(a.metadata.login_required).toBe("true");
     expect(a.metadata.block_reason).toBe("login");
   });
+
+  it("suppresses s.jina.ai 401 JSON content", async () => {
+    const adapter = createScraplingAdapter({
+      now: fixedNow,
+      exec: makeExec({
+        status: "success",
+        html: JSON.stringify({
+          data: null,
+          code: 401,
+          name: "AuthenticationRequiredError",
+          status: 40103,
+          message: "Authentication is required..."
+        })
+      }),
+      normalize: async () => {
+        throw new Error("normalize should not run");
+      },
+      storeRaw: async () => {
+        throw new Error("storeRaw should not run");
+      }
+    });
+
+    const [a] = await adapter.execute(makePlan(["https://s.jina.ai/?q=test"]));
+    expect(a.metadata.fetch_status).toBe("blocked");
+    expect(a.metadata.block_reason).toBe("login");
+    expect(a.metadata.login_required).toBe("true");
+    expect(a.content).toBe("");
+    expect(a.rawRef).toBeUndefined();
+    expect(a.metadata.error).toContain("authentication required");
+  });
+
+  it("passes through s.jina.ai JSON when no auth error code is present", async () => {
+    const adapter = createScraplingAdapter({
+      now: fixedNow,
+      exec: makeExec({
+        status: "success",
+        html: JSON.stringify({
+          data: [{ title: "rust" }],
+          message: "ok"
+        })
+      }),
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/scrapling/jina.json"
+    });
+
+    const [a] = await adapter.execute(makePlan(["https://s.jina.ai/?q=test"]));
+    expect(a.metadata.fetch_status).toBe("success");
+    expect(a.content).toContain("\"message\":\"ok\"");
+    expect(a.rawRef).toBe("p/runs/r/raw/scrapling/jina.json");
+  });
+
+  it("does not suppress non-jina hosts with similar JSON", async () => {
+    const adapter = createScraplingAdapter({
+      now: fixedNow,
+      exec: makeExec({
+        status: "success",
+        html: JSON.stringify({
+          code: 401,
+          message: "normal api response"
+        })
+      }),
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/scrapling/api.json"
+    });
+
+    const [a] = await adapter.execute(makePlan(["https://example.com/api"]));
+    expect(a.metadata.fetch_status).toBe("success");
+    expect(a.content).toContain("\"code\":401");
+    expect(a.rawRef).toBe("p/runs/r/raw/scrapling/api.json");
+  });
 });
 
 describe("createScraplingAdapter() — timeout / error paths", () => {

@@ -221,25 +221,37 @@ async function fetchOne(args: {
 
   const rawPayload = pickRawPayload(response);
   if (rawPayload) {
-    try {
-      rawRef = await storeRaw({
-        projectId,
-        runId,
-        adapter: ADAPTER_NAME,
-        format: rawPayload.storeFormat,
-        payload: rawPayload.payload
-      });
-      content = await normalize({
-        format: rawPayload.normalizeFormat,
-        payload: rawPayload.payload
-      });
-    } catch (err) {
-      outcome = failedOutcome("error");
+    if (isJinaAuthError(url, rawPayload.payload)) {
+      outcome = {
+        status: "blocked",
+        blockReason: "login",
+        bypassLevel: outcome.bypassLevel ?? "none",
+        loginRequired: true
+      };
       errorMessage = truncateErrorMessage(
-        err instanceof Error ? err.message : String(err)
+        "s.jina.ai authentication required — artifact content suppressed"
       );
-      content = "";
-      rawRef = undefined;
+    } else {
+      try {
+        rawRef = await storeRaw({
+          projectId,
+          runId,
+          adapter: ADAPTER_NAME,
+          format: rawPayload.storeFormat,
+          payload: rawPayload.payload
+        });
+        content = await normalize({
+          format: rawPayload.normalizeFormat,
+          payload: rawPayload.payload
+        });
+      } catch (err) {
+        outcome = failedOutcome("error");
+        errorMessage = truncateErrorMessage(
+          err instanceof Error ? err.message : String(err)
+        );
+        content = "";
+        rawRef = undefined;
+      }
     }
   }
 
@@ -384,6 +396,18 @@ function pickRawPayload(
   }
 
   return null;
+}
+
+function isJinaAuthError(url: string, payload: string): boolean {
+  if (hostnameOf(url) !== "s.jina.ai") return false;
+  const trimmed = payload.trim();
+  if (!trimmed.startsWith("{")) return false;
+  try {
+    const parsed = JSON.parse(trimmed) as { code?: unknown; data?: unknown };
+    return typeof parsed.code === "number" && parsed.code >= 400;
+  } catch {
+    return false;
+  }
 }
 
 // ---- URL classification (semantic tag, not routing) --------------------
