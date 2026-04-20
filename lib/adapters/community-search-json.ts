@@ -602,11 +602,10 @@ function extractDistinctiveTokens(query: string): {
 
 function isPostRelevant(title: string, body: string, tokens: string[]): boolean {
   if (tokens.length === 0) return true;
-  const haystack = `${title} ${body}`.normalize("NFKC").toLowerCase();
   const normalizedTitle = title.normalize("NFKC").toLowerCase();
   const longTokens = tokens.filter(isLongToken);
   if (longTokens.length > 0) {
-    return longTokens.some((token) => matchesToken(haystack, token));
+    return longTokens.some((token) => matchesToken(normalizedTitle, token));
   }
   return tokens.some((token) => matchesToken(normalizedTitle, token));
 }

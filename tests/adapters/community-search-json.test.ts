@@ -1423,4 +1423,71 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifact.metadata.community_filter_tokens).toBe("rust;authentication");
     expect(artifact.metadata.community_filter_mode).toBe("long_anchor");
   });
+
+  it("drops body-only matches in long_anchor mode", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Best IDE for Python",
+                  selftext: "we had a monorepo but moved away",
+                  permalink: "/r/python/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan(["https://www.reddit.com/search.json?q=monorepo+vs+polyrepo"])
+    );
+
+    expect(artifacts).toEqual([]);
+  });
+
+  it("keeps title matches in long_anchor mode", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Monorepo vs Polyrepo debate",
+                  selftext: "",
+                  permalink: "/r/programming/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan(["https://www.reddit.com/search.json?q=monorepo+vs+polyrepo"])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("Monorepo vs Polyrepo debate");
+  });
 });
