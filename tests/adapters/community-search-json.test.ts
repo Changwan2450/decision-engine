@@ -490,7 +490,7 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts[0].metadata.community_filter_dropped).toBe("0");
   });
 
-  it("returns a partial stub when every result is dropped by relevance", async () => {
+  it("returns an empty array when every result is dropped by relevance", async () => {
     const adapter = createCommunitySearchJsonAdapter({
       exec: async () => ({
         status: 200,
@@ -540,10 +540,7 @@ describe("createCommunitySearchJsonAdapter()", () => {
       makePlan(["https://www.reddit.com/search.json?q=monorepo"])
     );
 
-    expect(artifacts).toHaveLength(1);
-    expect(artifacts[0].metadata.fetch_status).toBe("partial");
-    expect(artifacts[0].metadata.community_filter_dropped).toBe("3");
-    expect(artifacts[0].metadata.error).toContain("no posts matched relevance filter");
+    expect(artifacts).toEqual([]);
   });
 
   it("keeps Korean posts using Hangul tokens", async () => {
@@ -775,14 +772,11 @@ describe("createCommunitySearchJsonAdapter()", () => {
       storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
     });
 
-    const [artifact] = await adapter.execute(
+    const artifacts = await adapter.execute(
       makePlan(["https://www.reddit.com/search.json?q=bad+or+old+stale"])
     );
 
-    expect(artifact.metadata.fetch_status).toBe("partial");
-    expect(artifact.metadata.community_filter_tokens).toBe("stale");
-    expect(artifact.metadata.community_filter_dropped).toBe("1");
-    expect(artifact.metadata.community_filter_mode).toBe("long_anchor");
+    expect(artifacts).toEqual([]);
   });
 
   it("marks noop mode when filtering is disabled", async () => {
@@ -1157,14 +1151,13 @@ describe("createCommunitySearchJsonAdapter()", () => {
       storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
     });
 
-    const [artifact] = await adapter.execute(
+    const artifacts = await adapter.execute(
       makePlan([
         "https://www.reddit.com/search.json?q=Rust+vs+Go+for+systems+programming+%ED%8C%80+%EB%8F%84%EC%9E%85+%EA%B2%B0%EC%A0%95"
       ])
     );
 
-    expect(artifact.metadata.fetch_status).toBe("partial");
-    expect(artifact.metadata.community_filter_tokens).toBe("rust");
+    expect(artifacts).toEqual([]);
   });
 
   it("keeps short-token word-boundary matches for rust", async () => {
@@ -1266,14 +1259,61 @@ describe("createCommunitySearchJsonAdapter()", () => {
       storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
     });
 
-    const [artifact] = await adapter.execute(
+    const artifacts = await adapter.execute(
       makePlan([
         "https://www.reddit.com/search.json?q=Rust+vs+Go+for+systems+programming+%ED%8C%80+%EB%8F%84%EC%9E%85+%EA%B2%B0%EC%A0%95"
       ])
     );
 
-    expect(artifact.metadata.fetch_status).toBe("partial");
-    expect(artifact.metadata.community_filter_tokens).toBe("rust");
+    expect(artifacts).toEqual([]);
+  });
+
+  it("keeps only real items when one search result is dropped and another is kept", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Go vs Rust for long-term systems",
+                  selftext: "",
+                  permalink: "/r/rust/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a2",
+                  title: "Leftover Eggs [April Submission]",
+                  selftext: "the pan has a rust stain",
+                  permalink: "/r/cooking/comments/a2/example",
+                  created_utc: 1_700_000_100
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=Rust+vs+Go+for+systems+programming+%ED%8C%80+%EB%8F%84%EC%9E%85+%EA%B2%B0%EC%A0%95"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("Go vs Rust for long-term systems");
+    expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
+    expect(artifacts[0].metadata.community_filter_tokens).toBe("rust");
   });
 
   it("keeps long-token substring matches like monorepos", async () => {

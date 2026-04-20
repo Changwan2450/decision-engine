@@ -344,35 +344,6 @@ async function fetchSearchUrl(args: {
     ];
   }
 
-  if (tokens.length > 0 && items.length === 0) {
-    return [
-      buildArtifact({
-        id: `${ADAPTER_NAME}-${index}`,
-        adapter: ADAPTER_NAME,
-        fetcher: FETCHER_NAME,
-        url,
-        canonicalUrl: canonicalize(url) || undefined,
-        sourceType: "community",
-        title: deriveTitleFromUrl(url),
-        snippet: "",
-        content: "",
-        sourcePriority: "community",
-        retrievedAt,
-        rawRef,
-        outcome: { status: "partial" },
-        sourceLabel: "community/partial",
-        rateLimitBucket: "community-search-json/search",
-        extra: {
-          error: "no posts matched relevance filter",
-          community_filter_mode: filterMode,
-          community_filter_tokens: tokens.join(";"),
-          community_filter_generics_dropped: String(genericsDropped),
-          community_filter_dropped: String(droppedCount)
-        }
-      })
-    ];
-  }
-
   if (items.length === 0) return [];
 
   return Promise.all(
@@ -648,11 +619,12 @@ function extractDistinctiveTokens(query: string): {
 function isPostRelevant(title: string, body: string, tokens: string[]): boolean {
   if (tokens.length === 0) return true;
   const haystack = `${title} ${body}`.normalize("NFKC").toLowerCase();
+  const normalizedTitle = title.normalize("NFKC").toLowerCase();
   const longTokens = tokens.filter(isLongToken);
   if (longTokens.length > 0) {
     return longTokens.some((token) => matchesToken(haystack, token));
   }
-  return tokens.some((token) => matchesToken(haystack, token));
+  return tokens.some((token) => matchesToken(normalizedTitle, token));
 }
 
 function getCommunityFilterMode(tokens: string[]): "noop" | "long_anchor" | "short_fallback" {
