@@ -147,13 +147,13 @@ export async function runResearch(
       }
 
       if (attemptArtifacts.length === 0) {
-        artifacts.push(
-          buildRoutingFailureArtifact({
+        console.warn(
+          "[run-research] empty adapter result",
+          JSON.stringify({
             adapter: adapterName,
             url,
-            sourceType: inferSourceType(chain),
-            status: "error",
-            errorMessage: "adapter returned no artifacts"
+            rule: chain.rule,
+            isFallback
           })
         );
         continue;

@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildArtifact,
   buildFailureArtifact
@@ -613,6 +613,84 @@ describe("runResearch", () => {
       "error",
       "success"
     ]);
+  });
+
+  it("does not push a placeholder artifact when the primary adapter returns no artifacts", async () => {
+    const { runResearch } = await import("@/lib/orchestrator/run-research");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const artifacts = await runResearch(makePlan(["https://hn.algolia.com/api/v1/search?query=rust"]), {
+      router: () => ({
+        primary: "agent-reach",
+        fallbacks: [],
+        rule: "aggregator/hn-algolia"
+      }),
+      registry: {
+        "agent-reach": makeAdapter("agent-reach", async () => [])
+      }
+    });
+
+    expect(artifacts).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      "[run-research] empty adapter result",
+      expect.stringContaining("\"adapter\":\"agent-reach\"")
+    );
+  });
+
+  it("falls through to fallback success without creating a primary placeholder", async () => {
+    const { runResearch } = await import("@/lib/orchestrator/run-research");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const artifacts = await runResearch(makePlan(["https://www.reddit.com/search.json?q=rust"]), {
+      router: () => ({
+        primary: "agent-reach",
+        fallbacks: ["scrapling"],
+        rule: "community/reddit-search-json"
+      }),
+      registry: {
+        "agent-reach": makeAdapter("agent-reach", async () => []),
+        scrapling: makeAdapter("scrapling", async (plan) => [
+          buildArtifact({
+            id: "scrapling-0",
+            adapter: "scrapling",
+            fetcher: "scrapling",
+            sourceType: "community",
+            url: plan.normalizedInput.urls[0] ?? "",
+            title: "fallback",
+            content: "ok",
+            outcome: { status: "success" }
+          })
+        ])
+      }
+    });
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0]?.adapter).toBe("scrapling");
+    expect(artifacts[0]?.title).toBe("fallback");
+    expect(warn).toHaveBeenCalledWith(
+      "[run-research] empty adapter result",
+      expect.stringContaining("\"isFallback\":false")
+    );
+  });
+
+  it("returns no artifacts when both primary and fallback return empty arrays", async () => {
+    const { runResearch } = await import("@/lib/orchestrator/run-research");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const artifacts = await runResearch(makePlan(["https://www.reddit.com/search.json?q=rust"]), {
+      router: () => ({
+        primary: "agent-reach",
+        fallbacks: ["scrapling"],
+        rule: "community/reddit-search-json"
+      }),
+      registry: {
+        "agent-reach": makeAdapter("agent-reach", async () => []),
+        scrapling: makeAdapter("scrapling", async () => [])
+      }
+    });
+
+    expect(artifacts).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(2);
   });
 
   it("records timeout and skips fallback when budget is exhausted", async () => {
