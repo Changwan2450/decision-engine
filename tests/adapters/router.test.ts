@@ -28,6 +28,22 @@ describe("routeUrl() — video track", () => {
 });
 
 describe("routeUrl() — community track", () => {
+  it("routes reddit search.json to community-search-json primary", () => {
+    const chain = routeUrl("https://www.reddit.com/search.json?q=monorepo");
+    expect(chain.primary).toBe("community-search-json");
+    expect(chain.fallbacks).toEqual(["agent-reach", "scrapling"]);
+    expect(chain.rule).toBe("community/reddit-search-json");
+  });
+
+  it("routes hn algolia search to community-search-json primary", () => {
+    const chain = routeUrl(
+      "https://hn.algolia.com/api/v1/search?query=monorepo"
+    );
+    expect(chain.primary).toBe("community-search-json");
+    expect(chain.fallbacks).toEqual([]);
+    expect(chain.rule).toBe("aggregator/hn-algolia");
+  });
+
   it("routes reddit to agent-reach primary, scrapling fallback", () => {
     const chain = routeUrl("https://www.reddit.com/r/foo/comments/xyz");
     expect(chain.primary).toBe("agent-reach");

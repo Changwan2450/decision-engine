@@ -18,6 +18,7 @@ import { hostnameOf } from "@/lib/adapters/url";
 /** Known adapter identifiers. Keep in sync with adapter module `name` fields. */
 export type AdapterName =
   | "agent-reach"
+  | "community-search-json"
   | "scrapling"
   | "reclip"
   | "opendataloader-pdf"
@@ -176,6 +177,27 @@ const DEFAULT_CHAIN: AdapterChain = {
  * return the default so callers don't have to handle null.
  */
 export function routeUrl(url: string): AdapterChain {
+  const pathname = safePathname(url);
+
+  if (
+    (hostnameOf(url) === "reddit.com" || hostnameOf(url) === "www.reddit.com") &&
+    pathname === "/search.json"
+  ) {
+    return {
+      primary: "community-search-json",
+      fallbacks: ["agent-reach", "scrapling"],
+      rule: "community/reddit-search-json"
+    };
+  }
+
+  if (hostnameOf(url) === "hn.algolia.com" && pathname?.startsWith("/api/v1/search")) {
+    return {
+      primary: "community-search-json",
+      fallbacks: [],
+      rule: "aggregator/hn-algolia"
+    };
+  }
+
   if (isJinaReaderMirror(url)) {
     return { primary: "scrapling", fallbacks: ["markitdown"], rule: "web/public-mirror" };
   }
