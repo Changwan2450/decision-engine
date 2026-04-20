@@ -579,6 +579,17 @@ function buildCliAttempts(input: {
   bypassLevel: BypassLevel;
   allowFallback: boolean;
 }> {
+  if (hostnameOf(input.url) === "s.jina.ai") {
+    return [
+      {
+        args: ["extract", "get", "--timeout", String(Math.max(1, Math.ceil(Math.min(input.timeoutMs, 5_000) / 1000)))],
+        timeoutMs: Math.min(input.timeoutMs, 5_000),
+        bypassLevel: "headers",
+        allowFallback: false
+      }
+    ];
+  }
+
   if (input.mode === "fetch") {
     return [
       {

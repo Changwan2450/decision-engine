@@ -571,4 +571,57 @@ describe("createCliExecutor()", () => {
     expect(parsed.status).toBe("blocked");
     expect(parsed.block_reason).toBe("turnstile");
   });
+
+  it("uses a single get attempt with a capped timeout for s.jina.ai", async () => {
+    const calls: Array<{ args: string[]; timeoutMs: number }> = [];
+    const exec = createCliExecutor({
+      tmpRoot: "/tmp",
+      run: async ({ args, timeoutMs }) => {
+        calls.push({ args, timeoutMs });
+        return {
+          stdout: "",
+          stderr: "timed out",
+          exitCode: 124,
+          timedOut: true
+        };
+      }
+    });
+
+    const result = await exec({
+      url: "https://s.jina.ai/?q=monorepo",
+      mode: "stealth",
+      timeoutMs: 30000
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.args[1]).toBe("get");
+    expect(calls[0]?.timeoutMs).toBe(5000);
+    expect(result.timedOut).toBe(true);
+  });
+
+  it("keeps the normal stealth escalation for non-jina hosts", async () => {
+    const calls: Array<{ args: string[]; timeoutMs: number }> = [];
+    const exec = createCliExecutor({
+      tmpRoot: "/tmp",
+      run: async ({ args, timeoutMs }) => {
+        calls.push({ args, timeoutMs });
+        if (args[1] === "get") {
+          return { stdout: "", stderr: "empty body", exitCode: 1 };
+        }
+        if (args[1] === "fetch") {
+          return { stdout: "", stderr: "still blocked", exitCode: 1 };
+        }
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+    });
+
+    await exec({
+      url: "https://example.com",
+      mode: "stealth",
+      timeoutMs: 30000
+    });
+
+    expect(calls.map((call) => call.args[1])).toEqual(["get", "fetch", "stealthy-fetch"]);
+    expect(calls[0]?.timeoutMs).toBe(30000);
+  });
 });
