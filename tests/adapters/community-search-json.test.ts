@@ -1130,4 +1130,220 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifact.metadata.community_filter_tokens).toBeUndefined();
     expect(artifact.metadata.community_filter_mode).toBe("noop");
   });
+
+  it("drops short-token substring matches like trust", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "why American democracy will likely withstand Trump",
+                  selftext: "we need to trust our institutions",
+                  permalink: "/r/politics/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const [artifact] = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=Rust+vs+Go+for+systems+programming+%ED%8C%80+%EB%8F%84%EC%9E%85+%EA%B2%B0%EC%A0%95"
+      ])
+    );
+
+    expect(artifact.metadata.fetch_status).toBe("partial");
+    expect(artifact.metadata.community_filter_tokens).toBe("rust");
+  });
+
+  it("keeps short-token word-boundary matches for rust", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Go vs Rust for long-term systems/finance infrastructure",
+                  selftext: "",
+                  permalink: "/r/golang/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const [artifact] = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=Rust+vs+Go+for+systems+programming+%ED%8C%80+%EB%8F%84%EC%9E%85+%EA%B2%B0%EC%A0%95"
+      ])
+    );
+
+    expect(artifact.title).toBe(
+      "Go vs Rust for long-term systems/finance infrastructure"
+    );
+    expect(artifact.metadata.community_filter_tokens).toBe("rust");
+  });
+
+  it("keeps short-token matches across hyphen boundaries", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "rust-lang community update",
+                  selftext: "",
+                  permalink: "/r/rust/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const [artifact] = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=Rust+vs+Go+for+systems+programming+%ED%8C%80+%EB%8F%84%EC%9E%85+%EA%B2%B0%EC%A0%95"
+      ])
+    );
+
+    expect(artifact.title).toBe("rust-lang community update");
+  });
+
+  it("drops short-token suffix matches like rusty", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "my code feels rusty today",
+                  selftext: "",
+                  permalink: "/r/programming/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const [artifact] = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=Rust+vs+Go+for+systems+programming+%ED%8C%80+%EB%8F%84%EC%9E%85+%EA%B2%B0%EC%A0%95"
+      ])
+    );
+
+    expect(artifact.metadata.fetch_status).toBe("partial");
+    expect(artifact.metadata.community_filter_tokens).toBe("rust");
+  });
+
+  it("keeps long-token substring matches like monorepos", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "benefits of monorepos in 2026",
+                  selftext: "",
+                  permalink: "/r/programming/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const [artifact] = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=monorepo+vs+polyrepo+%EA%B0%9C%EB%B0%9C%EC%9E%90+%EC%84%A0%ED%83%9D"
+      ])
+    );
+
+    expect(artifact.title).toBe("benefits of monorepos in 2026");
+    expect(artifact.metadata.community_filter_tokens).toBe("monorepo;polyrepo;개발자");
+  });
+
+  it("keeps posts when a long token matches even if a short token only appears inside another word", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "authentication edge cases",
+                  selftext: "we lost trust in the system",
+                  permalink: "/r/programming/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const [artifact] = await adapter.execute(
+      makePlan(["https://www.reddit.com/search.json?q=rust+authentication"])
+    );
+
+    expect(artifact.title).toBe("authentication edge cases");
+    expect(artifact.metadata.community_filter_tokens).toBe("rust;authentication");
+    expect(artifact.metadata.community_filter_mode).toBe("long_anchor");
+  });
 });

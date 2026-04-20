@@ -182,6 +182,19 @@ function isShortAllowlistToken(token: string): boolean {
   return !isLongToken(token) && SHORT_TOKEN_ALLOWLIST.has(token);
 }
 
+function matchesToken(haystack: string, token: string): boolean {
+  const lowerHaystack = haystack.toLowerCase();
+  const lowerToken = token.toLowerCase();
+
+  if (isLongToken(lowerToken)) {
+    return lowerHaystack.includes(lowerToken);
+  }
+
+  const escaped = lowerToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`, "u");
+  return regex.test(lowerHaystack);
+}
+
 export function isCommunitySearchJsonUrl(url: string): boolean {
   const host = hostnameOf(url);
   const pathname = safePathname(url);
@@ -637,9 +650,9 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
   const haystack = `${title} ${body}`.normalize("NFKC").toLowerCase();
   const longTokens = tokens.filter(isLongToken);
   if (longTokens.length > 0) {
-    return longTokens.some((token) => haystack.includes(token.toLowerCase()));
+    return longTokens.some((token) => matchesToken(haystack, token));
   }
-  return tokens.some((token) => haystack.includes(token.toLowerCase()));
+  return tokens.some((token) => matchesToken(haystack, token));
 }
 
 function getCommunityFilterMode(tokens: string[]): "noop" | "long_anchor" | "short_fallback" {
