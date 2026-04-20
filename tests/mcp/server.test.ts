@@ -702,8 +702,8 @@ describe("mcp server", () => {
     expect(followupResult.structuredContent.followup).toEqual({
       suggestedTitle: "시장 진입 — 내 KB 대비 최신 커뮤니티 의견 재검증",
       suggestedNaturalLanguage:
-        "목표: 내부 지식과 커뮤니티 의견이 충돌. 내 KB가 stale일 가능성.\n대상: solo 개발자\n비교: 내 KB 기준, 커뮤니티 최신 의견",
-      suggestedComparisonAxis: "내 KB 기준, 커뮤니티 최신 의견"
+        "목표: 내부 지식과 커뮤니티 의견이 충돌. 내 KB가 stale일 가능성.\n대상: solo 개발자\n비교: 시장 진입 찬성 근거, 시장 진입 반대 근거",
+      suggestedComparisonAxis: "시장 진입 찬성 근거, 시장 진입 반대 근거"
     });
 
     const aggregatorOnlyResponse = await callTool("suggest_followup_run", {

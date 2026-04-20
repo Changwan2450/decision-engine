@@ -648,6 +648,35 @@ function buildFollowupFocus(params: {
   return params.title;
 }
 
+function buildSemanticComparisonAxis(params: {
+  contradiction: Contradiction;
+  claims: Claim[];
+}): string | null {
+  const claimById = new Map(params.claims.map((claim) => [claim.id, claim]));
+  const contradictionClaims = params.contradiction.claimIds
+    .map((claimId) => claimById.get(claimId))
+    .filter((claim): claim is Claim => Boolean(claim));
+
+  if (contradictionClaims.length !== 2) {
+    return null;
+  }
+
+  const [left, right] = contradictionClaims;
+  if (!left.topicKey || left.topicKey !== right.topicKey) {
+    return null;
+  }
+
+  const focus = formatTopicKeyForTitle(left.topicKey);
+  if (left.stance === "support" && right.stance === "oppose") {
+    return `${focus} 찬성 근거, ${focus} 반대 근거`;
+  }
+  if (left.stance === "oppose" && right.stance === "support") {
+    return `${focus} 반대 근거, ${focus} 찬성 근거`;
+  }
+
+  return null;
+}
+
 function buildFollowupSuggestion(params: {
   title: string;
   contradiction: Contradiction;
@@ -661,7 +690,11 @@ function buildFollowupSuggestion(params: {
     return null;
   }
 
-  const suggestedComparisonAxis = template.comparisonAxis(params.title);
+  const suggestedComparisonAxis =
+    buildSemanticComparisonAxis({
+      contradiction: params.contradiction,
+      claims: params.claims
+    }) ?? template.comparisonAxis(params.title);
   return {
     contradictionId: params.contradiction.id,
     kind,
