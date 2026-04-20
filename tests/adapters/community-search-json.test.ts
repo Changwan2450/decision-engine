@@ -265,45 +265,82 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts).toEqual([]);
   });
 
-  it("returns a failure artifact for malformed JSON", async () => {
+  it("returns an empty array and logs for malformed JSON", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const adapter = createCommunitySearchJsonAdapter({
       exec: async () => ({ status: 200, body: "{incomplete" }),
       now: fixedNow
     });
 
-    const [artifact] = await adapter.execute(
+    const artifacts = await adapter.execute(
       makePlan(["https://www.reddit.com/search.json?q=bad"])
     );
 
-    expect(artifact.metadata.fetch_status).toBe("error");
-    expect(artifact.metadata.error).toContain("JSON");
+    expect(artifacts).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      "[community-search-json] failure",
+      expect.stringContaining("\"reason\":\"parse_fail\"")
+    );
   });
 
-  it("returns a failure artifact for HTTP error responses", async () => {
+  it("returns an empty array and logs for HTTP error responses", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const adapter = createCommunitySearchJsonAdapter({
-      exec: async () => ({ status: 503, body: "" }),
+      exec: async () => ({ status: 429, body: "" }),
       now: fixedNow
     });
 
-    const [artifact] = await adapter.execute(
+    const artifacts = await adapter.execute(
       makePlan(["https://hn.algolia.com/api/v1/search?query=fail"])
     );
 
-    expect(artifact.metadata.fetch_status).toBe("error");
-    expect(artifact.metadata.error).toContain("503");
+    expect(artifacts).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      "[community-search-json] failure",
+      expect.stringContaining("\"reason\":\"http_status\"")
+    );
+    expect(warn).toHaveBeenCalledWith(
+      "[community-search-json] failure",
+      expect.stringContaining("\"detail\":429")
+    );
   });
 
-  it("returns a failure artifact when the executor returns null", async () => {
+  it("returns an empty array and logs when the executor returns null", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const adapter = createCommunitySearchJsonAdapter({
       exec: async () => null,
       now: fixedNow
     });
 
-    const [artifact] = await adapter.execute(
+    const artifacts = await adapter.execute(
       makePlan(["https://hn.algolia.com/api/v1/search?query=null"])
     );
 
-    expect(artifact.metadata.fetch_status).toBe("error");
+    expect(artifacts).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      "[community-search-json] failure",
+      expect.stringContaining("\"reason\":\"executor_null\"")
+    );
+  });
+
+  it("returns an empty array and logs when the executor throws", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => {
+        throw new Error("boom");
+      },
+      now: fixedNow
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan(["https://www.reddit.com/search.json?q=boom"])
+    );
+
+    expect(artifacts).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      "[community-search-json] failure",
+      expect.stringContaining("\"reason\":\"executor_throw\"")
+    );
   });
 
   it("drops irrelevant reddit posts by query relevance", async () => {

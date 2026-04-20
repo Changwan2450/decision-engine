@@ -2,9 +2,7 @@ import { createHash } from "node:crypto";
 
 import {
   buildArtifact,
-  buildFailureArtifact,
   deriveTitleFromUrl,
-  truncateErrorMessage,
   type FetchOutcome
 } from "@/lib/adapters/contract";
 import { canonicalize, hostnameOf } from "@/lib/adapters/url";
@@ -258,36 +256,30 @@ async function fetchSearchUrl(args: {
   try {
     response = await exec({ url, timeoutMs: 15_000 });
   } catch (error) {
-    return [
-      buildCommunityFailure({
-        url,
-        index,
-        retrievedAt,
-        errorMessage: error instanceof Error ? error.message : String(error)
-      })
-    ];
+    logCommunityFailure({
+      url,
+      reason: "executor_throw",
+      detail: error instanceof Error ? error.message : String(error)
+    });
+    return [];
   }
 
   if (!response) {
-    return [
-      buildCommunityFailure({
-        url,
-        index,
-        retrievedAt,
-        errorMessage: "community-search-json executor returned null"
-      })
-    ];
+    logCommunityFailure({
+      url,
+      reason: "executor_null",
+      detail: "community-search-json executor returned null"
+    });
+    return [];
   }
 
   if (response.status >= 400) {
-    return [
-      buildCommunityFailure({
-        url,
-        index,
-        retrievedAt,
-        errorMessage: `community-search-json http ${response.status}`
-      })
-    ];
+    logCommunityFailure({
+      url,
+      reason: "http_status",
+      detail: response.status
+    });
+    return [];
   }
 
   let rawRef: string | undefined;
@@ -300,14 +292,12 @@ async function fetchSearchUrl(args: {
       payload: response.body
     });
   } catch (error) {
-    return [
-      buildCommunityFailure({
-        url,
-        index,
-        retrievedAt,
-        errorMessage: error instanceof Error ? error.message : String(error)
-      })
-    ];
+    logCommunityFailure({
+      url,
+      reason: "store_raw_fail",
+      detail: error instanceof Error ? error.message : String(error)
+    });
+    return [];
   }
 
   let items: ParsedItem[];
@@ -334,14 +324,12 @@ async function fetchSearchUrl(args: {
       }
     }));
   } catch (error) {
-    return [
-      buildCommunityFailure({
-        url,
-        index,
-        retrievedAt,
-        errorMessage: error instanceof Error ? error.message : String(error)
-      })
-    ];
+    logCommunityFailure({
+      url,
+      reason: "parse_fail",
+      detail: error instanceof Error ? error.message : String(error)
+    });
+    return [];
   }
 
   if (items.length === 0) return [];
@@ -498,23 +486,19 @@ async function parsedItemToArtifact(args: {
   });
 }
 
-function buildCommunityFailure(args: {
+function logCommunityFailure(args: {
   url: string;
-  index: number;
-  retrievedAt: string;
-  errorMessage: string;
-}): SourceArtifact {
-  return buildFailureArtifact({
-    id: `${ADAPTER_NAME}-${args.index}`,
-    adapter: ADAPTER_NAME,
-    fetcher: FETCHER_NAME,
-    url: args.url,
-    sourceType: "community",
-    retrievedAt: args.retrievedAt,
-    outcome: { status: "error" },
-    errorMessage: truncateErrorMessage(args.errorMessage),
-    sourceLabel: "community/error"
-  });
+  reason: "executor_throw" | "executor_null" | "http_status" | "store_raw_fail" | "parse_fail";
+  detail: string | number;
+}): void {
+  console.warn(
+    "[community-search-json] failure",
+    JSON.stringify({
+      url: args.url,
+      reason: args.reason,
+      detail: args.detail
+    })
+  );
 }
 
 const defaultExecutor: CommunitySearchJsonExecutor = async ({ url, timeoutMs }) => {
