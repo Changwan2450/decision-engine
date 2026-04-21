@@ -1046,6 +1046,77 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
   });
 
+  it("rescues AI memory posts with strong llm or chatgpt context", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Your ChatGPT Memory Isn’t What You Think It Is",
+                  selftext: "memory behavior investigation",
+                  permalink: "/r/chatgpt/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=AI+agent+memory+vs+prompt+stuffing"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("Your ChatGPT Memory Isn’t What You Think It Is");
+  });
+
+  it("still drops AI memory noise without strong model or agent context", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Micron is killing Crucial SSDs and memory in AI pivot",
+                  selftext: "hardware strategy update",
+                  permalink: "/r/hardware/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=AI+agent+memory+vs+prompt+stuffing"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(0);
+  });
+
   it("drops long-anchor posts that match only one long token from a multi-token query", async () => {
     const adapter = createCommunitySearchJsonAdapter({
       exec: async () => ({

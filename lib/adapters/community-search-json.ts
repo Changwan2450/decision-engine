@@ -189,6 +189,7 @@ const AI_AMBIGUOUS_LONG_TOKEN_GUARD = new Set([
 ]);
 
 const FOREIGN_STACK_TOKEN_DENY = new Set(["java", "django", "docker"]);
+const AI_MEMORY_RESCUE_SIGNAL = ["llm", "chatgpt", "rag", "context"];
 
 function isLongToken(token: string): boolean {
   return (
@@ -666,6 +667,9 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
       const matchedSpecificAsciiLongTokens = specificAsciiLongTokens.filter((token) =>
         matchesToken(normalizedTitle, token)
       );
+      const matchedAmbiguousLongTokens = ambiguousLongTokens.filter((token) =>
+        matchesAmbiguousLongToken(normalizedTitle, token)
+      );
       const hasAiAmbiguousLongTokens = ambiguousLongTokens.some((token) =>
         AI_AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
       );
@@ -697,6 +701,13 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
         hasAiAmbiguousLongTokens &&
         matchedAmbiguousLongCount >= 1 &&
         matchedSpecificAsciiLongTokens.includes("stuffing")
+      ) {
+        return true;
+      }
+      if (
+        shortTokens.includes("ai") &&
+        matchedAmbiguousLongTokens.includes("memory") &&
+        AI_MEMORY_RESCUE_SIGNAL.some((token) => matchesToken(normalizedTitle, token))
       ) {
         return true;
       }
