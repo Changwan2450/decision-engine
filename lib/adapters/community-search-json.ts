@@ -621,6 +621,17 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
     }
     if (longTokens.some((token) => AMBIGUOUS_LONG_TOKEN_GUARD.has(token))) {
       const distinctMatchCount = new Set(matchedLongTokens).size;
+      const shortTokens = tokens.filter((token) => !isLongToken(token));
+      const nonAmbiguousLongTokens = longTokens.filter(
+        (token) => !AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
+      );
+      if (
+        shortTokens.length === 0 &&
+        nonAmbiguousLongTokens.length > 0 &&
+        !nonAmbiguousLongTokens.some((token) => matchesToken(normalizedTitle, token))
+      ) {
+        return false;
+      }
       const ambiguousLongTokenCount = longTokens.filter((token) =>
         AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
       ).length;
