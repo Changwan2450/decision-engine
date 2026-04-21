@@ -642,6 +642,7 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
       const matchedSpecificAsciiLongCount = new Set(
         specificAsciiLongTokens.filter((token) => matchesToken(normalizedTitle, token))
       ).size;
+      const ambiguousLongTokenCount = ambiguousLongTokens.length;
       if (
         shortTokens.length === 0 &&
         nonAmbiguousLongTokens.length > 0 &&
@@ -651,12 +652,20 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
       }
       if (
         shortTokens.length === 0 &&
+        ambiguousLongTokenCount === 1 &&
+        ambiguousLongTokens.includes("typescript") &&
+        specificAsciiLongTokens.length >= 2 &&
+        matchedSpecificAsciiLongCount >= 2
+      ) {
+        return true;
+      }
+      if (
+        shortTokens.length === 0 &&
         specificAsciiLongTokens.length >= 2 &&
         (matchedAmbiguousLongCount === 0 || matchedSpecificAsciiLongCount < 2)
       ) {
         return false;
       }
-      const ambiguousLongTokenCount = ambiguousLongTokens.length;
       let requiredMatches =
         ambiguousLongTokenCount === longTokens.length && ambiguousLongTokenCount >= 4
           ? 3

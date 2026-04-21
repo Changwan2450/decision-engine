@@ -89,6 +89,9 @@ function resolveComparisonQueries(
   options: ExpansionOptions
 ): ComparisonCandidate[] {
   const limit = options.maxComparisonTokens ?? 3;
+  const inferred =
+    inferComparisonQueryFromText(input.title) ??
+    inferComparisonQueryFromText(input.naturalLanguage);
 
   if (options.comparisonTokens) {
     return buildComparisonQueriesFromTokens(
@@ -102,6 +105,9 @@ function resolveComparisonQueries(
   }
 
   if (input.comparisonAxis) {
+    if (inferred) {
+      return [{ query: inferred }];
+    }
     return buildComparisonQueriesFromTokens(
       encodeBaseQuery(input),
       dedupeCaseInsensitive(
@@ -110,9 +116,6 @@ function resolveComparisonQueries(
     );
   }
 
-  const inferred =
-    inferComparisonQueryFromText(input.title) ??
-    inferComparisonQueryFromText(input.naturalLanguage);
   return inferred ? [{ query: inferred }] : [];
 }
 

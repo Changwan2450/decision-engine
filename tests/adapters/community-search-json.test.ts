@@ -758,7 +758,7 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
   });
 
-  it("drops broad comparative posts when the ambiguous token is missing", async () => {
+  it("rescues broad comparative posts when both specific tokens match", async () => {
     const adapter = createCommunitySearchJsonAdapter({
       exec: async () => ({
         status: 200,
@@ -800,9 +800,12 @@ describe("createCommunitySearchJsonAdapter()", () => {
       ])
     );
 
-    expect(artifacts).toHaveLength(1);
-    expect(artifacts[0].title).toBe("TypeScript monolith vs microservices tradeoffs");
-    expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
+    expect(artifacts).toHaveLength(2);
+    expect(artifacts.map((artifact) => artifact.title)).toEqual([
+      "Monolith vs microservices tradeoffs",
+      "TypeScript monolith vs microservices tradeoffs"
+    ]);
+    expect(artifacts[0].metadata.community_filter_dropped).toBe("0");
   });
 
   it("drops broad comparative posts when only one specific token matches", async () => {
@@ -850,6 +853,44 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0].title).toBe("TypeScript monolith vs microservices tradeoffs");
     expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
+  });
+
+  it("rescues comparative architecture posts when both specific tokens match", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "How to improve your monolith before moving to microservices",
+                  selftext: "architecture lessons from real migrations",
+                  permalink: "/r/architecture/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=TypeScript+monolith+vs+microservices"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe(
+      "How to improve your monolith before moving to microservices"
+    );
   });
 
   it("drops noisy AI agent-memory posts unless three broad title tokens match", async () => {
