@@ -1163,6 +1163,114 @@ describe("createCommunitySearchJsonAdapter()", () => {
     );
   });
 
+  it("drops react comparative posts without spa or exact server-components phrase", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title:
+                    "I think they more specifically mean server side rendering of react components vs",
+                  selftext: "borderline rendering discussion",
+                  permalink: "/r/reactjs/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=React+Server+Components+vs+SPA+%EB%8F%84%EC%9E%85+%ED%9B%84%ED%9A%8C"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(0);
+  });
+
+  it("keeps react comparative posts with exact server-components phrase", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "How are folks feeling about React Server Components?",
+                  selftext: "discussion of the RSC direction",
+                  permalink: "/r/reactjs/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=React+Server+Components+vs+SPA+%EB%8F%84%EC%9E%85+%ED%9B%84%ED%9A%8C"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("How are folks feeling about React Server Components?");
+  });
+
+  it("drops server-components posts that omit react in comparative react queries", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title:
+                    "This is clever combining stateless server components with fine-grained reactivity",
+                  selftext: "framework pattern discussion",
+                  permalink: "/r/webdev/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=React+Server+Components+vs+SPA+%EB%8F%84%EC%9E%85+%ED%9B%84%ED%9A%8C"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(0);
+  });
+
   it("keeps short allowlisted ai and ml tokens", async () => {
     const adapter = createCommunitySearchJsonAdapter({
       exec: async () => ({

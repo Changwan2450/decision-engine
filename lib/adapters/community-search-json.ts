@@ -214,6 +214,16 @@ function matchesToken(haystack: string, token: string): boolean {
   return regex.test(lowerHaystack);
 }
 
+function matchesAmbiguousLongToken(haystack: string, token: string): boolean {
+  const lowerToken = token.toLowerCase();
+  if (AMBIGUOUS_LONG_TOKEN_GUARD.has(lowerToken) && /^[a-z]+$/u.test(lowerToken)) {
+    const escaped = lowerToken.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`, "u");
+    return regex.test(haystack.toLowerCase());
+  }
+  return matchesToken(haystack, token);
+}
+
 export function isCommunitySearchJsonUrl(url: string): boolean {
   const host = hostnameOf(url);
   const pathname = safePathname(url);
@@ -627,7 +637,7 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
   const longTokens = tokens.filter(isLongToken);
   if (longTokens.length > 0) {
     const matchedLongTokens = longTokens.filter((token) =>
-      matchesToken(normalizedTitle, token)
+      matchesAmbiguousLongToken(normalizedTitle, token)
     );
     if (matchedLongTokens.length === 0) {
       return false;
@@ -642,7 +652,7 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
         (token) => !AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
       );
       const matchedAmbiguousLongCount = new Set(
-        ambiguousLongTokens.filter((token) => matchesToken(normalizedTitle, token))
+        ambiguousLongTokens.filter((token) => matchesAmbiguousLongToken(normalizedTitle, token))
       ).size;
       const specificAsciiLongTokens = nonAmbiguousLongTokens.filter((token) =>
         /[a-z]/u.test(token)
@@ -657,10 +667,26 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
       const hasAiAmbiguousLongTokens = ambiguousLongTokens.some((token) =>
         AI_AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
       );
+      const hasReactServerComponentsQuery =
+        shortTokens.includes("spa") &&
+        ambiguousLongTokens.includes("react") &&
+        ambiguousLongTokens.includes("server") &&
+        ambiguousLongTokens.includes("components");
+      const hasReactServerComponentsPhrase =
+        normalizedTitle.includes("react server components") ||
+        (matchesToken(normalizedTitle, "react") &&
+          normalizedTitle.includes("server components"));
       if (
         shortTokens.length === 0 &&
         nonAmbiguousLongTokens.length > 0 &&
-        !nonAmbiguousLongTokens.some((token) => matchesToken(normalizedTitle, token))
+        !nonAmbiguousLongTokens.some((token) => matchesAmbiguousLongToken(normalizedTitle, token))
+      ) {
+        return false;
+      }
+      if (
+        hasReactServerComponentsQuery &&
+        !matchesToken(normalizedTitle, "spa") &&
+        !hasReactServerComponentsPhrase
       ) {
         return false;
       }
