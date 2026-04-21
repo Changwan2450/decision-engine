@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_EVALUATION_CASES,
   evaluateSummary,
+  summarizeEvaluationResults,
   summarizeEvaluationRun
 } from "@/lib/orchestrator/evaluation-harness";
 import type { RunRecord } from "@/lib/storage/schema";
@@ -115,5 +116,76 @@ describe("evaluation-harness", () => {
       "rust-vs-go",
       "ai-memory-vs-prompt-stuffing"
     ]);
+    expect(DEFAULT_EVALUATION_CASES.every((entry) => entry.tags.includes("comparative"))).toBe(true);
+  });
+
+  it("summarizes case results into adoption-friendly gate status", () => {
+    expect(
+      summarizeEvaluationResults([
+        {
+          id: "react-rsc-vs-spa",
+          tags: ["comparative"],
+          summary: {
+            runId: "run-1",
+            title: "react",
+            communityCount: 5,
+            contradictionCount: 0,
+            leakedAuthClaimCount: 0,
+            placeholderCount: 0,
+            runAnchors: [],
+            communityTitles: []
+          },
+          expected: {
+            communityCount: { min: 3, max: 6 },
+            contradictionCount: { max: 0 },
+            leakedAuthClaimCount: { max: 0 },
+            placeholderCount: { max: 0 }
+          },
+          pass: true,
+          failures: []
+        },
+        {
+          id: "ai-memory-vs-prompt-stuffing",
+          tags: ["comparative", "ai"],
+          summary: {
+            runId: "run-2",
+            title: "ai",
+            communityCount: 0,
+            contradictionCount: 1,
+            leakedAuthClaimCount: 0,
+            placeholderCount: 1,
+            runAnchors: [],
+            communityTitles: []
+          },
+          expected: {
+            communityCount: { min: 1, max: 3 },
+            contradictionCount: { max: 0 },
+            leakedAuthClaimCount: { max: 0 },
+            placeholderCount: { max: 0 }
+          },
+          pass: false,
+          failures: [
+            "communityCount expected >= 1, got 0",
+            "contradictionCount expected <= 0, got 1",
+            "placeholderCount expected <= 0, got 1"
+          ]
+        }
+      ])
+    ).toEqual({
+      totalCases: 2,
+      passedCases: 1,
+      failedCaseIds: ["ai-memory-vs-prompt-stuffing"],
+      metricFailures: {
+        communityCount: 1,
+        contradictionCount: 1,
+        leakedAuthClaimCount: 0,
+        placeholderCount: 1
+      },
+      gateStatus: {
+        trust: false,
+        coverage: false,
+        contradiction: false
+      }
+    });
   });
 });

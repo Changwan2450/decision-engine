@@ -9,6 +9,7 @@ export type EvaluationCase = {
   id: string;
   title: string;
   query: string;
+  tags: string[];
   expected: {
     communityCount: EvaluationBudget;
     contradictionCount: EvaluationBudget;
@@ -33,6 +34,32 @@ export type EvaluationResult = {
   failures: string[];
 };
 
+export type EvaluationCaseResult = {
+  id: string;
+  tags: string[];
+  summary: EvaluationSummary;
+  expected: EvaluationCase["expected"];
+  pass: boolean;
+  failures: string[];
+};
+
+export type EvaluationReportSummary = {
+  totalCases: number;
+  passedCases: number;
+  failedCaseIds: string[];
+  metricFailures: {
+    communityCount: number;
+    contradictionCount: number;
+    leakedAuthClaimCount: number;
+    placeholderCount: number;
+  };
+  gateStatus: {
+    trust: boolean;
+    coverage: boolean;
+    contradiction: boolean;
+  };
+};
+
 export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
   {
     id: "react-rsc-vs-spa",
@@ -43,6 +70,7 @@ export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
       "대상: 팀",
       "비교: 장단점, 운영 복잡도"
     ].join("\n"),
+    tags: ["comparative", "broad-technical", "domain-shifted", "korean-english-mixed"],
     expected: {
       communityCount: { min: 3, max: 6 },
       contradictionCount: { max: 0 },
@@ -59,6 +87,7 @@ export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
       "대상: 팀",
       "비교: 장단점, 운영 복잡도"
     ].join("\n"),
+    tags: ["comparative", "broad-technical", "domain-shifted", "korean-english-mixed"],
     expected: {
       communityCount: { min: 4, max: 6 },
       contradictionCount: { max: 0 },
@@ -75,6 +104,7 @@ export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
       "대상: 팀",
       "비교: 장단점, 운영 복잡도"
     ].join("\n"),
+    tags: ["comparative", "broad-technical", "korean-english-mixed"],
     expected: {
       communityCount: { min: 8, max: 12 },
       contradictionCount: { max: 1 },
@@ -91,6 +121,7 @@ export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
       "대상: 팀",
       "비교: 장단점, 운영 복잡도"
     ].join("\n"),
+    tags: ["comparative", "broad-technical", "domain-shifted", "korean-english-mixed", "ai"],
     expected: {
       communityCount: { min: 1, max: 3 },
       contradictionCount: { max: 0 },
@@ -164,6 +195,49 @@ export function evaluateSummary(
   return {
     pass: failures.length === 0,
     failures
+  };
+}
+
+export function summarizeEvaluationResults(
+  results: EvaluationCaseResult[]
+): EvaluationReportSummary {
+  const failedCaseIds: string[] = [];
+  const metricFailures = {
+    communityCount: 0,
+    contradictionCount: 0,
+    leakedAuthClaimCount: 0,
+    placeholderCount: 0
+  };
+
+  for (const result of results) {
+    if (!result.pass) {
+      failedCaseIds.push(result.id);
+    }
+    for (const failure of result.failures) {
+      if (failure.startsWith("communityCount ")) {
+        metricFailures.communityCount += 1;
+      } else if (failure.startsWith("contradictionCount ")) {
+        metricFailures.contradictionCount += 1;
+      } else if (failure.startsWith("leakedAuthClaimCount ")) {
+        metricFailures.leakedAuthClaimCount += 1;
+      } else if (failure.startsWith("placeholderCount ")) {
+        metricFailures.placeholderCount += 1;
+      }
+    }
+  }
+
+  return {
+    totalCases: results.length,
+    passedCases: results.length - failedCaseIds.length,
+    failedCaseIds,
+    metricFailures,
+    gateStatus: {
+      trust:
+        metricFailures.leakedAuthClaimCount === 0 &&
+        metricFailures.placeholderCount === 0,
+      coverage: metricFailures.communityCount === 0,
+      contradiction: metricFailures.contradictionCount === 0
+    }
   };
 }
 

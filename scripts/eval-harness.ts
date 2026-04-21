@@ -4,6 +4,7 @@ import { handleMcpRequest } from "@/lib/mcp/server";
 import {
   DEFAULT_EVALUATION_CASES,
   evaluateSummary,
+  summarizeEvaluationResults,
   summarizeEvaluationRun
 } from "@/lib/orchestrator/evaluation-harness";
 
@@ -18,6 +19,25 @@ async function callTool(name: string, args: Record<string, unknown>) {
 }
 
 async function main() {
+  const requestedCaseIds = new Set(
+    process.argv.flatMap((arg, index, args) => {
+      if (arg === "--case") {
+        return args[index + 1] ? [args[index + 1]] : [];
+      }
+      if (arg.startsWith("--case=")) {
+        return [arg.slice("--case=".length)];
+      }
+      return [];
+    })
+  );
+  const cases =
+    requestedCaseIds.size > 0
+      ? DEFAULT_EVALUATION_CASES.filter((entry) => requestedCaseIds.has(entry.id))
+      : DEFAULT_EVALUATION_CASES;
+  if (cases.length === 0) {
+    process.stderr.write("No evaluation cases matched the requested --case filters.\n");
+    process.exit(1);
+  }
   const project = await createProjectRecord({
     name: `Evaluation Harness ${Date.now()}`,
     description: "generalization regression harness"
@@ -26,7 +46,7 @@ async function main() {
   const results = [];
   let hasFailure = false;
 
-  for (const testCase of DEFAULT_EVALUATION_CASES) {
+  for (const testCase of cases) {
     let run = await callTool("run_research", {
       projectId,
       title: testCase.title
@@ -46,6 +66,7 @@ async function main() {
     hasFailure = hasFailure || !evaluation.pass;
     results.push({
       id: testCase.id,
+      tags: testCase.tags,
       summary,
       expected: testCase.expected,
       pass: evaluation.pass,
@@ -53,7 +74,8 @@ async function main() {
     });
   }
 
-  process.stdout.write(`${JSON.stringify({ projectId, results }, null, 2)}\n`);
+  const report = summarizeEvaluationResults(results);
+  process.stdout.write(`${JSON.stringify({ projectId, summary: report, results }, null, 2)}\n`);
   if (hasFailure) {
     process.exit(1);
   }
