@@ -1,11 +1,22 @@
 import { triggerWatchTarget } from "@/lib/orchestrator/watch-runtime";
-import type { WatchTargetRecord } from "@/lib/storage/schema";
+import type { InboxItemRecord, WatchTargetRecord } from "@/lib/storage/schema";
 import {
+  listInboxItemRecords,
   listProjectRecords,
   listWatchTargetRecords
 } from "@/lib/storage/workspace";
 
 type SchedulerSkipReason = "paused" | "no_schedule" | "not_due" | "error";
+type SchedulerActionableItem = {
+  projectId: string;
+  watchTargetId: string;
+  inboxItemId: string;
+  refId: string;
+  kind: InboxItemRecord["kind"];
+  priority: "high" | "medium";
+  actionType: NonNullable<InboxItemRecord["recommendedAction"]>["type"];
+  actionTitle: string;
+};
 
 export function isWatchTargetDue(target: WatchTargetRecord, now: string): boolean {
   if (target.status !== "active") return false;
@@ -28,6 +39,7 @@ export async function runSchedulerTick(deps?: {
     watchTargetId: string;
     reason: SchedulerSkipReason;
   }[];
+  actionable?: SchedulerActionableItem[];
 }> {
   const now = deps?.now ?? new Date().toISOString();
   const trigger = deps?.trigger ?? triggerWatchTarget;
@@ -37,6 +49,7 @@ export async function runSchedulerTick(deps?: {
     watchTargetId: string;
     reason: SchedulerSkipReason;
   }[] = [];
+  const actionable: SchedulerActionableItem[] = [];
 
   try {
     const projectIds = deps?.projectId
@@ -45,6 +58,9 @@ export async function runSchedulerTick(deps?: {
 
     for (const projectId of projectIds) {
       const targets = await listWatchTargetRecords(projectId);
+      const inboxItems = await listInboxItemRecords(projectId);
+
+      actionable.push(...collectActionableInboxItems(projectId, inboxItems));
 
       for (const target of targets) {
         if (target.status !== "active") {
@@ -91,8 +107,44 @@ export async function runSchedulerTick(deps?: {
       }
     }
   } catch {
-    return { triggered, skipped };
+    return { triggered, skipped, actionable };
   }
 
-  return { triggered, skipped };
+  return { triggered, skipped, actionable };
+}
+
+function collectActionableInboxItems(
+  projectId: string,
+  items: InboxItemRecord[]
+): SchedulerActionableItem[] {
+  return items
+    .filter(
+      (item): item is InboxItemRecord & {
+        recommendedAction: NonNullable<InboxItemRecord["recommendedAction"]>;
+        watchTargetId: string;
+      } =>
+        item.status === "unread" &&
+        Boolean(item.watchTargetId) &&
+        Boolean(item.recommendedAction)
+    )
+    .map((item) => ({
+      projectId,
+      watchTargetId: item.watchTargetId,
+      inboxItemId: item.id,
+      refId: item.refId,
+      kind: item.kind,
+      priority:
+        item.recommendedAction.type === "investigate_contradiction"
+          ? ("high" as const)
+          : ("medium" as const),
+      actionType: item.recommendedAction.type,
+      actionTitle: item.recommendedAction.title
+    }))
+    .sort((a, b) => {
+      if (a.priority !== b.priority) {
+        return a.priority === "high" ? -1 : 1;
+      }
+
+      return a.actionTitle.localeCompare(b.actionTitle);
+    });
 }

@@ -170,6 +170,7 @@ describe("watch scheduler", () => {
         }
       ])
     );
+    expect(result.actionable).toEqual([]);
   });
 
   it("is idempotent for the same now value", async () => {
@@ -221,6 +222,7 @@ describe("watch scheduler", () => {
         reason: "not_due"
       }
     ]);
+    expect(second.actionable).toEqual([]);
     await expect(readWatchTargetRecord(project.project.id, target.id)).resolves.toMatchObject({
       lastTriggeredAt: "2026-04-18T01:00:00.000Z"
     });
@@ -267,6 +269,7 @@ describe("watch scheduler", () => {
         runId: `run-for-${targetA.id}`
       }
     ]);
+    expect(result.actionable).toEqual([]);
   });
 
   it("absorbs individual trigger failures without failing the tick", async () => {
@@ -319,5 +322,122 @@ describe("watch scheduler", () => {
       watchTargetId: bad.id,
       reason: "error"
     });
+    expect(result.actionable).toEqual([]);
+  });
+
+  it("surfaces unread recommended actions with contradiction-first priority", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "watch-scheduler-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+
+    const {
+      createProjectRecord,
+      createWatchTargetRecord,
+      saveInboxItemRecord,
+      updateWatchTargetRecord
+    } = await import("@/lib/storage/workspace");
+    const { runSchedulerTick } = await import("@/lib/orchestrator/watch-scheduler");
+
+    const project = await createProjectRecord({
+      name: "Actionable scheduler",
+      description: "action queue test"
+    });
+    const contradictionTarget = await createWatchTargetRecord(project.project.id, {
+      title: "Contradiction watch"
+    });
+    const reviewTarget = await createWatchTargetRecord(project.project.id, {
+      title: "Review watch"
+    });
+
+    for (const target of [contradictionTarget, reviewTarget]) {
+      await updateWatchTargetRecord(project.project.id, target.id, (record) => ({
+        ...record,
+        status: "active",
+        schedule: { kind: "interval", intervalMs: 60000 }
+      }));
+    }
+
+    await saveInboxItemRecord({
+      id: "digest-review",
+      projectId: project.project.id,
+      kind: "digest",
+      refId: "digest-review-ref",
+      watchTargetId: reviewTarget.id,
+      status: "unread",
+      title: "Review digest",
+      summary: "review new evidence",
+      recommendedAction: {
+        type: "review_focus_topic",
+        title: "Review new evidence on model routing",
+        focusTopic: "model routing"
+      },
+      createdAt: "2026-04-18T00:00:00.000Z",
+      updatedAt: "2026-04-18T00:00:00.000Z"
+    });
+    await saveInboxItemRecord({
+      id: "digest-contradiction",
+      projectId: project.project.id,
+      kind: "digest",
+      refId: "digest-contradiction-ref",
+      watchTargetId: contradictionTarget.id,
+      status: "unread",
+      title: "Contradiction digest",
+      summary: "investigate contradiction",
+      recommendedAction: {
+        type: "investigate_contradiction",
+        title: "Investigate conflicting evidence on benchmark quality",
+        focusTopic: "benchmark quality",
+        contradictionCount: 2
+      },
+      createdAt: "2026-04-18T00:01:00.000Z",
+      updatedAt: "2026-04-18T00:01:00.000Z"
+    });
+    await saveInboxItemRecord({
+      id: "digest-read",
+      projectId: project.project.id,
+      kind: "digest",
+      refId: "digest-read-ref",
+      watchTargetId: contradictionTarget.id,
+      status: "read",
+      title: "Read digest",
+      summary: "already handled",
+      recommendedAction: {
+        type: "investigate_contradiction",
+        title: "Should not surface"
+      },
+      createdAt: "2026-04-18T00:02:00.000Z",
+      updatedAt: "2026-04-18T00:02:00.000Z"
+    });
+
+    const result = await runSchedulerTick({
+      projectId: project.project.id,
+      now: "2026-04-18T01:00:00.000Z",
+      trigger: async (_projectId, watchTargetId) =>
+        ({
+          run: { id: `run-for-${watchTargetId}` }
+        }) as never
+    });
+
+    expect(result.actionable).toEqual([
+      {
+        projectId: project.project.id,
+        watchTargetId: contradictionTarget.id,
+        inboxItemId: "digest-contradiction",
+        refId: "digest-contradiction-ref",
+        kind: "digest",
+        priority: "high",
+        actionType: "investigate_contradiction",
+        actionTitle: "Investigate conflicting evidence on benchmark quality"
+      },
+      {
+        projectId: project.project.id,
+        watchTargetId: reviewTarget.id,
+        inboxItemId: "digest-review",
+        refId: "digest-review-ref",
+        kind: "digest",
+        priority: "medium",
+        actionType: "review_focus_topic",
+        actionTitle: "Review new evidence on model routing"
+      }
+    ]);
   });
 });
