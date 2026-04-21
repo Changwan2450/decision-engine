@@ -29,6 +29,7 @@ export async function buildWatchDigest(
     sourceRunIds: deps.sourceRunIds,
     headline: "pending digest",
     summary: "",
+    recommendedAction: null,
     status: "pending",
     createdAt: now,
     updatedAt: now
@@ -66,6 +67,7 @@ export async function buildWatchDigest(
       novelCount: novelUrls.length,
       signal: digestSignal
     }),
+    recommendedAction: digestSignal.recommendedAction,
     status: "built",
     updatedAt: now
   };
@@ -104,6 +106,7 @@ async function createInboxItems(input: {
         kind: "digest",
         title: `${input.title} digest`,
         summary: input.digest.summary,
+        recommendedAction: input.digest.recommendedAction,
         now: input.digest.updatedAt
       })
     );
@@ -118,6 +121,7 @@ async function createInboxItems(input: {
         kind: "alert",
         title: `${input.title} alert`,
         summary: input.digest.summary,
+        recommendedAction: input.digest.recommendedAction,
         now: input.digest.updatedAt
       })
     );
@@ -131,6 +135,7 @@ function buildInboxItem(input: {
   kind: InboxItemRecord["kind"];
   title: string;
   summary: string;
+  recommendedAction: InboxItemRecord["recommendedAction"];
   now: string;
 }): InboxItemRecord {
   return {
@@ -142,6 +147,7 @@ function buildInboxItem(input: {
     status: "unread",
     title: input.title,
     summary: input.summary,
+    recommendedAction: input.recommendedAction,
     createdAt: input.now,
     updatedAt: input.now
   };
@@ -171,6 +177,7 @@ function buildDigestSignal(runs: RunRecord[]): {
   focusTopic: string | null;
   contradictionCount: number;
   nextAction: string | null;
+  recommendedAction: DigestRecord["recommendedAction"];
 } {
   const contradictionCount = runs.reduce(
     (sum, run) => sum + run.contradictions.length,
@@ -184,6 +191,10 @@ function buildDigestSignal(runs: RunRecord[]): {
     focusTopic: focusTopic ? formatTopicKey(focusTopic) : null,
     contradictionCount,
     nextAction: buildNextAction({
+      focusTopic: focusTopic ? formatTopicKey(focusTopic) : null,
+      contradictionCount
+    }),
+    recommendedAction: buildRecommendedAction({
       focusTopic: focusTopic ? formatTopicKey(focusTopic) : null,
       contradictionCount
     })
@@ -239,6 +250,7 @@ function buildDigestHeadline(input: {
     focusTopic: string | null;
     contradictionCount: number;
     nextAction: string | null;
+    recommendedAction: DigestRecord["recommendedAction"];
   };
 }): string {
   if (input.signal.focusTopic && input.signal.contradictionCount > 0) {
@@ -293,4 +305,31 @@ function buildNextAction(input: {
   }
 
   return null;
+}
+
+function buildRecommendedAction(input: {
+  focusTopic: string | null;
+  contradictionCount: number;
+}): DigestRecord["recommendedAction"] {
+  if (input.focusTopic && input.contradictionCount > 0) {
+    return {
+      type: "investigate_contradiction",
+      title: `Investigate conflicting evidence on ${input.focusTopic}`,
+      focusTopic: input.focusTopic,
+      contradictionCount: input.contradictionCount
+    };
+  }
+
+  if (input.focusTopic) {
+    return {
+      type: "review_focus_topic",
+      title: `Review new evidence on ${input.focusTopic}`,
+      focusTopic: input.focusTopic
+    };
+  }
+
+  return {
+    type: "review_digest",
+    title: "Review digest for novel evidence"
+  };
 }

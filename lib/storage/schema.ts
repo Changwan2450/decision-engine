@@ -142,6 +142,19 @@ export const digestSchema = z.object({
   sourceRunIds: z.array(z.string().min(1)).default([]),
   headline: z.string().min(1),
   summary: z.string(),
+  recommendedAction: z
+    .object({
+      type: z.enum([
+        "investigate_contradiction",
+        "review_focus_topic",
+        "review_digest"
+      ]),
+      title: z.string().min(1),
+      focusTopic: z.string().min(1).optional(),
+      contradictionCount: z.number().int().nonnegative().optional()
+    })
+    .nullable()
+    .optional(),
   status: z.enum(["pending", "built", "delivered", "acted_on", "ignored"]),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
@@ -157,6 +170,19 @@ export const inboxItemSchema = z.object({
   promotedRunId: z.string().min(1).nullable().optional(),
   title: z.string().min(1),
   summary: z.string(),
+  recommendedAction: z
+    .object({
+      type: z.enum([
+        "investigate_contradiction",
+        "review_focus_topic",
+        "review_digest"
+      ]),
+      title: z.string().min(1),
+      focusTopic: z.string().min(1).optional(),
+      contradictionCount: z.number().int().nonnegative().optional()
+    })
+    .nullable()
+    .optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
 });

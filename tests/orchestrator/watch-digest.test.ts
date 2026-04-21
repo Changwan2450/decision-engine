@@ -115,6 +115,10 @@ describe("buildWatchDigest", () => {
       {
         kind: "digest",
         refId: digest.id,
+        recommendedAction: {
+          type: "review_digest",
+          title: "Review digest for novel evidence"
+        },
         watchTargetId: watchTarget.id,
         status: "unread"
       }
@@ -212,13 +216,20 @@ describe("buildWatchDigest", () => {
     expect(digest.summary).toContain(
       "next: investigate conflicting evidence on monorepo"
     );
+    expect(digest.recommendedAction).toEqual({
+      type: "investigate_contradiction",
+      title: "Investigate conflicting evidence on monorepo",
+      focusTopic: "monorepo",
+      contradictionCount: 1
+    });
 
     await expect(listInboxItemRecords(project.project.id)).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           kind: "digest",
           refId: digest.id,
-          summary: digest.summary
+          summary: digest.summary,
+          recommendedAction: digest.recommendedAction
         })
       ])
     );
@@ -387,7 +398,8 @@ describe("buildWatchDigest", () => {
         expect.objectContaining({
           kind: "alert",
           refId: digest.id,
-          summary: digest.summary
+          summary: digest.summary,
+          recommendedAction: digest.recommendedAction
         })
       ])
     );
