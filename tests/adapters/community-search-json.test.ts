@@ -893,6 +893,63 @@ describe("createCommunitySearchJsonAdapter()", () => {
     );
   });
 
+  it("drops foreign-stack comparative posts for typescript architecture queries", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Your experience with Java microservices vs monolith in the Cloud",
+                  selftext: "java platform discussion",
+                  permalink: "/r/java/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a2",
+                  title: "Choosing the Right Architecture for Django Application: Monolith vs. Microservices",
+                  selftext: "django architecture discussion",
+                  permalink: "/r/django/comments/a2/example",
+                  created_utc: 1_700_000_100
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a3",
+                  title: "Monolith vs. Microservices: What's Your Take?",
+                  selftext: "generic architecture discussion",
+                  permalink: "/r/architecture/comments/a3/example",
+                  created_utc: 1_700_000_200
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=TypeScript+monolith+vs+microservices"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("Monolith vs. Microservices: What's Your Take?");
+    expect(artifacts[0].metadata.community_filter_dropped).toBe("2");
+  });
+
   it("drops noisy AI agent-memory posts unless three broad title tokens match", async () => {
     const adapter = createCommunitySearchJsonAdapter({
       exec: async () => ({

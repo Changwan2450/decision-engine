@@ -188,6 +188,8 @@ const AI_AMBIGUOUS_LONG_TOKEN_GUARD = new Set([
   "prompts"
 ]);
 
+const FOREIGN_STACK_TOKEN_DENY = new Set(["java", "django", "docker"]);
+
 function isLongToken(token: string): boolean {
   return (
     token.length >= 5 ||
@@ -705,6 +707,14 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
         specificAsciiLongTokens.length >= 2 &&
         matchedSpecificAsciiLongCount >= 2
       ) {
+        if (
+          !matchesAmbiguousLongToken(normalizedTitle, "typescript") &&
+          Array.from(FOREIGN_STACK_TOKEN_DENY).some((token) =>
+            matchesToken(normalizedTitle, token)
+          )
+        ) {
+          return false;
+        }
         return true;
       }
       if (
