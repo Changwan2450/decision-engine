@@ -108,6 +108,13 @@ describe("buildWatchDigest", () => {
     expect(digest.sourceRunIds).toEqual([run1.run.id, run2.run.id]);
     expect(digest.headline).toContain("2");
     expect(digest.summary).toContain("novel");
+    expect(digest.signal).toEqual({
+      focusTopic: null,
+      contradictionCount: 0,
+      novelUrlCount: 2,
+      sourceRunCount: 2,
+      nextAction: null
+    });
 
     await expect(readDigestRecord(project.project.id, digest.id)).resolves.toEqual(digest);
 
@@ -115,6 +122,7 @@ describe("buildWatchDigest", () => {
       {
         kind: "digest",
         refId: digest.id,
+        signal: digest.signal,
         recommendedAction: {
           type: "review_digest",
           title: "Review digest for novel evidence"
@@ -216,6 +224,13 @@ describe("buildWatchDigest", () => {
     expect(digest.summary).toContain(
       "next: investigate conflicting evidence on monorepo"
     );
+    expect(digest.signal).toEqual({
+      focusTopic: "monorepo",
+      contradictionCount: 1,
+      novelUrlCount: 1,
+      sourceRunCount: 1,
+      nextAction: "investigate conflicting evidence on monorepo"
+    });
     expect(digest.recommendedAction).toEqual({
       type: "investigate_contradiction",
       title: "Investigate conflicting evidence on monorepo",
@@ -229,6 +244,7 @@ describe("buildWatchDigest", () => {
           kind: "digest",
           refId: digest.id,
           summary: digest.summary,
+          signal: digest.signal,
           recommendedAction: digest.recommendedAction
         })
       ])

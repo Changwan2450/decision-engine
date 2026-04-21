@@ -365,6 +365,13 @@ describe("watch scheduler", () => {
       status: "unread",
       title: "Review digest",
       summary: "review new evidence",
+      signal: {
+        focusTopic: "model routing",
+        contradictionCount: 0,
+        novelUrlCount: 1,
+        sourceRunCount: 1,
+        nextAction: "review new evidence on model routing"
+      },
       recommendedAction: {
         type: "review_focus_topic",
         title: "Review new evidence on model routing",
@@ -382,6 +389,13 @@ describe("watch scheduler", () => {
       status: "unread",
       title: "Contradiction digest",
       summary: "investigate contradiction",
+      signal: {
+        focusTopic: "benchmark quality",
+        contradictionCount: 2,
+        novelUrlCount: 1,
+        sourceRunCount: 1,
+        nextAction: "investigate conflicting evidence on benchmark quality"
+      },
       recommendedAction: {
         type: "investigate_contradiction",
         title: "Investigate conflicting evidence on benchmark quality",
@@ -400,6 +414,13 @@ describe("watch scheduler", () => {
       status: "read",
       title: "Read digest",
       summary: "already handled",
+      signal: {
+        focusTopic: "benchmark quality",
+        contradictionCount: 1,
+        novelUrlCount: 1,
+        sourceRunCount: 1,
+        nextAction: "investigate conflicting evidence on benchmark quality"
+      },
       recommendedAction: {
         type: "investigate_contradiction",
         title: "Should not surface"

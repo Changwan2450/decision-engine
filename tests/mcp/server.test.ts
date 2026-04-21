@@ -930,6 +930,13 @@ describe("mcp server", () => {
         structuredContent: {
           digests: Array<{
             id: string;
+            signal: {
+              focusTopic: string | null;
+              contradictionCount: number;
+              novelUrlCount: number;
+              sourceRunCount: number;
+              nextAction: string | null;
+            };
             recommendedNextAction: {
               name: string;
               arguments: { projectId: string; digestId: string };
@@ -951,6 +958,7 @@ describe("mcp server", () => {
       }
     });
     expect(result.structuredContent.digests[0]?.followupCandidate.digestId).toBe(digest.id);
+    expect(result.structuredContent.digests[0]?.signal.novelUrlCount).toBeGreaterThanOrEqual(0);
   });
 
   it("gets a single digest", async () => {
@@ -981,6 +989,13 @@ describe("mcp server", () => {
         structuredContent: {
           id: string;
           watchTargetId: string;
+          signal: {
+            focusTopic: string | null;
+            contradictionCount: number;
+            novelUrlCount: number;
+            sourceRunCount: number;
+            nextAction: string | null;
+          };
           recommendedNextAction: {
             name: string;
             arguments: { projectId: string; digestId: string };
@@ -1002,6 +1017,7 @@ describe("mcp server", () => {
       }
     });
     expect(result.structuredContent.followupCandidate.digestId).toBe(digest.id);
+    expect(result.structuredContent.signal.sourceRunCount).toBe(1);
   });
 
   it("builds a follow-up suggestion directly from a digest contradiction", async () => {
@@ -1456,6 +1472,13 @@ describe("mcp server", () => {
         structuredContent: {
           inboxItems: Array<{
             status: string;
+            signal: {
+              focusTopic: string | null;
+              contradictionCount: number;
+              novelUrlCount: number;
+              sourceRunCount: number;
+              nextAction: string | null;
+            };
             recommendedNextAction: {
               name: string;
               arguments: { projectId: string; digestId: string };
@@ -1473,6 +1496,7 @@ describe("mcp server", () => {
     expect(result.structuredContent.inboxItems[0]?.recommendedNextAction.name).toBe(
       "run_followup_from_digest"
     );
+    expect(result.structuredContent.inboxItems[0]?.signal.sourceRunCount).toBe(1);
     expect(result.structuredContent.inboxItems[0]?.followupCandidate.followup.suggestedTitle).toBe(
       "Short-form watch — 신규 근거 검토"
     );

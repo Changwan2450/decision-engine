@@ -109,6 +109,14 @@ export const watchScheduleSchema = z
   .nullable()
   .default(null);
 
+export const digestSignalSchema = z.object({
+  focusTopic: z.string().min(1).nullable().default(null),
+  contradictionCount: z.number().int().nonnegative().default(0),
+  novelUrlCount: z.number().int().nonnegative().default(0),
+  sourceRunCount: z.number().int().nonnegative().default(0),
+  nextAction: z.string().min(1).nullable().default(null)
+});
+
 export const watchTargetSchema = z.object({
   id: z.string().min(1),
   projectId: z.string().min(1),
@@ -142,6 +150,13 @@ export const digestSchema = z.object({
   sourceRunIds: z.array(z.string().min(1)).default([]),
   headline: z.string().min(1),
   summary: z.string(),
+  signal: digestSignalSchema.default({
+    focusTopic: null,
+    contradictionCount: 0,
+    novelUrlCount: 0,
+    sourceRunCount: 0,
+    nextAction: null
+  }),
   recommendedAction: z
     .object({
       type: z.enum([
@@ -170,6 +185,13 @@ export const inboxItemSchema = z.object({
   promotedRunId: z.string().min(1).nullable().optional(),
   title: z.string().min(1),
   summary: z.string(),
+  signal: digestSignalSchema.default({
+    focusTopic: null,
+    contradictionCount: 0,
+    novelUrlCount: 0,
+    sourceRunCount: 0,
+    nextAction: null
+  }),
   recommendedAction: z
     .object({
       type: z.enum([

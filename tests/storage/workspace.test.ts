@@ -163,6 +163,13 @@ describe("workspace storage", () => {
       sourceRunIds: ["run-1"],
       headline: "digest headline",
       summary: "digest summary",
+      signal: {
+        focusTopic: null,
+        contradictionCount: 0,
+        novelUrlCount: 1,
+        sourceRunCount: 1,
+        nextAction: null
+      },
       status: "built" as const,
       createdAt: "2026-04-18T00:00:00.000Z",
       updatedAt: "2026-04-18T00:00:00.000Z"
@@ -199,6 +206,13 @@ describe("workspace storage", () => {
       status: "unread" as const,
       title: "digest ready",
       summary: "digest summary",
+      signal: {
+        focusTopic: null,
+        contradictionCount: 0,
+        novelUrlCount: 1,
+        sourceRunCount: 1,
+        nextAction: null
+      },
       createdAt: "2026-04-18T00:00:00.000Z",
       updatedAt: "2026-04-18T00:00:00.000Z"
     };
@@ -254,6 +268,13 @@ describe("workspace storage", () => {
       status: "unread",
       title: "digest ready",
       summary: "digest summary",
+      signal: {
+        focusTopic: null,
+        contradictionCount: 0,
+        novelUrlCount: 1,
+        sourceRunCount: 1,
+        nextAction: null
+      },
       createdAt: "2026-04-18T00:00:00.000Z",
       updatedAt: "2026-04-18T00:00:00.000Z",
       promotedRunId: null

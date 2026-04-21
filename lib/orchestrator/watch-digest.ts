@@ -29,6 +29,13 @@ export async function buildWatchDigest(
     sourceRunIds: deps.sourceRunIds,
     headline: "pending digest",
     summary: "",
+    signal: {
+      focusTopic: null,
+      contradictionCount: 0,
+      novelUrlCount: 0,
+      sourceRunCount: deps.sourceRunIds.length,
+      nextAction: null
+    },
     recommendedAction: null,
     status: "pending",
     createdAt: now,
@@ -67,6 +74,13 @@ export async function buildWatchDigest(
       novelCount: novelUrls.length,
       signal: digestSignal
     }),
+    signal: {
+      focusTopic: digestSignal.focusTopic,
+      contradictionCount: digestSignal.contradictionCount,
+      novelUrlCount: novelUrls.length,
+      sourceRunCount: deps.sourceRunIds.length,
+      nextAction: digestSignal.nextAction
+    },
     recommendedAction: digestSignal.recommendedAction,
     status: "built",
     updatedAt: now
@@ -106,6 +120,7 @@ async function createInboxItems(input: {
         kind: "digest",
         title: `${input.title} digest`,
         summary: input.digest.summary,
+        signal: input.digest.signal,
         recommendedAction: input.digest.recommendedAction,
         now: input.digest.updatedAt
       })
@@ -121,6 +136,7 @@ async function createInboxItems(input: {
         kind: "alert",
         title: `${input.title} alert`,
         summary: input.digest.summary,
+        signal: input.digest.signal,
         recommendedAction: input.digest.recommendedAction,
         now: input.digest.updatedAt
       })
@@ -135,6 +151,7 @@ function buildInboxItem(input: {
   kind: InboxItemRecord["kind"];
   title: string;
   summary: string;
+  signal: InboxItemRecord["signal"];
   recommendedAction: InboxItemRecord["recommendedAction"];
   now: string;
 }): InboxItemRecord {
@@ -147,6 +164,7 @@ function buildInboxItem(input: {
     status: "unread",
     title: input.title,
     summary: input.summary,
+    signal: input.signal,
     recommendedAction: input.recommendedAction,
     createdAt: input.now,
     updatedAt: input.now
