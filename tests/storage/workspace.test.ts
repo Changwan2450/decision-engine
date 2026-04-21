@@ -178,7 +178,14 @@ describe("workspace storage", () => {
         contradictionCount: 0,
         novelUrlCount: 1,
         sourceRunCount: 1,
-        nextAction: null
+        nextAction: null,
+        delta: {
+          previousFocusTopic: null,
+          focusShifted: false,
+          contradictionDelta: 0,
+          novelUrlDelta: 1,
+          sourceRunDelta: 1
+        }
       },
       status: "built" as const,
       createdAt: "2026-04-18T00:00:00.000Z",
@@ -221,7 +228,14 @@ describe("workspace storage", () => {
         contradictionCount: 0,
         novelUrlCount: 1,
         sourceRunCount: 1,
-        nextAction: null
+        nextAction: null,
+        delta: {
+          previousFocusTopic: null,
+          focusShifted: false,
+          contradictionDelta: 0,
+          novelUrlDelta: 1,
+          sourceRunDelta: 1
+        }
       },
       createdAt: "2026-04-18T00:00:00.000Z",
       updatedAt: "2026-04-18T00:00:00.000Z"
@@ -283,7 +297,14 @@ describe("workspace storage", () => {
         contradictionCount: 0,
         novelUrlCount: 1,
         sourceRunCount: 1,
-        nextAction: null
+        nextAction: null,
+        delta: {
+          previousFocusTopic: null,
+          focusShifted: false,
+          contradictionDelta: 0,
+          novelUrlDelta: 1,
+          sourceRunDelta: 1
+        }
       },
       createdAt: "2026-04-18T00:00:00.000Z",
       updatedAt: "2026-04-18T00:00:00.000Z",

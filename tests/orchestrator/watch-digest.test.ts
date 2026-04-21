@@ -113,7 +113,14 @@ describe("buildWatchDigest", () => {
       contradictionCount: 0,
       novelUrlCount: 2,
       sourceRunCount: 2,
-      nextAction: null
+      nextAction: null,
+      delta: {
+        previousFocusTopic: null,
+        focusShifted: false,
+        contradictionDelta: 0,
+        novelUrlDelta: 2,
+        sourceRunDelta: 2
+      }
     });
 
     await expect(readDigestRecord(project.project.id, digest.id)).resolves.toEqual(digest);
@@ -218,22 +225,29 @@ describe("buildWatchDigest", () => {
     });
 
     expect(digest.headline).toContain("monorepo");
-    expect(digest.headline).toContain("1 contradictions");
+    expect(digest.headline).toContain("contradiction pressure +1");
     expect(digest.summary).toContain("focus: monorepo");
     expect(digest.summary).toContain("contradictions: 1");
     expect(digest.summary).toContain(
-      "next: investigate conflicting evidence on monorepo"
+      "next: reinvestigate shifting evidence on monorepo"
     );
     expect(digest.signal).toEqual({
       focusTopic: "monorepo",
       contradictionCount: 1,
       novelUrlCount: 1,
       sourceRunCount: 1,
-      nextAction: "investigate conflicting evidence on monorepo"
+      nextAction: "reinvestigate shifting evidence on monorepo",
+      delta: {
+        previousFocusTopic: null,
+        focusShifted: true,
+        contradictionDelta: 1,
+        novelUrlDelta: 1,
+        sourceRunDelta: 1
+      }
     });
     expect(digest.recommendedAction).toEqual({
       type: "investigate_contradiction",
-      title: "Investigate conflicting evidence on monorepo",
+      title: "Reinvestigate shifting evidence on monorepo",
       focusTopic: "monorepo",
       contradictionCount: 1
     });
@@ -341,6 +355,141 @@ describe("buildWatchDigest", () => {
     });
 
     expect(digest.summary).toContain("0 novel");
+  });
+
+  it("tracks delta against the previous digest for the same watch", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "watch-digest-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+
+    const {
+      createProjectRecord,
+      createWatchTargetRecord,
+      createRunRecord,
+      updateRunRecord
+    } = await import("@/lib/storage/workspace");
+    const { buildWatchDigest } = await import("@/lib/orchestrator/watch-digest");
+
+    const project = await createProjectRecord({
+      name: "Longitudinal",
+      description: "delta test"
+    });
+    const watchTarget = await createWatchTargetRecord(project.project.id, {
+      title: "Architecture watch",
+      urls: ["https://example.com/source"]
+    });
+
+    const previousRun = await createRunRecord(project.project.id, {
+      title: "tick 1",
+      urls: ["https://example.com/a"]
+    });
+    await updateRunRecord(project.project.id, previousRun.run.id, (record) => ({
+      ...record,
+      artifacts: [
+        {
+          id: "artifact-a",
+          adapter: "community-search-json",
+          sourceType: "community",
+          title: "Monorepo tradeoffs",
+          url: "https://example.com/a",
+          canonicalUrl: "https://example.com/a",
+          snippet: "A",
+          content: "A body",
+          sourcePriority: "analysis",
+          metadata: {
+            fetcher: "community-search-json",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        }
+      ],
+      claims: [
+        {
+          id: "claim-a",
+          artifactId: "artifact-a",
+          text: "Monorepo can simplify collaboration",
+          topicKey: "monorepo",
+          stance: "support",
+          citationIds: ["citation-a"]
+        }
+      ]
+    }));
+
+    await buildWatchDigest(project.project.id, watchTarget.id, {
+      sourceRunIds: [previousRun.run.id],
+      now: "2026-04-18T00:00:00.000Z"
+    });
+
+    const nextRun = await createRunRecord(project.project.id, {
+      title: "tick 2",
+      urls: ["https://example.com/b"]
+    });
+    await updateRunRecord(project.project.id, nextRun.run.id, (record) => ({
+      ...record,
+      artifacts: [
+        {
+          id: "artifact-b",
+          adapter: "community-search-json",
+          sourceType: "community",
+          title: "Polyrepo tradeoffs",
+          url: "https://example.com/b",
+          canonicalUrl: "https://example.com/b",
+          snippet: "B",
+          content: "B body",
+          sourcePriority: "analysis",
+          metadata: {
+            fetcher: "community-search-json",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        }
+      ],
+      claims: [
+        {
+          id: "claim-b1",
+          artifactId: "artifact-b",
+          text: "Polyrepo improves service isolation",
+          topicKey: "polyrepo",
+          stance: "support",
+          citationIds: ["citation-b1"]
+        },
+        {
+          id: "claim-b2",
+          artifactId: "artifact-b",
+          text: "Polyrepo adds delivery overhead",
+          topicKey: "polyrepo",
+          stance: "oppose",
+          citationIds: ["citation-b2"]
+        }
+      ],
+      contradictions: [
+        {
+          id: "contradiction-b",
+          claimIds: ["claim-b1", "claim-b2"],
+          status: "flagged",
+          resolution: "unresolved",
+          kind: "community_only"
+        }
+      ]
+    }));
+
+    const digest = await buildWatchDigest(project.project.id, watchTarget.id, {
+      sourceRunIds: [nextRun.run.id],
+      now: "2026-04-19T00:00:00.000Z"
+    });
+
+    expect(digest.summary).toContain("delta: contradictions +1");
+    expect(digest.summary).toContain("focus-shift: monorepo -> polyrepo");
+    expect(digest.signal.delta).toEqual({
+      previousFocusTopic: "monorepo",
+      focusShifted: true,
+      contradictionDelta: 1,
+      novelUrlDelta: 0,
+      sourceRunDelta: 0
+    });
   });
 
   it("creates an internal alert inbox item when alert delivery is enabled", async () => {

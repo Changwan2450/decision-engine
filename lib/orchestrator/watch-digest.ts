@@ -34,7 +34,14 @@ export async function buildWatchDigest(
       contradictionCount: 0,
       novelUrlCount: 0,
       sourceRunCount: deps.sourceRunIds.length,
-      nextAction: null
+      nextAction: null,
+      delta: {
+        previousFocusTopic: null,
+        focusShifted: false,
+        contradictionDelta: 0,
+        novelUrlDelta: 0,
+        sourceRunDelta: 0
+      }
     },
     recommendedAction: null,
     status: "pending",
@@ -60,7 +67,13 @@ export async function buildWatchDigest(
   const currentUrls = collectArtifactUrls(runs);
   const novelUrls = Array.from(currentUrls).filter((url) => !previousUrls.has(url));
   const watchTarget = await readWatchTargetRecord(projectId, watchTargetId);
-  const digestSignal = buildDigestSignal(runs);
+  const previousSignal = pickPreviousDigestSignal(previousDigests);
+  const digestSignal = buildDigestSignal({
+    runs,
+    previousSignal,
+    novelUrlCount: novelUrls.length,
+    sourceRunCount: deps.sourceRunIds.length
+  });
 
   const built: DigestRecord = {
     ...pending,
@@ -79,7 +92,8 @@ export async function buildWatchDigest(
       contradictionCount: digestSignal.contradictionCount,
       novelUrlCount: novelUrls.length,
       sourceRunCount: deps.sourceRunIds.length,
-      nextAction: digestSignal.nextAction
+      nextAction: digestSignal.nextAction,
+      delta: digestSignal.delta
     },
     recommendedAction: digestSignal.recommendedAction,
     status: "built",
@@ -191,31 +205,58 @@ function normalizeArtifactUrl(artifact: SourceArtifact): string | null {
   return url && url.length > 0 ? url : null;
 }
 
-function buildDigestSignal(runs: RunRecord[]): {
+function buildDigestSignal(input: {
+  runs: RunRecord[];
+  previousSignal: DigestRecord["signal"] | null;
+  novelUrlCount: number;
+  sourceRunCount: number;
+}): {
   focusTopic: string | null;
   contradictionCount: number;
   nextAction: string | null;
   recommendedAction: DigestRecord["recommendedAction"];
+  delta: DigestRecord["signal"]["delta"];
 } {
-  const contradictionCount = runs.reduce(
+  const contradictionCount = input.runs.reduce(
     (sum, run) => sum + run.contradictions.length,
     0
   );
   const focusTopic =
-    pickTopTopicKey(collectContradictionClaims(runs)) ??
-    pickTopTopicKey(runs.flatMap((run) => run.claims));
+    pickTopTopicKey(collectContradictionClaims(input.runs)) ??
+    pickTopTopicKey(input.runs.flatMap((run) => run.claims));
+  const formattedFocusTopic = focusTopic ? formatTopicKey(focusTopic) : null;
+  const previousFocusTopic = input.previousSignal?.focusTopic ?? null;
+  const contradictionDelta =
+    contradictionCount - (input.previousSignal?.contradictionCount ?? 0);
+  const focusShifted =
+    formattedFocusTopic !== previousFocusTopic &&
+    (formattedFocusTopic !== null || previousFocusTopic !== null);
+  const novelUrlDelta = input.novelUrlCount - (input.previousSignal?.novelUrlCount ?? 0);
+  const sourceRunDelta =
+    input.sourceRunCount - (input.previousSignal?.sourceRunCount ?? 0);
 
   return {
-    focusTopic: focusTopic ? formatTopicKey(focusTopic) : null,
+    focusTopic: formattedFocusTopic,
     contradictionCount,
     nextAction: buildNextAction({
-      focusTopic: focusTopic ? formatTopicKey(focusTopic) : null,
-      contradictionCount
+      focusTopic: formattedFocusTopic,
+      contradictionCount,
+      contradictionDelta,
+      focusShifted
     }),
     recommendedAction: buildRecommendedAction({
-      focusTopic: focusTopic ? formatTopicKey(focusTopic) : null,
-      contradictionCount
-    })
+      focusTopic: formattedFocusTopic,
+      contradictionCount,
+      contradictionDelta,
+      focusShifted
+    }),
+    delta: {
+      previousFocusTopic,
+      focusShifted,
+      contradictionDelta,
+      novelUrlDelta,
+      sourceRunDelta
+    }
   };
 }
 
@@ -264,13 +305,16 @@ function formatTopicKey(topicKey: string): string {
 function buildDigestHeadline(input: {
   runCount: number;
   novelCount: number;
-  signal: {
-    focusTopic: string | null;
-    contradictionCount: number;
-    nextAction: string | null;
-    recommendedAction: DigestRecord["recommendedAction"];
-  };
+  signal: ReturnType<typeof buildDigestSignal>;
 }): string {
+  if (
+    input.signal.focusTopic &&
+    input.signal.recommendedAction?.type === "investigate_contradiction" &&
+    input.signal.nextAction?.startsWith("reinvestigate")
+  ) {
+    return `${input.signal.focusTopic}: contradiction pressure +${input.signal.delta.contradictionDelta}, ${input.novelCount} novel urls`;
+  }
+
   if (input.signal.focusTopic && input.signal.contradictionCount > 0) {
     return `${input.signal.focusTopic}: ${input.signal.contradictionCount} contradictions, ${input.novelCount} novel urls`;
   }
@@ -285,11 +329,7 @@ function buildDigestHeadline(input: {
 function buildDigestSummary(input: {
   runCount: number;
   novelCount: number;
-  signal: {
-    focusTopic: string | null;
-    contradictionCount: number;
-    nextAction: string | null;
-  };
+  signal: ReturnType<typeof buildDigestSignal>;
 }): string {
   const parts = [
     `${input.novelCount} novel urls across ${input.runCount} source runs`
@@ -307,14 +347,31 @@ function buildDigestSummary(input: {
     parts.push(`next: ${input.signal.nextAction}`);
   }
 
+  if (input.signal.delta.contradictionDelta > 0) {
+    parts.push(`delta: contradictions +${input.signal.delta.contradictionDelta}`);
+  } else if (input.signal.delta.contradictionDelta < 0) {
+    parts.push(`delta: contradictions ${input.signal.delta.contradictionDelta}`);
+  }
+
+  if (input.signal.delta.focusShifted) {
+    const previousFocus = input.signal.delta.previousFocusTopic ?? "none";
+    const currentFocus = input.signal.focusTopic ?? "none";
+    parts.push(`focus-shift: ${previousFocus} -> ${currentFocus}`);
+  }
+
   return parts.join("; ");
 }
 
 function buildNextAction(input: {
   focusTopic: string | null;
   contradictionCount: number;
+  contradictionDelta: number;
+  focusShifted: boolean;
 }): string | null {
   if (input.focusTopic && input.contradictionCount > 0) {
+    if (input.contradictionDelta > 0 || input.focusShifted) {
+      return `reinvestigate shifting evidence on ${input.focusTopic}`;
+    }
     return `investigate conflicting evidence on ${input.focusTopic}`;
   }
 
@@ -328,11 +385,16 @@ function buildNextAction(input: {
 function buildRecommendedAction(input: {
   focusTopic: string | null;
   contradictionCount: number;
+  contradictionDelta: number;
+  focusShifted: boolean;
 }): DigestRecord["recommendedAction"] {
   if (input.focusTopic && input.contradictionCount > 0) {
     return {
       type: "investigate_contradiction",
-      title: `Investigate conflicting evidence on ${input.focusTopic}`,
+      title:
+        input.contradictionDelta > 0 || input.focusShifted
+          ? `Reinvestigate shifting evidence on ${input.focusTopic}`
+          : `Investigate conflicting evidence on ${input.focusTopic}`,
       focusTopic: input.focusTopic,
       contradictionCount: input.contradictionCount
     };
@@ -350,4 +412,13 @@ function buildRecommendedAction(input: {
     type: "review_digest",
     title: "Review digest for novel evidence"
   };
+}
+
+function pickPreviousDigestSignal(
+  digests: DigestRecord[]
+): DigestRecord["signal"] | null {
+  const latest = [...digests].sort((a, b) =>
+    a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0
+  )[0];
+  return latest?.signal ?? null;
 }

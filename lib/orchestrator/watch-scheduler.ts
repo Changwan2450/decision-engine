@@ -16,6 +16,8 @@ type SchedulerActionableItem = {
   priority: "high" | "medium";
   actionType: NonNullable<InboxItemRecord["recommendedAction"]>["type"];
   actionTitle: string;
+  contradictionDelta: number;
+  focusShifted: boolean;
 };
 
 export function isWatchTargetDue(target: WatchTargetRecord, now: string): boolean {
@@ -138,11 +140,21 @@ function collectActionableInboxItems(
           ? ("high" as const)
           : ("medium" as const),
       actionType: item.recommendedAction.type,
-      actionTitle: item.recommendedAction.title
+      actionTitle: item.recommendedAction.title,
+      contradictionDelta: item.signal.delta.contradictionDelta,
+      focusShifted: item.signal.delta.focusShifted
     }))
     .sort((a, b) => {
       if (a.priority !== b.priority) {
         return a.priority === "high" ? -1 : 1;
+      }
+
+      if (a.contradictionDelta !== b.contradictionDelta) {
+        return b.contradictionDelta - a.contradictionDelta;
+      }
+
+      if (a.focusShifted !== b.focusShifted) {
+        return a.focusShifted ? -1 : 1;
       }
 
       return a.actionTitle.localeCompare(b.actionTitle);

@@ -142,7 +142,22 @@ export const digestSignalSchema = z.object({
   contradictionCount: z.number().int().nonnegative().default(0),
   novelUrlCount: z.number().int().nonnegative().default(0),
   sourceRunCount: z.number().int().nonnegative().default(0),
-  nextAction: z.string().min(1).nullable().default(null)
+  nextAction: z.string().min(1).nullable().default(null),
+  delta: z
+    .object({
+      previousFocusTopic: z.string().min(1).nullable().default(null),
+      focusShifted: z.boolean().default(false),
+      contradictionDelta: z.number().int().default(0),
+      novelUrlDelta: z.number().int().default(0),
+      sourceRunDelta: z.number().int().default(0)
+    })
+    .default({
+      previousFocusTopic: null,
+      focusShifted: false,
+      contradictionDelta: 0,
+      novelUrlDelta: 0,
+      sourceRunDelta: 0
+    })
 });
 
 export const watchTargetSchema = z.object({
@@ -183,7 +198,14 @@ export const digestSchema = z.object({
     contradictionCount: 0,
     novelUrlCount: 0,
     sourceRunCount: 0,
-    nextAction: null
+    nextAction: null,
+    delta: {
+      previousFocusTopic: null,
+      focusShifted: false,
+      contradictionDelta: 0,
+      novelUrlDelta: 0,
+      sourceRunDelta: 0
+    }
   }),
   recommendedAction: z
     .object({
@@ -218,7 +240,14 @@ export const inboxItemSchema = z.object({
     contradictionCount: 0,
     novelUrlCount: 0,
     sourceRunCount: 0,
-    nextAction: null
+    nextAction: null,
+    delta: {
+      previousFocusTopic: null,
+      focusShifted: false,
+      contradictionDelta: 0,
+      novelUrlDelta: 0,
+      sourceRunDelta: 0
+    }
   }),
   recommendedAction: z
     .object({

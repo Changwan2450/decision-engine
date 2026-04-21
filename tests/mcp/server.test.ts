@@ -1684,7 +1684,9 @@ describe("mcp server", () => {
             kind: "digest",
             priority: "high",
             actionType: "investigate_contradiction",
-            actionTitle: "investigate conflicting evidence on monorepo"
+            actionTitle: "investigate conflicting evidence on monorepo",
+            contradictionDelta: 1,
+            focusShifted: true
           }
         ]
       }),
@@ -1761,7 +1763,9 @@ describe("mcp server", () => {
             kind: "digest",
             priority: "medium",
             actionType: "review_digest",
-            actionTitle: "review digest"
+            actionTitle: "review digest",
+            contradictionDelta: 0,
+            focusShifted: false
           }
         ]
       })

@@ -344,11 +344,14 @@ describe("watch scheduler", () => {
     const contradictionTarget = await createWatchTargetRecord(project.project.id, {
       title: "Contradiction watch"
     });
+    const contradictionTargetLow = await createWatchTargetRecord(project.project.id, {
+      title: "Older contradiction watch"
+    });
     const reviewTarget = await createWatchTargetRecord(project.project.id, {
       title: "Review watch"
     });
 
-    for (const target of [contradictionTarget, reviewTarget]) {
+    for (const target of [contradictionTarget, contradictionTargetLow, reviewTarget]) {
       await updateWatchTargetRecord(project.project.id, target.id, (record) => ({
         ...record,
         status: "active",
@@ -370,7 +373,14 @@ describe("watch scheduler", () => {
         contradictionCount: 0,
         novelUrlCount: 1,
         sourceRunCount: 1,
-        nextAction: "review new evidence on model routing"
+        nextAction: "review new evidence on model routing",
+        delta: {
+          previousFocusTopic: null,
+          focusShifted: false,
+          contradictionDelta: 0,
+          novelUrlDelta: 1,
+          sourceRunDelta: 1
+        }
       },
       recommendedAction: {
         type: "review_focus_topic",
@@ -394,16 +404,55 @@ describe("watch scheduler", () => {
         contradictionCount: 2,
         novelUrlCount: 1,
         sourceRunCount: 1,
-        nextAction: "investigate conflicting evidence on benchmark quality"
+        nextAction: "reinvestigate shifting evidence on benchmark quality",
+        delta: {
+          previousFocusTopic: "latency",
+          focusShifted: true,
+          contradictionDelta: 2,
+          novelUrlDelta: 0,
+          sourceRunDelta: 0
+        }
       },
       recommendedAction: {
         type: "investigate_contradiction",
-        title: "Investigate conflicting evidence on benchmark quality",
+        title: "Reinvestigate shifting evidence on benchmark quality",
         focusTopic: "benchmark quality",
         contradictionCount: 2
       },
       createdAt: "2026-04-18T00:01:00.000Z",
       updatedAt: "2026-04-18T00:01:00.000Z"
+    });
+    await saveInboxItemRecord({
+      id: "digest-contradiction-low",
+      projectId: project.project.id,
+      kind: "digest",
+      refId: "digest-contradiction-low-ref",
+      watchTargetId: contradictionTargetLow.id,
+      status: "unread",
+      title: "Older contradiction digest",
+      summary: "investigate contradiction",
+      signal: {
+        focusTopic: "benchmark quality",
+        contradictionCount: 1,
+        novelUrlCount: 1,
+        sourceRunCount: 1,
+        nextAction: "investigate conflicting evidence on benchmark quality",
+        delta: {
+          previousFocusTopic: "benchmark quality",
+          focusShifted: false,
+          contradictionDelta: 0,
+          novelUrlDelta: 0,
+          sourceRunDelta: 0
+        }
+      },
+      recommendedAction: {
+        type: "investigate_contradiction",
+        title: "Investigate conflicting evidence on benchmark quality",
+        focusTopic: "benchmark quality",
+        contradictionCount: 1
+      },
+      createdAt: "2026-04-18T00:01:30.000Z",
+      updatedAt: "2026-04-18T00:01:30.000Z"
     });
     await saveInboxItemRecord({
       id: "digest-read",
@@ -419,7 +468,14 @@ describe("watch scheduler", () => {
         contradictionCount: 1,
         novelUrlCount: 1,
         sourceRunCount: 1,
-        nextAction: "investigate conflicting evidence on benchmark quality"
+        nextAction: "investigate conflicting evidence on benchmark quality",
+        delta: {
+          previousFocusTopic: null,
+          focusShifted: false,
+          contradictionDelta: 0,
+          novelUrlDelta: 0,
+          sourceRunDelta: 0
+        }
       },
       recommendedAction: {
         type: "investigate_contradiction",
@@ -447,7 +503,21 @@ describe("watch scheduler", () => {
         kind: "digest",
         priority: "high",
         actionType: "investigate_contradiction",
-        actionTitle: "Investigate conflicting evidence on benchmark quality"
+        actionTitle: "Reinvestigate shifting evidence on benchmark quality",
+        contradictionDelta: 2,
+        focusShifted: true
+      },
+      {
+        projectId: project.project.id,
+        watchTargetId: contradictionTargetLow.id,
+        inboxItemId: "digest-contradiction-low",
+        refId: "digest-contradiction-low-ref",
+        kind: "digest",
+        priority: "high",
+        actionType: "investigate_contradiction",
+        actionTitle: "Investigate conflicting evidence on benchmark quality",
+        contradictionDelta: 0,
+        focusShifted: false
       },
       {
         projectId: project.project.id,
@@ -457,7 +527,9 @@ describe("watch scheduler", () => {
         kind: "digest",
         priority: "medium",
         actionType: "review_focus_topic",
-        actionTitle: "Review new evidence on model routing"
+        actionTitle: "Review new evidence on model routing",
+        contradictionDelta: 0,
+        focusShifted: false
       }
     ]);
   });
