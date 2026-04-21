@@ -946,6 +946,11 @@ describe("mcp server", () => {
               sourceRunCount: number;
               nextAction: string | null;
             };
+            decisionWatchBrief: {
+              urgency: string;
+              recommendation: string;
+              rationale: string[];
+            };
             recommendedNextAction: {
               name: string;
               arguments: { projectId: string; digestId: string };
@@ -968,6 +973,8 @@ describe("mcp server", () => {
     });
     expect(result.structuredContent.digests[0]?.followupCandidate.digestId).toBe(digest.id);
     expect(result.structuredContent.digests[0]?.signal.novelUrlCount).toBeGreaterThanOrEqual(0);
+    expect(result.structuredContent.digests[0]?.decisionWatchBrief.urgency).toBe("low");
+    expect(result.structuredContent.digests[0]?.decisionWatchBrief.recommendation).toBe("review digest");
   });
 
   it("gets a single digest", async () => {
@@ -1005,6 +1012,12 @@ describe("mcp server", () => {
             sourceRunCount: number;
             nextAction: string | null;
           };
+          decisionWatchBrief: {
+            title: string;
+            urgency: string;
+            summary: string;
+            recommendation: string;
+          };
           recommendedNextAction: {
             name: string;
             arguments: { projectId: string; digestId: string };
@@ -1027,6 +1040,8 @@ describe("mcp server", () => {
     });
     expect(result.structuredContent.followupCandidate.digestId).toBe(digest.id);
     expect(result.structuredContent.signal.sourceRunCount).toBe(1);
+    expect(result.structuredContent.decisionWatchBrief.title).toContain("Short-form watch");
+    expect(result.structuredContent.decisionWatchBrief.urgency).toBe("low");
   });
 
   it("builds a follow-up suggestion directly from a digest contradiction", async () => {
@@ -1488,6 +1503,10 @@ describe("mcp server", () => {
               sourceRunCount: number;
               nextAction: string | null;
             };
+            decisionWatchBrief: {
+              urgency: string;
+              recommendation: string;
+            };
             recommendedNextAction: {
               name: string;
               arguments: { projectId: string; digestId: string };
@@ -1509,6 +1528,7 @@ describe("mcp server", () => {
     expect(result.structuredContent.inboxItems[0]?.followupCandidate.followup.suggestedTitle).toBe(
       "Short-form watch — 신규 근거 검토"
     );
+    expect(result.structuredContent.inboxItems[0]?.decisionWatchBrief.urgency).toBe("low");
   });
 
   it("archives an inbox item", async () => {

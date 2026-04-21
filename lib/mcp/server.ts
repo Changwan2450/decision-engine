@@ -928,6 +928,54 @@ async function buildDigestFollowupSurface(params: {
   };
 }
 
+async function buildDecisionWatchBrief(params: {
+  projectId: string;
+  digestId: string;
+}) {
+  const digest = await readDigestRecord(params.projectId, params.digestId);
+  const watchTarget = await readWatchTargetRecord(params.projectId, digest.watchTargetId);
+  const delta = digest.signal.delta;
+  const urgency =
+    delta.contradictionDelta > 0 || digest.signal.contradictionCount > 0
+      ? "high"
+      : delta.focusShifted || digest.signal.novelUrlCount > 0
+        ? "medium"
+        : "low";
+
+  const title = digest.signal.focusTopic
+    ? `${watchTarget.title} — ${digest.signal.focusTopic}`
+    : `${watchTarget.title} — digest review`;
+
+  const summary =
+    delta.contradictionDelta > 0 && digest.signal.focusTopic
+      ? `${digest.signal.focusTopic}에서 상충 근거 압력이 증가했다.`
+      : delta.focusShifted && digest.signal.focusTopic
+        ? `${digest.signal.focusTopic}로 논점이 이동했다.`
+        : digest.signal.novelUrlCount > 0
+          ? `${digest.signal.novelUrlCount}개의 신규 근거가 들어왔다.`
+          : "주요 변화는 작지만 digest 검토가 필요하다.";
+
+  const rationale: string[] = [];
+  if (delta.previousFocusTopic && delta.focusShifted && digest.signal.focusTopic) {
+    rationale.push(`focus shift: ${delta.previousFocusTopic} -> ${digest.signal.focusTopic}`);
+  }
+  if (delta.contradictionDelta !== 0) {
+    rationale.push(`contradiction delta: ${delta.contradictionDelta > 0 ? "+" : ""}${delta.contradictionDelta}`);
+  }
+  rationale.push(`novel urls: ${digest.signal.novelUrlCount}`);
+  rationale.push(`source runs: ${digest.signal.sourceRunCount}`);
+
+  return {
+    digestId: digest.id,
+    watchTargetId: watchTarget.id,
+    title,
+    urgency,
+    summary,
+    recommendation: digest.signal.nextAction ?? "review digest",
+    rationale
+  };
+}
+
 function buildAutoFollowupAction(
   actionable: {
     projectId: string;
@@ -1270,15 +1318,21 @@ async function callTool(
       const filteredDigests = watchTargetId
         ? digests.filter((digest) => digest.watchTargetId === watchTargetId)
         : digests;
-      const followupByDigestId = new Map(
+      const digestExtrasById = new Map(
         (
           await Promise.all(
             filteredDigests.map(async (digest) => [
               digest.id,
-              await buildDigestFollowupSurface({
-                projectId: targetProjectId,
-                digestId: digest.id
-              })
+              {
+                followupCandidate: await buildDigestFollowupSurface({
+                  projectId: targetProjectId,
+                  digestId: digest.id
+                }),
+                decisionWatchBrief: await buildDecisionWatchBrief({
+                  projectId: targetProjectId,
+                  digestId: digest.id
+                })
+              }
             ] as const)
           )
         )
@@ -1286,11 +1340,12 @@ async function callTool(
       return toToolResult({
         projectId: targetProjectId,
         digests: filteredDigests.map((digest) => {
-          const followupCandidate = followupByDigestId.get(digest.id);
+          const extras = digestExtrasById.get(digest.id);
           return {
             ...digest,
-            followupCandidate,
-            recommendedNextAction: followupCandidate?.recommendedNextAction
+            decisionWatchBrief: extras?.decisionWatchBrief,
+            followupCandidate: extras?.followupCandidate,
+            recommendedNextAction: extras?.followupCandidate.recommendedNextAction
           };
         })
       });
@@ -1303,8 +1358,13 @@ async function callTool(
         projectId: targetProjectId,
         digestId
       });
+      const decisionWatchBrief = await buildDecisionWatchBrief({
+        projectId: targetProjectId,
+        digestId
+      });
       return toToolResult({
         ...record,
+        decisionWatchBrief,
         followupCandidate,
         recommendedNextAction: followupCandidate.recommendedNextAction
       });
@@ -1336,7 +1396,7 @@ async function callTool(
       }
       const items = await listInboxItemRecords(targetProjectId);
       const filteredItems = status ? items.filter((item) => item.status === status) : items;
-      const digestFollowupByRefId = new Map(
+      const digestExtrasByRefId = new Map(
         (
           await Promise.all(
             filteredItems.map(async (item) => {
@@ -1345,23 +1405,30 @@ async function callTool(
               }
               return [
                 item.refId,
-                await buildDigestFollowupSurface({
-                  projectId: targetProjectId,
-                  digestId: item.refId
-                })
+                {
+                  followupCandidate: await buildDigestFollowupSurface({
+                    projectId: targetProjectId,
+                    digestId: item.refId
+                  }),
+                  decisionWatchBrief: await buildDecisionWatchBrief({
+                    projectId: targetProjectId,
+                    digestId: item.refId
+                  })
+                }
               ] as const;
             })
           )
-        ).filter((entry): entry is readonly [string, Awaited<ReturnType<typeof buildDigestFollowupSurface>>] => entry[1] !== null)
+        ).filter((entry): entry is readonly [string, { followupCandidate: Awaited<ReturnType<typeof buildDigestFollowupSurface>>; decisionWatchBrief: Awaited<ReturnType<typeof buildDecisionWatchBrief>> }] => entry[1] !== null)
       );
       return toToolResult({
         projectId: targetProjectId,
         inboxItems: filteredItems.map((item) => {
-          const followupCandidate = digestFollowupByRefId.get(item.refId);
+          const extras = digestExtrasByRefId.get(item.refId);
           return {
             ...item,
-            followupCandidate,
-            recommendedNextAction: followupCandidate?.recommendedNextAction
+            decisionWatchBrief: extras?.decisionWatchBrief,
+            followupCandidate: extras?.followupCandidate,
+            recommendedNextAction: extras?.followupCandidate.recommendedNextAction
           };
         })
       });
