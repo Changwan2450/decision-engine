@@ -158,6 +158,18 @@ const TOOLS: ToolDefinition[] = [
     }
   },
   {
+    name: "run_followup_from_digest",
+    description: "Create and execute a follow-up research run directly from a watch digest.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        digestId: { type: "string" }
+      },
+      required: ["projectId", "digestId"]
+    }
+  },
+  {
     name: "fetch_web",
     description: "Fetch a single URL through the router and return one SourceArtifact. Never throws; failures return an artifact.",
     inputSchema: {
@@ -831,6 +843,51 @@ async function buildDigestFollowupSuggestion(params: {
   };
 }
 
+async function runFollowupFromDigest(params: {
+  projectId: string;
+  digestId: string;
+  now?: string;
+  executeRun?: (projectId: string, runId: string) => Promise<Awaited<ReturnType<typeof readRunRecord>>>;
+}) {
+  const digest = await readDigestRecord(params.projectId, params.digestId);
+  const watchTarget = await readWatchTargetRecord(params.projectId, digest.watchTargetId);
+  const digestInboxItems = await listInboxItemRecords(params.projectId);
+  const digestInbox = digestInboxItems.find(
+    (item) => item.refId === digest.id && item.kind === "digest"
+  );
+  const suggestion = await buildDigestFollowupSuggestion({
+    projectId: params.projectId,
+    digestId: params.digestId
+  });
+
+  const followup = suggestion.followup;
+  if (!followup) {
+    throw new Error("digest_followup_not_available");
+  }
+
+  const createdRun = await createRunRecord(params.projectId, {
+    title: followup.suggestedTitle,
+    naturalLanguage: followup.suggestedNaturalLanguage,
+    pastedContent: `Follow-up from digest ${digest.id}: ${digest.summary}`,
+    urls: watchTarget.query.urls
+  });
+
+  await updateRunRecord(params.projectId, createdRun.run.id, (record) => ({
+    ...record,
+    projectOrigin: {
+      source: "watch_digest",
+      watchTargetId: digest.watchTargetId,
+      digestId: digest.id,
+      inboxItemId: digestInbox?.id ?? "",
+      sourceRunIds: digest.sourceRunIds
+    }
+  }));
+
+  const executeRun =
+    params.executeRun ?? ((projectId, runId) => executeResearchRun(projectId, runId, { now: params.now }));
+  return executeRun(params.projectId, createdRun.run.id);
+}
+
 function buildRunBridgePaths(projectId: string, runId: string) {
   const bridgeDir = path.join(WORKSPACE_ROOT, projectId, "runs", runId, "bridge");
   return {
@@ -1004,6 +1061,16 @@ async function callTool(
           digestId
         })
       );
+    }
+    case "run_followup_from_digest": {
+      const targetProjectId = requireString(projectId, "projectId");
+      const digestId = requireString(args?.digestId, "digestId");
+      const record = await runFollowupFromDigest({
+        projectId: targetProjectId,
+        digestId,
+        executeRun: executeResearchRunFn
+      });
+      return toToolResult(withMcpSummary(record));
     }
     case "fetch_web": {
       const url = requireString(args?.url, "url");

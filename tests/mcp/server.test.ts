@@ -119,6 +119,7 @@ describe("mcp server", () => {
       "clarify_run",
       "suggest_followup_run",
       "suggest_followup_from_digest",
+      "run_followup_from_digest",
       "fetch_web",
       "gather_for_run",
       "list_watch_targets",
@@ -1081,6 +1082,123 @@ describe("mcp server", () => {
       "Short-form watch — 신규 근거 검토"
     );
     expect(result.structuredContent.followup.suggestedComparisonAxis).toBe("신규 근거");
+  });
+
+  it("creates and executes a follow-up run directly from a digest", async () => {
+    await setupTempWorkspace();
+    const { workspace, project, watchTarget } = await createWatchFixture();
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+
+    const sourceRun = await workspace.createRunRecord(project.project.id, {
+      title: "monorepo vs polyrepo — solo 개발자 선택",
+      urls: ["https://example.com/source"]
+    });
+    await workspace.updateRunRecord(project.project.id, sourceRun.run.id, (record) => ({
+      ...record,
+      watchContext: { watchTargetId: watchTarget.id, digestId: null },
+      normalizedInput: {
+        title: record.run.title,
+        naturalLanguage: "저장소 전략 결정",
+        pastedContent: "",
+        urls: ["https://example.com/source"],
+        target: "solo 개발자",
+        comparisonAxis: "개발 경험, 유지보수 비용"
+      },
+      claims: [
+        {
+          id: "claim-1",
+          artifactId: "artifact-1",
+          text: "monorepo는 AI-driven development에 유리하다.",
+          topicKey: "monorepo",
+          stance: "support",
+          citationIds: ["citation-1"]
+        },
+        {
+          id: "claim-2",
+          artifactId: "artifact-2",
+          text: "large monorepos add CI complexity.",
+          topicKey: "monorepo",
+          stance: "oppose",
+          citationIds: ["citation-2"]
+        }
+      ],
+      contradictions: [
+        {
+          id: "contradiction-1",
+          claimIds: ["claim-1", "claim-2"],
+          status: "flagged",
+          resolution: "unresolved",
+          kind: "community_only"
+        }
+      ]
+    }));
+    const digest = await (await import("@/lib/orchestrator/watch-digest")).buildWatchDigest(
+      project.project.id,
+      watchTarget.id,
+      { sourceRunIds: [sourceRun.run.id] }
+    );
+
+    const handleMcpRequest = createMcpHandler({
+      executeResearchRun: async (projectId, runId) =>
+        workspace.updateRunRecord(projectId, runId, (record) => ({
+          ...record,
+          run: {
+            ...record.run,
+            status: "decided",
+            clarificationQuestions: []
+          },
+          normalizedInput: {
+            title: record.run.title,
+            naturalLanguage: record.run.input.naturalLanguage ?? "",
+            pastedContent: record.run.input.pastedContent ?? "",
+            urls: record.run.input.urls
+          },
+          decision: {
+            value: "go",
+            confidence: "medium",
+            why: "follow-up probe",
+            blockingUnknowns: [],
+            nextActions: []
+          }
+        }))
+    });
+
+    const response = await callToolWithHandler(handleMcpRequest, "run_followup_from_digest", {
+      projectId: project.project.id,
+      digestId: digest.id
+    });
+
+    const result = (response as {
+      result: {
+        structuredContent: {
+          run: {
+            title: string;
+            input: {
+              naturalLanguage: string;
+              pastedContent: string;
+              urls: string[];
+            };
+          };
+          projectOrigin: {
+            digestId: string;
+            sourceRunIds: string[];
+          };
+          mcpSummary: {
+            status: string;
+          };
+        };
+      };
+    }).result;
+
+    expect(result.structuredContent.run.title).toBe("monorepo — 커뮤니티 의견 분산 원인");
+    expect(result.structuredContent.run.input.naturalLanguage).toContain(
+      "monorepo 찬성 근거, monorepo 반대 근거"
+    );
+    expect(result.structuredContent.run.input.pastedContent).toContain(digest.summary);
+    expect(result.structuredContent.run.input.urls).toEqual(watchTarget.query.urls);
+    expect(result.structuredContent.projectOrigin.digestId).toBe(digest.id);
+    expect(result.structuredContent.projectOrigin.sourceRunIds).toEqual([sourceRun.run.id]);
+    expect(result.structuredContent.mcpSummary.status).toBe("decided");
   });
 
   it("builds a watch digest from source runs", async () => {
