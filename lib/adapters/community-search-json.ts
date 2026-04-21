@@ -180,6 +180,14 @@ const AMBIGUOUS_LONG_TOKEN_GUARD = new Set([
   "prompts"
 ]);
 
+const AI_AMBIGUOUS_LONG_TOKEN_GUARD = new Set([
+  "agent",
+  "agents",
+  "memory",
+  "prompt",
+  "prompts"
+]);
+
 function isLongToken(token: string): boolean {
   return (
     token.length >= 5 ||
@@ -643,12 +651,26 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
         specificAsciiLongTokens.filter((token) => matchesToken(normalizedTitle, token))
       ).size;
       const ambiguousLongTokenCount = ambiguousLongTokens.length;
+      const matchedSpecificAsciiLongTokens = specificAsciiLongTokens.filter((token) =>
+        matchesToken(normalizedTitle, token)
+      );
+      const hasAiAmbiguousLongTokens = ambiguousLongTokens.some((token) =>
+        AI_AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
+      );
       if (
         shortTokens.length === 0 &&
         nonAmbiguousLongTokens.length > 0 &&
         !nonAmbiguousLongTokens.some((token) => matchesToken(normalizedTitle, token))
       ) {
         return false;
+      }
+      if (
+        shortTokens.length > 0 &&
+        hasAiAmbiguousLongTokens &&
+        matchedAmbiguousLongCount >= 1 &&
+        matchedSpecificAsciiLongTokens.includes("stuffing")
+      ) {
+        return true;
       }
       if (
         shortTokens.length === 0 &&
