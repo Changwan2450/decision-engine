@@ -118,6 +118,7 @@ describe("mcp server", () => {
       "run_research",
       "clarify_run",
       "suggest_followup_run",
+      "suggest_followup_from_digest",
       "fetch_web",
       "gather_for_run",
       "list_watch_targets",
@@ -952,6 +953,134 @@ describe("mcp server", () => {
     const result = (response as { result: { structuredContent: { id: string; watchTargetId: string } } }).result;
     expect(result.structuredContent.id).toBe(digest.id);
     expect(result.structuredContent.watchTargetId).toBe(watchTarget.id);
+  });
+
+  it("builds a follow-up suggestion directly from a digest contradiction", async () => {
+    await setupTempWorkspace();
+    const { workspace, project, watchTarget } = await createWatchFixture();
+
+    const run = await workspace.createRunRecord(project.project.id, {
+      title: "monorepo vs polyrepo — solo 개발자 선택",
+      urls: []
+    });
+    await workspace.updateRunRecord(project.project.id, run.run.id, (record) => ({
+      ...record,
+      watchContext: { watchTargetId: watchTarget.id, digestId: null },
+      normalizedInput: {
+        title: record.run.title,
+        naturalLanguage: "저장소 전략 결정",
+        pastedContent: "",
+        urls: [],
+        target: "solo 개발자",
+        comparisonAxis: "개발 경험, 유지보수 비용"
+      },
+      claims: [
+        {
+          id: "claim-1",
+          artifactId: "artifact-1",
+          text: "monorepo는 AI-driven development에 유리하다.",
+          topicKey: "monorepo",
+          stance: "support",
+          citationIds: ["citation-1"]
+        },
+        {
+          id: "claim-2",
+          artifactId: "artifact-2",
+          text: "large monorepos add CI complexity.",
+          topicKey: "monorepo",
+          stance: "oppose",
+          citationIds: ["citation-2"]
+        }
+      ],
+      contradictions: [
+        {
+          id: "contradiction-1",
+          claimIds: ["claim-1", "claim-2"],
+          status: "flagged",
+          resolution: "unresolved",
+          kind: "community_only"
+        }
+      ]
+    }));
+
+    const digest = await (await import("@/lib/orchestrator/watch-digest")).buildWatchDigest(
+      project.project.id,
+      watchTarget.id,
+      { sourceRunIds: [run.run.id] }
+    );
+
+    const response = await callTool("suggest_followup_from_digest", {
+      projectId: project.project.id,
+      digestId: digest.id
+    });
+
+    const result = (response as {
+      result: {
+        structuredContent: {
+          digestId: string;
+          sourceRunId: string;
+          contradictionId: string;
+          followup: {
+            suggestedTitle: string;
+            suggestedComparisonAxis: string;
+          };
+        };
+      };
+    }).result;
+
+    expect(result.structuredContent.digestId).toBe(digest.id);
+    expect(result.structuredContent.sourceRunId).toBe(run.run.id);
+    expect(result.structuredContent.contradictionId).toBe("contradiction-1");
+    expect(result.structuredContent.followup.suggestedTitle).toBe(
+      "monorepo — 커뮤니티 의견 분산 원인"
+    );
+    expect(result.structuredContent.followup.suggestedComparisonAxis).toBe(
+      "monorepo 찬성 근거, monorepo 반대 근거"
+    );
+  });
+
+  it("builds a generic review suggestion from a digest without contradictions", async () => {
+    await setupTempWorkspace();
+    const { workspace, project, watchTarget } = await createWatchFixture();
+
+    const run = await workspace.createRunRecord(project.project.id, {
+      title: "tick",
+      urls: []
+    });
+    await workspace.updateRunRecord(project.project.id, run.run.id, (record) => ({
+      ...record,
+      watchContext: { watchTargetId: watchTarget.id, digestId: null }
+    }));
+    const digest = await (await import("@/lib/orchestrator/watch-digest")).buildWatchDigest(
+      project.project.id,
+      watchTarget.id,
+      { sourceRunIds: [run.run.id] }
+    );
+
+    const response = await callTool("suggest_followup_from_digest", {
+      projectId: project.project.id,
+      digestId: digest.id
+    });
+
+    const result = (response as {
+      result: {
+        structuredContent: {
+          contradictionId: null;
+          kind: string;
+          followup: {
+            suggestedTitle: string;
+            suggestedComparisonAxis: string;
+          };
+        };
+      };
+    }).result;
+
+    expect(result.structuredContent.contradictionId).toBeNull();
+    expect(result.structuredContent.kind).toBe("digest_review");
+    expect(result.structuredContent.followup.suggestedTitle).toBe(
+      "Short-form watch — 신규 근거 검토"
+    );
+    expect(result.structuredContent.followup.suggestedComparisonAxis).toBe("신규 근거");
   });
 
   it("builds a watch digest from source runs", async () => {

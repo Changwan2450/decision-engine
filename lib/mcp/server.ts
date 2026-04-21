@@ -146,6 +146,18 @@ const TOOLS: ToolDefinition[] = [
     }
   },
   {
+    name: "suggest_followup_from_digest",
+    description: "Build a follow-up research suggestion directly from a watch digest without promoting it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string" },
+        digestId: { type: "string" }
+      },
+      required: ["projectId", "digestId"]
+    }
+  },
+  {
     name: "fetch_web",
     description: "Fetch a single URL through the router and return one SourceArtifact. Never throws; failures return an artifact.",
     inputSchema: {
@@ -762,6 +774,63 @@ function buildFollowupSuggestion(params: {
   };
 }
 
+async function buildDigestFollowupSuggestion(params: {
+  projectId: string;
+  digestId: string;
+}) {
+  const digest = await readDigestRecord(params.projectId, params.digestId);
+  const watchTarget = await readWatchTargetRecord(params.projectId, digest.watchTargetId);
+  const runs = await Promise.all(
+    digest.sourceRunIds.map((runId) => readRunRecord(params.projectId, runId))
+  );
+
+  const contradictionRun = [...runs]
+    .reverse()
+    .find((run) => run.contradictions.length > 0);
+
+  if (contradictionRun) {
+    const contradiction = contradictionRun.contradictions[0];
+    if (contradiction) {
+      const followup =
+        buildFollowupSuggestion({
+          title: contradictionRun.run.title,
+          contradiction,
+          claims: contradictionRun.claims,
+          target: contradictionRun.normalizedInput?.target,
+          comparisonAxis: contradictionRun.normalizedInput?.comparisonAxis
+        }) ?? {
+          contradictionId: contradiction.id,
+          kind: contradiction.kind ?? "mixed",
+          followup: null
+        };
+
+      return {
+        digestId: digest.id,
+        watchTargetId: watchTarget.id,
+        sourceRunId: contradictionRun.run.id,
+        ...followup
+      };
+    }
+  }
+
+  return {
+    digestId: digest.id,
+    watchTargetId: watchTarget.id,
+    sourceRunId: digest.sourceRunIds[0] ?? null,
+    contradictionId: null,
+    kind: "digest_review",
+    followup: {
+      suggestedTitle: `${watchTarget.title} — 신규 근거 검토`,
+      suggestedNaturalLanguage: [
+        `목표: ${digest.summary}`,
+        `대상: ${watchTarget.title}`,
+        "비교: 신규 근거"
+      ].join("\n"),
+      suggestedComparisonAxis: "신규 근거"
+    }
+  };
+}
+
 function buildRunBridgePaths(projectId: string, runId: string) {
   const bridgeDir = path.join(WORKSPACE_ROOT, projectId, "runs", runId, "bridge");
   return {
@@ -924,6 +993,16 @@ async function callTool(
           kind: contradiction.kind ?? "mixed",
           followup: null
         }
+      );
+    }
+    case "suggest_followup_from_digest": {
+      const targetProjectId = requireString(projectId, "projectId");
+      const digestId = requireString(args?.digestId, "digestId");
+      return toToolResult(
+        await buildDigestFollowupSuggestion({
+          projectId: targetProjectId,
+          digestId
+        })
       );
     }
     case "fetch_web": {
