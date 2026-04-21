@@ -625,6 +625,92 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
   });
 
+  it("drops ambiguous broad-query posts that match only two title tokens", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "TypeScript server patterns for API routes",
+                  selftext: "generic backend setup notes",
+                  permalink: "/r/typescript/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a2",
+                  title: "React Server Components in TypeScript",
+                  selftext: "migration notes from production",
+                  permalink: "/r/reactjs/comments/a2/example",
+                  created_utc: 1_700_000_100
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=React+Server+Components+TypeScript"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("React Server Components in TypeScript");
+    expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
+  });
+
+  it("keeps ambiguous broad-query posts when three title tokens match", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "React Server Components architecture notes",
+                  selftext: "production tradeoffs and migration lessons",
+                  permalink: "/r/reactjs/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=React+Server+Components+TypeScript"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("React Server Components architecture notes");
+    expect(artifacts[0].metadata.community_filter_tokens).toBe(
+      "react;server;components;typescript"
+    );
+  });
+
   it("drops long-anchor posts that match only one long token from a multi-token query", async () => {
     const adapter = createCommunitySearchJsonAdapter({
       exec: async () => ({

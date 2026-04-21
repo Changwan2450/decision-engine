@@ -620,7 +620,15 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
       return false;
     }
     if (longTokens.some((token) => AMBIGUOUS_LONG_TOKEN_GUARD.has(token))) {
-      return new Set(matchedLongTokens).size >= 2;
+      const distinctMatchCount = new Set(matchedLongTokens).size;
+      const ambiguousLongTokenCount = longTokens.filter((token) =>
+        AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
+      ).length;
+      const requiredMatches =
+        ambiguousLongTokenCount === longTokens.length && ambiguousLongTokenCount >= 4
+          ? 3
+          : 2;
+      return distinctMatchCount >= requiredMatches;
     }
     return true;
   }
