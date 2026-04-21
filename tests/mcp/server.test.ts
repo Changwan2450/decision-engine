@@ -1581,6 +1581,177 @@ describe("mcp server", () => {
     expect(result.structuredContent.skipped[0]?.reason).toBe("not_due");
   });
 
+  it("auto-executes the top contradiction follow-up action from a scheduler tick", async () => {
+    await setupTempWorkspace();
+    const { workspace, project, watchTarget } = await createWatchFixture();
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+
+    const sourceRun = await workspace.createRunRecord(project.project.id, {
+      title: "monorepo vs polyrepo — solo 개발자 선택",
+      naturalLanguage: "monorepo vs polyrepo"
+    });
+    await workspace.updateRunRecord(project.project.id, sourceRun.run.id, (record) => ({
+      ...record,
+      watchContext: { watchTargetId: watchTarget.id, digestId: null },
+      run: {
+        ...record.run,
+        status: "decided",
+        clarificationQuestions: []
+      },
+      normalizedInput: {
+        title: record.run.title,
+        naturalLanguage: record.run.input.naturalLanguage ?? "",
+        pastedContent: "",
+        urls: []
+      },
+      claims: [
+        {
+          id: "claim-1",
+          artifactId: "artifact-1",
+          text: "monorepo is simpler for solo development",
+          stance: "support",
+          citationIds: ["citation-1"],
+          topicKey: "monorepo"
+        },
+        {
+          id: "claim-2",
+          artifactId: "artifact-2",
+          text: "monorepo adds CI complexity",
+          stance: "oppose",
+          citationIds: ["citation-2"],
+          topicKey: "monorepo"
+        }
+      ],
+      contradictions: [
+        {
+          id: "contradiction-0",
+          claimIds: ["claim-1", "claim-2"],
+          status: "flagged",
+          resolution: "unresolved",
+          kind: "community_only"
+        }
+      ]
+    }));
+    const digest = await (await import("@/lib/orchestrator/watch-digest")).buildWatchDigest(
+      project.project.id,
+      watchTarget.id,
+      { sourceRunIds: [sourceRun.run.id] }
+    );
+
+    const handleMcpRequest = createMcpHandler({
+      runSchedulerTick: async () => ({
+        triggered: [],
+        skipped: [],
+        actionable: [
+          {
+            projectId: project.project.id,
+            watchTargetId: watchTarget.id,
+            inboxItemId: "inbox-1",
+            refId: digest.id,
+            kind: "digest",
+            priority: "high",
+            actionType: "investigate_contradiction",
+            actionTitle: "investigate conflicting evidence on monorepo"
+          }
+        ]
+      }),
+      executeResearchRun: async (projectId, runId) =>
+        workspace.updateRunRecord(projectId, runId, (record) => ({
+          ...record,
+          run: {
+            ...record.run,
+            status: "decided",
+            clarificationQuestions: []
+          },
+          normalizedInput: {
+            title: record.run.title,
+            naturalLanguage: record.run.input.naturalLanguage ?? "",
+            pastedContent: record.run.input.pastedContent ?? "",
+            urls: record.run.input.urls
+          },
+          decision: {
+            value: "go",
+            confidence: "medium",
+            why: "auto follow-up probe",
+            blockingUnknowns: [],
+            nextActions: []
+          }
+        }))
+    });
+
+    const response = await callToolWithHandler(handleMcpRequest, "run_scheduler_tick", {
+      projectId: project.project.id,
+      autoFollowup: true
+    });
+
+    const result = (response as {
+      result: {
+        structuredContent: {
+          autoExecutedAction: {
+            name: string;
+            arguments: { projectId: string; digestId: string };
+          } | null;
+          autoExecutedResult: {
+            run: { title: string; status: string };
+            projectOrigin: { digestId: string };
+          } | null;
+        };
+      };
+    }).result;
+
+    expect(result.structuredContent.autoExecutedAction).toEqual({
+      name: "run_followup_from_digest",
+      arguments: {
+        projectId: project.project.id,
+        digestId: digest.id
+      }
+    });
+    expect(result.structuredContent.autoExecutedResult?.run.status).toBe("decided");
+    expect(result.structuredContent.autoExecutedResult?.projectOrigin.digestId).toBe(digest.id);
+  });
+
+  it("returns null auto-execution fields when no contradiction action is available", async () => {
+    await setupTempWorkspace();
+    const { project, watchTarget } = await createWatchFixture();
+    const { createMcpHandler } = await import("@/lib/mcp/server");
+
+    const handleMcpRequest = createMcpHandler({
+      runSchedulerTick: async () => ({
+        triggered: [],
+        skipped: [],
+        actionable: [
+          {
+            projectId: project.project.id,
+            watchTargetId: watchTarget.id,
+            inboxItemId: "inbox-1",
+            refId: "digest-1",
+            kind: "digest",
+            priority: "medium",
+            actionType: "review_digest",
+            actionTitle: "review digest"
+          }
+        ]
+      })
+    });
+
+    const response = await callToolWithHandler(handleMcpRequest, "run_scheduler_tick", {
+      projectId: project.project.id,
+      autoFollowup: true
+    });
+
+    const result = (response as {
+      result: {
+        structuredContent: {
+          autoExecutedAction: null;
+          autoExecutedResult: null;
+        };
+      };
+    }).result;
+
+    expect(result.structuredContent.autoExecutedAction).toBeNull();
+    expect(result.structuredContent.autoExecutedResult).toBeNull();
+  });
+
   it("returns an error for a missing watch target", async () => {
     await setupTempWorkspace();
     const { project } = await createWatchFixture();

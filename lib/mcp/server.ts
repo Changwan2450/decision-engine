@@ -330,7 +330,8 @@ const TOOLS: ToolDefinition[] = [
     inputSchema: {
       type: "object",
       properties: {
-        projectId: { type: "string" }
+        projectId: { type: "string" },
+        autoFollowup: { type: "boolean" }
       }
     }
   },
@@ -893,6 +894,35 @@ async function buildDigestFollowupSurface(params: {
   };
 }
 
+function buildAutoFollowupAction(
+  actionable: {
+    projectId: string;
+    refId: string;
+    kind: string;
+    actionType: string;
+    priority: "high" | "medium";
+  }[]
+) {
+  const candidate = actionable.find(
+    (item) =>
+      (item.kind === "digest" || item.kind === "alert") &&
+      item.actionType === "investigate_contradiction" &&
+      item.priority === "high"
+  );
+
+  if (!candidate) {
+    return null;
+  }
+
+  return {
+    name: "run_followup_from_digest",
+    arguments: {
+      projectId: candidate.projectId,
+      digestId: candidate.refId
+    }
+  };
+}
+
 async function runFollowupFromDigest(params: {
   projectId: string;
   digestId: string;
@@ -1319,11 +1349,32 @@ async function callTool(
     case "run_scheduler_tick": {
       const targetProjectId =
         typeof projectId === "string" && projectId.length > 0 ? projectId : undefined;
-      return toToolResult(
-        await runSchedulerTickFn({
-          projectId: targetProjectId
-        })
-      );
+      const schedulerResult = await runSchedulerTickFn({
+        projectId: targetProjectId
+      });
+      if (args?.autoFollowup !== true) {
+        return toToolResult(schedulerResult);
+      }
+
+      const autoAction = buildAutoFollowupAction(schedulerResult.actionable ?? []);
+      if (!autoAction) {
+        return toToolResult({
+          ...schedulerResult,
+          autoExecutedAction: null,
+          autoExecutedResult: null
+        });
+      }
+
+      const autoExecuted = (await callTool("execute_recommended_action", { action: autoAction }, deps))
+        .structuredContent as {
+        executedAction: { name: string; arguments: Record<string, unknown> };
+        result: unknown;
+      };
+      return toToolResult({
+        ...schedulerResult,
+        autoExecutedAction: autoAction,
+        autoExecutedResult: autoExecuted.result
+      });
     }
     case "export_bundle": {
       const bundleDir = await exportRunBundle(
