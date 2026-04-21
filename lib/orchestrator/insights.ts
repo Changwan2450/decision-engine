@@ -1,4 +1,5 @@
 import { deriveTitleFromUrl } from "@/lib/adapters/contract";
+import { inferSourceTier } from "@/lib/adapters/source-tier";
 import type { SourceArtifact } from "@/lib/adapters/types";
 import {
   assignTopicKey,
@@ -11,7 +12,8 @@ import {
   type Citation,
   type Contradiction,
   type EvidenceSummary,
-  type SourceArtifactRecord
+  type SourceArtifactRecord,
+  type TrustTier
 } from "@/lib/domain/claims";
 import { promotionCandidateSchema, type RunRecord } from "@/lib/storage/schema";
 
@@ -44,6 +46,38 @@ export type ProjectInsightPatch = {
 };
 
 type PromotionKind = "repeated_problem" | "repeated_pattern" | "competitor_signal";
+
+function inferTrustTier(params: {
+  sourcePriority: SourceArtifact["sourcePriority"];
+  sourceTier?: SourceArtifact["sourceTier"];
+}): TrustTier {
+  if (params.sourcePriority === "official" || params.sourcePriority === "primary_data") {
+    if (params.sourceTier === "aggregator") {
+      return "medium";
+    }
+    return "high";
+  }
+
+  if (params.sourcePriority === "analysis") {
+    if (params.sourceTier === "internal") {
+      return "high";
+    }
+    if (params.sourceTier === "aggregator" || params.sourceTier === "unknown") {
+      return "low";
+    }
+    return "medium";
+  }
+
+  if (params.sourceTier === "internal") {
+    return "medium";
+  }
+
+  return "low";
+}
+
+function resolveArtifactTier(artifact: SourceArtifact): SourceArtifact["sourceTier"] {
+  return artifact.sourceTier ?? inferSourceTier(artifact.canonicalUrl ?? artifact.url);
+}
 
 function slugify(value: string): string {
   return value
@@ -151,14 +185,23 @@ export function synthesizeEvidenceFromArtifacts(
   let claimIndex = 0;
   const artifactById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
   const citations: Citation[] = artifacts
-    .map((artifact, index) => ({
-      id: `citation-${index}`,
-      artifactId: artifact.id,
-      url: artifact.url,
-      title: artifact.title,
-      priority: artifact.sourcePriority,
-      publishedAt: artifact.publishedAt
-    }))
+    .map((artifact, index) => {
+      const sourceTier = resolveArtifactTier(artifact);
+      return {
+        id: `citation-${index}`,
+        artifactId: artifact.id,
+        url: artifact.url,
+        title: artifact.title,
+        priority: artifact.sourcePriority,
+        sourceTier,
+        trustTier: inferTrustTier({
+          sourcePriority: artifact.sourcePriority,
+          sourceTier
+        }),
+        retrievedAt: artifact.retrievedAt,
+        publishedAt: artifact.publishedAt
+      };
+    })
     .sort(comparePriority);
 
   const citationByArtifactId = new Map(citations.map((citation) => [citation.artifactId, citation]));
@@ -191,14 +234,38 @@ export function synthesizeEvidenceFromArtifacts(
       return topicAliases.get(slug) ?? slug;
     })
   );
-  const claims: Claim[] = seededClaims.map((seed) => ({
-    id: `claim-${claimIndex++}`,
-    artifactId: seed.artifactId,
-    text: seed.text,
-    topicKey: seed.topicKey,
-    stance: seed.stance ?? "neutral",
-    citationIds: seed.citationIds
-  }));
+  const claims: Claim[] = seededClaims.map((seed) => {
+    const artifact = artifactById.get(seed.artifactId);
+    const sourceTier = artifact ? resolveArtifactTier(artifact) : undefined;
+    const citationCount = seed.citationIds.length;
+    const trustTier = inferTrustTier({
+      sourcePriority: artifact?.sourcePriority ?? "community",
+      sourceTier
+    });
+
+    return {
+      id: `claim-${claimIndex++}`,
+      artifactId: seed.artifactId,
+      text: seed.text,
+      topicKey: seed.topicKey,
+      stance: seed.stance ?? "neutral",
+      citationIds: seed.citationIds,
+      sourceTier,
+      trustTier,
+      observedAt: artifact?.publishedAt ?? artifact?.retrievedAt,
+      provenance: artifact
+        ? {
+            sourcePriority: artifact.sourcePriority,
+            sourceTier,
+            trustTier,
+            citationCount,
+            observedAt: artifact.publishedAt ?? artifact.retrievedAt,
+            artifactTitle: artifact.title,
+            artifactUrl: artifact.url
+          }
+        : undefined
+    };
+  });
 
   for (const [index, claim] of claims.entries()) {
     if (claim.topicKey === "project-prior-decision") {

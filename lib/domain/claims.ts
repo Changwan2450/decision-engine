@@ -26,6 +26,12 @@ export const sourceTierSchema = z.enum([
   "unknown"
 ]);
 
+export const trustTierSchema = z.enum([
+  "high",
+  "medium",
+  "low"
+]);
+
 // ---- Fetcher outcome enums (Milestone 1 / PR 1) -------------------------
 // Every adapter should populate metadata.fetch_status. block_reason and
 // bypass_level are populated when relevant (blocked fetchers, protected sites).
@@ -98,7 +104,20 @@ export const citationSchema = z.object({
   url: z.string().url(),
   title: z.string().min(1),
   priority: sourcePrioritySchema,
+  sourceTier: sourceTierSchema.optional(),
+  trustTier: trustTierSchema.optional(),
+  retrievedAt: z.string().datetime().optional(),
   publishedAt: z.string().datetime().optional()
+});
+
+export const claimProvenanceSchema = z.object({
+  sourcePriority: sourcePrioritySchema,
+  sourceTier: sourceTierSchema.optional(),
+  trustTier: trustTierSchema,
+  citationCount: z.number().int().positive(),
+  observedAt: z.string().datetime().optional(),
+  artifactTitle: z.string().min(1).optional(),
+  artifactUrl: z.string().url().optional()
 });
 
 export const claimSchema = z.object({
@@ -107,7 +126,11 @@ export const claimSchema = z.object({
   text: z.string().min(1),
   topicKey: z.string().min(1).optional(),
   stance: z.enum(["support", "oppose", "neutral"]).default("neutral"),
-  citationIds: z.array(z.string().min(1)).min(1)
+  citationIds: z.array(z.string().min(1)).min(1),
+  sourceTier: sourceTierSchema.optional(),
+  trustTier: trustTierSchema.optional(),
+  observedAt: z.string().datetime().optional(),
+  provenance: claimProvenanceSchema.optional()
 });
 
 export const contradictionKindSchema = z.enum([
@@ -147,6 +170,7 @@ export const evidenceSummarySchema = z.object({
 
 export type SourceArtifactRecord = z.infer<typeof sourceArtifactSchema>;
 export type SourceTier = z.infer<typeof sourceTierSchema>;
+export type TrustTier = z.infer<typeof trustTierSchema>;
 export type Citation = z.infer<typeof citationSchema>;
 export type Claim = z.infer<typeof claimSchema>;
 export type ContradictionKind = z.infer<typeof contradictionKindSchema>;

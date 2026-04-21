@@ -253,7 +253,7 @@ describe("mcp server", () => {
       urls: ["https://example.com/report"]
     });
 
-    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string; sourceTier: string }>; tierDistribution: { official: number; primary: number; internal: number; community: number; aggregator: number; unknown: number }; contradictionSignals: Array<{ id: string; kind: string; tierA: string; tierB: string; reason: string; followupAvailable: boolean }>; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: null; expandedQueries: Array<{ axis: string; source: string; url: string }>; expansionDropped: number } } } }).result;
+    const result = (response as { result: { structuredContent: { run: { id: string; status: string; input: { urls: string[] } }; normalizedInput: { naturalLanguage: string }; mcpSummary: { runId: string; status: string; decision: { value: string; confidence: string }; topArtifacts: Array<{ title: string; sourceTier: string }>; tierDistribution: { official: number; primary: number; internal: number; community: number; aggregator: number; unknown: number }; provenanceLedger: { claimCount: number; trustDistribution: { high: number; medium: number; low: number }; topClaims: Array<{ id: string; trustTier: string; sourceTier: string; citationCount: number; artifactTitle: string | null; artifactUrl: string | null }> }; contradictionSignals: Array<{ id: string; kind: string; tierA: string; tierB: string; reason: string; followupAvailable: boolean }>; paths: { bundlePath: string; snapshotPath: string }; recommendedNextTools: string[]; nextToolCall: { name: string; arguments: { projectId: string; runId: string } }; clarificationTemplate: null; expandedQueries: Array<{ axis: string; source: string; url: string }>; expansionDropped: number } } } }).result;
     const stored = await workspace.readRunRecord(project.project.id, result.structuredContent.run.id);
 
     expect(result.structuredContent.run.status).toBe("decided");
@@ -274,6 +274,15 @@ describe("mcp server", () => {
       community: 1,
       aggregator: 0,
       unknown: 0
+    });
+    expect(result.structuredContent.mcpSummary.provenanceLedger).toEqual({
+      claimCount: 0,
+      trustDistribution: {
+        high: 0,
+        medium: 0,
+        low: 0
+      },
+      topClaims: []
     });
     expect(result.structuredContent.mcpSummary.contradictionSignals).toEqual([
       {

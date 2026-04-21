@@ -75,6 +75,28 @@ describe("evidence synthesis", () => {
     });
     expect(synthesis.summary.shouldRemainUnclear).toBe(true);
     expect(synthesis.summary.reasons).toContain("contradiction_detected");
+    expect(synthesis.citations[0]).toMatchObject({
+      sourceTier: "unknown",
+      trustTier: "high"
+    });
+    expect(synthesis.claims[0]).toMatchObject({
+      sourceTier: "unknown",
+      trustTier: "high",
+      provenance: {
+        sourcePriority: "official",
+        trustTier: "high",
+        citationCount: 1,
+        artifactTitle: "Official report",
+        artifactUrl: "https://example.com/official"
+      }
+    });
+    expect(synthesis.claims[2]).toMatchObject({
+      trustTier: "low",
+      provenance: {
+        sourcePriority: "community",
+        trustTier: "low"
+      }
+    });
   });
 
   it("stays unclear when the topic is recency-sensitive and evidence is stale", () => {

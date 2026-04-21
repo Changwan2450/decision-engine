@@ -8,7 +8,7 @@ import { sendDiscordNotifierFromFile } from "@/lib/bridge/discord-notifier";
 import { exportLinkitIngestBundle } from "@/lib/bridge/linkit-export";
 import { publishLinkitBatch } from "@/lib/bridge/linkit-publish";
 import { WORKSPACE_ROOT } from "@/lib/config";
-import type { Claim, Contradiction, ContradictionKind, SourceTier } from "@/lib/domain/claims";
+import type { Claim, Contradiction, ContradictionKind, SourceTier, TrustTier } from "@/lib/domain/claims";
 import { executeResearchRun, fetchWeb, gatherForRun } from "@/lib/orchestrator/run-research";
 import { buildWatchDigest } from "@/lib/orchestrator/watch-digest";
 import { promoteDigestToProject } from "@/lib/orchestrator/watch-inbox";
@@ -526,6 +526,40 @@ function buildTierDistribution(artifacts: SourceArtifact[]): Record<SourceTier, 
   );
 }
 
+function buildTrustDistribution(claims: Claim[]): Record<TrustTier, number> {
+  return claims.reduce<Record<TrustTier, number>>(
+    (acc, claim) => {
+      const trustTier = claim.trustTier ?? "low";
+      acc[trustTier] += 1;
+      return acc;
+    },
+    {
+      high: 0,
+      medium: 0,
+      low: 0
+    }
+  );
+}
+
+function buildProvenanceLedger(claims: Claim[]) {
+  return {
+    claimCount: claims.length,
+    trustDistribution: buildTrustDistribution(claims),
+    topClaims: claims.slice(0, 5).map((claim) => ({
+      id: claim.id,
+      text: claim.text,
+      topicKey: claim.topicKey ?? null,
+      stance: claim.stance,
+      sourceTier: claim.sourceTier ?? "unknown",
+      trustTier: claim.trustTier ?? "low",
+      observedAt: claim.observedAt ?? null,
+      citationCount: claim.provenance?.citationCount ?? claim.citationIds.length,
+      artifactTitle: claim.provenance?.artifactTitle ?? null,
+      artifactUrl: claim.provenance?.artifactUrl ?? null
+    }))
+  };
+}
+
 function buildRecommendedNextTools(status: string) {
   if (status === "awaiting_clarification") {
     return ["clarify_run", "get_run"];
@@ -994,6 +1028,7 @@ function withMcpSummary(record: Awaited<ReturnType<typeof executeResearchRun>>) 
       clarificationQuestions: record.run.clarificationQuestions,
       topArtifacts: summarizeArtifacts(record.artifacts),
       tierDistribution: buildTierDistribution(record.artifacts),
+      provenanceLedger: buildProvenanceLedger(record.claims),
       contradictionSignals: buildContradictionSignals(record.contradictions),
       expandedQueries: record.expansion?.expanded ?? [],
       expansionDropped: record.expansion?.dropped ?? 0,
