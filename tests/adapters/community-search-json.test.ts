@@ -758,6 +758,100 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
   });
 
+  it("drops broad comparative posts when the ambiguous token is missing", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Monolith vs microservices tradeoffs",
+                  selftext: "generic architecture discussion",
+                  permalink: "/r/architecture/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a2",
+                  title: "TypeScript monolith vs microservices tradeoffs",
+                  selftext: "team migration notes",
+                  permalink: "/r/typescript/comments/a2/example",
+                  created_utc: 1_700_000_100
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=TypeScript+monolith+vs+microservices"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("TypeScript monolith vs microservices tradeoffs");
+    expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
+  });
+
+  it("drops broad comparative posts when only one specific token matches", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "TypeScript monolith migration notes",
+                  selftext: "single-architecture post",
+                  permalink: "/r/typescript/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a2",
+                  title: "TypeScript monolith vs microservices tradeoffs",
+                  selftext: "team migration notes",
+                  permalink: "/r/typescript/comments/a2/example",
+                  created_utc: 1_700_000_100
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=TypeScript+monolith+vs+microservices"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("TypeScript monolith vs microservices tradeoffs");
+    expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
+  });
+
   it("drops long-anchor posts that match only one long token from a multi-token query", async () => {
     const adapter = createCommunitySearchJsonAdapter({
       exec: async () => ({

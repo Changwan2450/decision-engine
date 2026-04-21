@@ -622,9 +622,21 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
     if (longTokens.some((token) => AMBIGUOUS_LONG_TOKEN_GUARD.has(token))) {
       const distinctMatchCount = new Set(matchedLongTokens).size;
       const shortTokens = tokens.filter((token) => !isLongToken(token));
+      const ambiguousLongTokens = longTokens.filter((token) =>
+        AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
+      );
       const nonAmbiguousLongTokens = longTokens.filter(
         (token) => !AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
       );
+      const matchedAmbiguousLongCount = new Set(
+        ambiguousLongTokens.filter((token) => matchesToken(normalizedTitle, token))
+      ).size;
+      const specificAsciiLongTokens = nonAmbiguousLongTokens.filter((token) =>
+        /[a-z]/u.test(token)
+      );
+      const matchedSpecificAsciiLongCount = new Set(
+        specificAsciiLongTokens.filter((token) => matchesToken(normalizedTitle, token))
+      ).size;
       if (
         shortTokens.length === 0 &&
         nonAmbiguousLongTokens.length > 0 &&
@@ -632,9 +644,14 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
       ) {
         return false;
       }
-      const ambiguousLongTokenCount = longTokens.filter((token) =>
-        AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
-      ).length;
+      if (
+        shortTokens.length === 0 &&
+        specificAsciiLongTokens.length >= 2 &&
+        (matchedAmbiguousLongCount === 0 || matchedSpecificAsciiLongCount < 2)
+      ) {
+        return false;
+      }
+      const ambiguousLongTokenCount = ambiguousLongTokens.length;
       const requiredMatches =
         ambiguousLongTokenCount === longTokens.length && ambiguousLongTokenCount >= 4
           ? 3
