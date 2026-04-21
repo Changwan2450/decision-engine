@@ -924,8 +924,32 @@ describe("mcp server", () => {
       watchTargetId: watchTarget.id
     });
 
-    const result = (response as { result: { structuredContent: { digests: Array<{ id: string }> } } }).result;
+    const result = (response as {
+      result: {
+        structuredContent: {
+          digests: Array<{
+            id: string;
+            recommendedNextAction: {
+              name: string;
+              arguments: { projectId: string; digestId: string };
+            };
+            followupCandidate: {
+              digestId: string;
+              followup: { suggestedTitle: string };
+            };
+          }>;
+        };
+      };
+    }).result;
     expect(result.structuredContent.digests.map((item) => item.id)).toEqual([digest.id]);
+    expect(result.structuredContent.digests[0]?.recommendedNextAction).toEqual({
+      name: "run_followup_from_digest",
+      arguments: {
+        projectId: project.project.id,
+        digestId: digest.id
+      }
+    });
+    expect(result.structuredContent.digests[0]?.followupCandidate.digestId).toBe(digest.id);
   });
 
   it("gets a single digest", async () => {
@@ -951,9 +975,32 @@ describe("mcp server", () => {
       digestId: digest.id
     });
 
-    const result = (response as { result: { structuredContent: { id: string; watchTargetId: string } } }).result;
+    const result = (response as {
+      result: {
+        structuredContent: {
+          id: string;
+          watchTargetId: string;
+          recommendedNextAction: {
+            name: string;
+            arguments: { projectId: string; digestId: string };
+          };
+          followupCandidate: {
+            digestId: string;
+            followup: { suggestedTitle: string };
+          };
+        };
+      };
+    }).result;
     expect(result.structuredContent.id).toBe(digest.id);
     expect(result.structuredContent.watchTargetId).toBe(watchTarget.id);
+    expect(result.structuredContent.recommendedNextAction).toEqual({
+      name: "run_followup_from_digest",
+      arguments: {
+        projectId: project.project.id,
+        digestId: digest.id
+      }
+    });
+    expect(result.structuredContent.followupCandidate.digestId).toBe(digest.id);
   });
 
   it("builds a follow-up suggestion directly from a digest contradiction", async () => {
@@ -1021,6 +1068,10 @@ describe("mcp server", () => {
           digestId: string;
           sourceRunId: string;
           contradictionId: string;
+          recommendedNextAction: {
+            name: string;
+            arguments: { projectId: string; digestId: string };
+          };
           followup: {
             suggestedTitle: string;
             suggestedComparisonAxis: string;
@@ -1032,6 +1083,13 @@ describe("mcp server", () => {
     expect(result.structuredContent.digestId).toBe(digest.id);
     expect(result.structuredContent.sourceRunId).toBe(run.run.id);
     expect(result.structuredContent.contradictionId).toBe("contradiction-1");
+    expect(result.structuredContent.recommendedNextAction).toEqual({
+      name: "run_followup_from_digest",
+      arguments: {
+        projectId: project.project.id,
+        digestId: digest.id
+      }
+    });
     expect(result.structuredContent.followup.suggestedTitle).toBe(
       "monorepo — 커뮤니티 의견 분산 원인"
     );
@@ -1068,6 +1126,10 @@ describe("mcp server", () => {
         structuredContent: {
           contradictionId: null;
           kind: string;
+          recommendedNextAction: {
+            name: string;
+            arguments: { projectId: string; digestId: string };
+          };
           followup: {
             suggestedTitle: string;
             suggestedComparisonAxis: string;
@@ -1078,6 +1140,13 @@ describe("mcp server", () => {
 
     expect(result.structuredContent.contradictionId).toBeNull();
     expect(result.structuredContent.kind).toBe("digest_review");
+    expect(result.structuredContent.recommendedNextAction).toEqual({
+      name: "run_followup_from_digest",
+      arguments: {
+        projectId: project.project.id,
+        digestId: digest.id
+      }
+    });
     expect(result.structuredContent.followup.suggestedTitle).toBe(
       "Short-form watch — 신규 근거 검토"
     );
@@ -1171,6 +1240,10 @@ describe("mcp server", () => {
     const result = (response as {
       result: {
         structuredContent: {
+          followupCandidate: {
+            digestId: string;
+            followup: { suggestedTitle: string };
+          };
           run: {
             title: string;
             input: {
@@ -1191,6 +1264,7 @@ describe("mcp server", () => {
     }).result;
 
     expect(result.structuredContent.run.title).toBe("monorepo — 커뮤니티 의견 분산 원인");
+    expect(result.structuredContent.followupCandidate.digestId).toBe(digest.id);
     expect(result.structuredContent.run.input.naturalLanguage).toContain(
       "monorepo 찬성 근거, monorepo 반대 근거"
     );
@@ -1248,9 +1322,31 @@ describe("mcp server", () => {
       status: "unread"
     });
 
-    const result = (response as { result: { structuredContent: { inboxItems: Array<{ status: string }> } } }).result;
+    const result = (response as {
+      result: {
+        structuredContent: {
+          inboxItems: Array<{
+            status: string;
+            recommendedNextAction: {
+              name: string;
+              arguments: { projectId: string; digestId: string };
+            };
+            followupCandidate: {
+              digestId: string;
+              followup: { suggestedTitle: string };
+            };
+          }>;
+        };
+      };
+    }).result;
     expect(result.structuredContent.inboxItems).toHaveLength(1);
     expect(result.structuredContent.inboxItems[0]?.status).toBe("unread");
+    expect(result.structuredContent.inboxItems[0]?.recommendedNextAction.name).toBe(
+      "run_followup_from_digest"
+    );
+    expect(result.structuredContent.inboxItems[0]?.followupCandidate.followup.suggestedTitle).toBe(
+      "Short-form watch — 신규 근거 검토"
+    );
   });
 
   it("archives an inbox item", async () => {

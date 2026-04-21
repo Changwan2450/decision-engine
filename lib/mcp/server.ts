@@ -786,6 +786,16 @@ function buildFollowupSuggestion(params: {
   };
 }
 
+function buildDigestFollowupRecommendedNextAction(projectId: string, digestId: string) {
+  return {
+    name: "run_followup_from_digest",
+    arguments: {
+      projectId,
+      digestId
+    }
+  };
+}
+
 async function buildDigestFollowupSuggestion(params: {
   projectId: string;
   digestId: string;
@@ -840,6 +850,21 @@ async function buildDigestFollowupSuggestion(params: {
       ].join("\n"),
       suggestedComparisonAxis: "신규 근거"
     }
+  };
+}
+
+async function buildDigestFollowupSurface(params: {
+  projectId: string;
+  digestId: string;
+}) {
+  const candidate = await buildDigestFollowupSuggestion(params);
+  return {
+    ...candidate,
+    followupAvailable: candidate.followup !== null,
+    recommendedNextAction: buildDigestFollowupRecommendedNextAction(
+      params.projectId,
+      params.digestId
+    )
   };
 }
 
@@ -1056,7 +1081,7 @@ async function callTool(
       const targetProjectId = requireString(projectId, "projectId");
       const digestId = requireString(args?.digestId, "digestId");
       return toToolResult(
-        await buildDigestFollowupSuggestion({
+        await buildDigestFollowupSurface({
           projectId: targetProjectId,
           digestId
         })
@@ -1065,12 +1090,19 @@ async function callTool(
     case "run_followup_from_digest": {
       const targetProjectId = requireString(projectId, "projectId");
       const digestId = requireString(args?.digestId, "digestId");
+      const followupCandidate = await buildDigestFollowupSurface({
+        projectId: targetProjectId,
+        digestId
+      });
       const record = await runFollowupFromDigest({
         projectId: targetProjectId,
         digestId,
         executeRun: executeResearchRunFn
       });
-      return toToolResult(withMcpSummary(record));
+      return toToolResult({
+        ...withMcpSummary(record),
+        followupCandidate
+      });
     }
     case "fetch_web": {
       const url = requireString(args?.url, "url");
@@ -1130,19 +1162,47 @@ async function callTool(
           ? args.watchTargetId
           : undefined;
       const digests = await listDigestRecords(targetProjectId);
+      const filteredDigests = watchTargetId
+        ? digests.filter((digest) => digest.watchTargetId === watchTargetId)
+        : digests;
+      const followupByDigestId = new Map(
+        (
+          await Promise.all(
+            filteredDigests.map(async (digest) => [
+              digest.id,
+              await buildDigestFollowupSurface({
+                projectId: targetProjectId,
+                digestId: digest.id
+              })
+            ] as const)
+          )
+        )
+      );
       return toToolResult({
         projectId: targetProjectId,
-        digests: watchTargetId
-          ? digests.filter((digest) => digest.watchTargetId === watchTargetId)
-          : digests
+        digests: filteredDigests.map((digest) => {
+          const followupCandidate = followupByDigestId.get(digest.id);
+          return {
+            ...digest,
+            followupCandidate,
+            recommendedNextAction: followupCandidate?.recommendedNextAction
+          };
+        })
       });
     }
     case "get_digest": {
-      const record = await readDigestRecord(
-        requireString(projectId, "projectId"),
-        requireString(args?.digestId, "digestId")
-      );
-      return toToolResult(record);
+      const targetProjectId = requireString(projectId, "projectId");
+      const digestId = requireString(args?.digestId, "digestId");
+      const record = await readDigestRecord(targetProjectId, digestId);
+      const followupCandidate = await buildDigestFollowupSurface({
+        projectId: targetProjectId,
+        digestId
+      });
+      return toToolResult({
+        ...record,
+        followupCandidate,
+        recommendedNextAction: followupCandidate.recommendedNextAction
+      });
     }
     case "build_watch_digest": {
       const record = await buildWatchDigestFn(
@@ -1170,9 +1230,35 @@ async function callTool(
         throw new Error("status must be unread, read, archived, or promoted");
       }
       const items = await listInboxItemRecords(targetProjectId);
+      const filteredItems = status ? items.filter((item) => item.status === status) : items;
+      const digestFollowupByRefId = new Map(
+        (
+          await Promise.all(
+            filteredItems.map(async (item) => {
+              if (item.kind !== "digest" && item.kind !== "alert") {
+                return [item.refId, null] as const;
+              }
+              return [
+                item.refId,
+                await buildDigestFollowupSurface({
+                  projectId: targetProjectId,
+                  digestId: item.refId
+                })
+              ] as const;
+            })
+          )
+        ).filter((entry): entry is readonly [string, Awaited<ReturnType<typeof buildDigestFollowupSurface>>] => entry[1] !== null)
+      );
       return toToolResult({
         projectId: targetProjectId,
-        inboxItems: status ? items.filter((item) => item.status === status) : items
+        inboxItems: filteredItems.map((item) => {
+          const followupCandidate = digestFollowupByRefId.get(item.refId);
+          return {
+            ...item,
+            followupCandidate,
+            recommendedNextAction: followupCandidate?.recommendedNextAction
+          };
+        })
       });
     }
     case "archive_inbox_item": {
