@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  buildKnowledgeContext,
   createQmdClientForTests,
+  setQmdClientForTests,
   setQmdRunnerForTests
 } from "@/lib/orchestrator/kb-context";
 
 describe("kb-context qmd fallback", () => {
   afterEach(() => {
+    setQmdClientForTests(null);
     setQmdRunnerForTests(null);
     vi.restoreAllMocks();
   });
@@ -110,5 +113,114 @@ describe("kb-context qmd fallback", () => {
     expect(getCalls).toEqual(["qmd://wiki/topics/example-topic.md"]);
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy.mock.calls[0]?.[0]).toContain("qmd multi-get JSON parse failed");
+  });
+
+  it("reuses thin project memory in prior decisions and query expansion", async () => {
+    setQmdClientForTests({
+      async operatorNotes() {
+        return [];
+      },
+      async queryNotes() {
+        return [];
+      }
+    });
+
+    const context = await buildKnowledgeContext({
+      vaultRoot: "/tmp",
+      record: {
+        run: {
+          id: "run-2",
+          projectId: "project-1",
+          title: "Next decision",
+          mode: "standard",
+          status: "draft",
+          clarificationQuestions: [],
+          input: {
+            naturalLanguage: "next decision",
+            pastedContent: "",
+            urls: []
+          },
+          createdAt: "2026-04-21T00:00:00.000Z",
+          updatedAt: "2026-04-21T00:00:00.000Z"
+        },
+        watchContext: null,
+        projectOrigin: null,
+        normalizedInput: {
+          title: "Next decision",
+          naturalLanguage: "next decision",
+          pastedContent: "",
+          urls: [],
+          goal: "결정",
+          target: "팀",
+          comparisonAxis: "장단점"
+        },
+        expansion: null,
+        kbContext: null,
+        decision: null,
+        prdSeed: null,
+        artifacts: [],
+        claims: [],
+        citations: [],
+        contradictions: [],
+        evidenceSummary: null,
+        advisory: null
+      },
+      projectRecord: {
+        project: {
+          id: "project-1",
+          name: "Project",
+          description: "desc",
+          createdAt: "2026-04-20T00:00:00.000Z",
+          updatedAt: "2026-04-21T00:00:00.000Z"
+        },
+        insights: {
+          repeatedProblems: [],
+          repeatedPatterns: [],
+          competitorSignals: [],
+          contradictionIds: []
+        },
+        memory: {
+          decisionLedger: [
+            {
+              runId: "run-1",
+              title: "Prior decision",
+              decision: "go",
+              confidence: "high",
+              why: "근거가 충분했다.",
+              createdAt: "2026-04-20T00:00:00.000Z"
+            }
+          ],
+          topicLedger: [
+            {
+              topicKey: "monorepo",
+              count: 3,
+              highTrustCount: 2,
+              lastSeenAt: "2026-04-20T00:00:00.000Z"
+            }
+          ],
+          contradictionLedger: [
+            {
+              topicKey: "ci-complexity",
+              count: 2,
+              lastSeenAt: "2026-04-20T00:00:00.000Z"
+            }
+          ]
+        },
+        promotionCandidates: []
+      },
+      runRecords: []
+    });
+
+    expect(context.priorDecisions).toEqual([
+      expect.objectContaining({
+        runId: "run-1",
+        title: "Prior decision",
+        decision: "go"
+      })
+    ]);
+    expect(context.queryExpansion).toContain("monorepo (3)");
+    expect(context.duplicateWarnings).toContain("이미 다룬 런: Prior decision (go)");
+    expect(context.duplicateWarnings).toContain("반복 상충 토픽: ci-complexity (2)");
+    expect(context.freshEvidenceFocus).toContain("상충 토픽 재검증: ci-complexity (2)");
   });
 });

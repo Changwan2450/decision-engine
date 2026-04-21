@@ -41,7 +41,12 @@ describe("workspace storage", () => {
     await bootstrapWorkspace(project, run);
 
     await expect(readProjectRecord(project.id)).resolves.toMatchObject({
-      project: { id: project.id, name: "Alpha" }
+      project: { id: project.id, name: "Alpha" },
+      memory: {
+        decisionLedger: [],
+        topicLedger: [],
+        contradictionLedger: []
+      }
     });
     await expect(readRunRecord(project.id, run.id)).resolves.toMatchObject({
       run: { id: run.id, title: "1차 리서치" }
@@ -69,6 +74,11 @@ describe("workspace storage", () => {
           id: created.project.id,
           name: "Shorts",
           description: "숏츠 포맷 조사"
+        },
+        memory: {
+          decisionLedger: [],
+          topicLedger: [],
+          contradictionLedger: []
         }
       }
     ]);

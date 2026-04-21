@@ -18,6 +18,7 @@ import { buildDecisionHistory } from "@/lib/orchestrator/decision-history";
 import {
   derivePromotionCandidates,
   deriveProjectInsightPatch,
+  deriveProjectMemoryPatch,
   synthesizeEvidenceFromArtifacts
 } from "@/lib/orchestrator/insights";
 import { buildKnowledgeArtifacts, buildKnowledgeContext } from "@/lib/orchestrator/kb-context";
@@ -31,6 +32,7 @@ import {
   updateProjectRecord,
   updateRunRecord
 } from "@/lib/storage/workspace";
+import type { ProjectRecord } from "@/lib/storage/schema";
 import type { Claim, Citation, Contradiction, SourceArtifactRecord, SourceTier } from "@/lib/domain/claims";
 
 type RunResearchDeps = {
@@ -272,6 +274,70 @@ function isRecencySensitive(plan: ResearchPlan): boolean {
 
 function mergeUnique(left: string[], right: string[]): string[] {
   return Array.from(new Set([...left, ...right]));
+}
+
+function mergeDecisionLedger(
+  left: NonNullable<ProjectRecord["memory"]>["decisionLedger"],
+  right: NonNullable<ProjectRecord["memory"]>["decisionLedger"]
+): NonNullable<ProjectRecord["memory"]>["decisionLedger"] {
+  const merged = new Map<string, ProjectRecord["memory"]["decisionLedger"][number]>(
+    left.map((entry) => [entry.runId, entry])
+  );
+  for (const entry of right) {
+    merged.set(entry.runId, entry);
+  }
+  return Array.from(merged.values())
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 12);
+}
+
+function mergeTopicLedger(
+  left: NonNullable<ProjectRecord["memory"]>["topicLedger"],
+  right: NonNullable<ProjectRecord["memory"]>["topicLedger"]
+): NonNullable<ProjectRecord["memory"]>["topicLedger"] {
+  const merged = new Map<string, ProjectRecord["memory"]["topicLedger"][number]>(
+    left.map((entry) => [entry.topicKey, { ...entry }])
+  );
+  for (const entry of right) {
+    const current = merged.get(entry.topicKey);
+    if (!current) {
+      merged.set(entry.topicKey, { ...entry });
+      continue;
+    }
+    merged.set(entry.topicKey, {
+      topicKey: entry.topicKey,
+      count: current.count + entry.count,
+      highTrustCount: current.highTrustCount + entry.highTrustCount,
+      lastSeenAt: entry.lastSeenAt > current.lastSeenAt ? entry.lastSeenAt : current.lastSeenAt
+    });
+  }
+  return Array.from(merged.values())
+    .sort((a, b) => b.count - a.count || b.lastSeenAt.localeCompare(a.lastSeenAt))
+    .slice(0, 24);
+}
+
+function mergeContradictionLedger(
+  left: NonNullable<ProjectRecord["memory"]>["contradictionLedger"],
+  right: NonNullable<ProjectRecord["memory"]>["contradictionLedger"]
+): NonNullable<ProjectRecord["memory"]>["contradictionLedger"] {
+  const merged = new Map<string, ProjectRecord["memory"]["contradictionLedger"][number]>(
+    left.map((entry) => [entry.topicKey, { ...entry }])
+  );
+  for (const entry of right) {
+    const current = merged.get(entry.topicKey);
+    if (!current) {
+      merged.set(entry.topicKey, { ...entry });
+      continue;
+    }
+    merged.set(entry.topicKey, {
+      topicKey: entry.topicKey,
+      count: current.count + entry.count,
+      lastSeenAt: entry.lastSeenAt > current.lastSeenAt ? entry.lastSeenAt : current.lastSeenAt
+    });
+  }
+  return Array.from(merged.values())
+    .sort((a, b) => b.count - a.count || b.lastSeenAt.localeCompare(a.lastSeenAt))
+    .slice(0, 24);
 }
 
 function singleUrlPlan(plan: ResearchPlan, url: string): ResearchPlan {
@@ -599,6 +665,12 @@ export async function executeResearchRun(
     });
 
     const patch = deriveProjectInsightPatch(synthesis);
+    const memoryPatch = deriveProjectMemoryPatch({
+      record: finalRecord,
+      synthesis,
+      decision,
+      now
+    });
     const runRecords = await listRunRecords(projectId);
     const promotionCandidates = derivePromotionCandidates(runRecords);
     const updatedProject = await updateProjectRecord(projectId, (projectRecord) => ({
@@ -619,6 +691,20 @@ export async function executeResearchRun(
         contradictionIds: mergeUnique(
           projectRecord.insights.contradictionIds,
           patch.contradictionIds
+        )
+      },
+      memory: {
+        decisionLedger: mergeDecisionLedger(
+          projectRecord.memory?.decisionLedger ?? [],
+          memoryPatch.decisionLedger
+        ),
+        topicLedger: mergeTopicLedger(
+          projectRecord.memory?.topicLedger ?? [],
+          memoryPatch.topicLedger
+        ),
+        contradictionLedger: mergeContradictionLedger(
+          projectRecord.memory?.contradictionLedger ?? [],
+          memoryPatch.contradictionLedger
         )
       },
       promotionCandidates,

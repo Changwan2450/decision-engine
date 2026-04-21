@@ -189,6 +189,11 @@ export async function bootstrapWorkspace(project: Project, run?: Run): Promise<v
       competitorSignals: [],
       contradictionIds: []
     },
+    memory: {
+      decisionLedger: [],
+      topicLedger: [],
+      contradictionLedger: []
+    },
     promotionCandidates: []
   });
 
@@ -241,6 +246,11 @@ export async function createProjectRecord(input: {
       repeatedPatterns: [],
       competitorSignals: [],
       contradictionIds: []
+    },
+    memory: {
+      decisionLedger: [],
+      topicLedger: [],
+      contradictionLedger: []
     },
     promotionCandidates: []
   };

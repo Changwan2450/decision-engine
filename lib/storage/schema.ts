@@ -71,6 +71,34 @@ export const projectInsightSchema = z.object({
   contradictionIds: z.array(z.string()).default([])
 });
 
+export const projectMemoryDecisionSchema = z.object({
+  runId: z.string().min(1),
+  title: z.string().min(1),
+  decision: z.enum(["go", "no_go", "unclear"]),
+  confidence: z.enum(["low", "medium", "high"]),
+  why: z.string().min(1),
+  createdAt: z.string().datetime()
+});
+
+export const projectMemoryTopicSchema = z.object({
+  topicKey: z.string().min(1),
+  count: z.number().int().positive(),
+  highTrustCount: z.number().int().nonnegative().default(0),
+  lastSeenAt: z.string().datetime()
+});
+
+export const projectMemoryContradictionSchema = z.object({
+  topicKey: z.string().min(1),
+  count: z.number().int().positive(),
+  lastSeenAt: z.string().datetime()
+});
+
+export const projectMemorySchema = z.object({
+  decisionLedger: z.array(projectMemoryDecisionSchema).default([]),
+  topicLedger: z.array(projectMemoryTopicSchema).default([]),
+  contradictionLedger: z.array(projectMemoryContradictionSchema).default([])
+});
+
 export const promotionCandidateSchema = z.object({
   id: z.string().min(1),
   kind: z.enum(["repeated_problem", "repeated_pattern", "competitor_signal"]),
@@ -230,6 +258,11 @@ export const projectRecordSchema = z.object({
     repeatedPatterns: [],
     competitorSignals: [],
     contradictionIds: []
+  }),
+  memory: projectMemorySchema.default({
+    decisionLedger: [],
+    topicLedger: [],
+    contradictionLedger: []
   }),
   promotionCandidates: z.array(promotionCandidateSchema).default([])
 });

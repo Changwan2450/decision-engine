@@ -45,6 +45,28 @@ export type ProjectInsightPatch = {
   contradictionIds: string[];
 };
 
+export type ProjectMemoryPatch = {
+  decisionLedger: Array<{
+    runId: string;
+    title: string;
+    decision: "go" | "no_go" | "unclear";
+    confidence: "low" | "medium" | "high";
+    why: string;
+    createdAt: string;
+  }>;
+  topicLedger: Array<{
+    topicKey: string;
+    count: number;
+    highTrustCount: number;
+    lastSeenAt: string;
+  }>;
+  contradictionLedger: Array<{
+    topicKey: string;
+    count: number;
+    lastSeenAt: string;
+  }>;
+};
+
 type PromotionKind = "repeated_problem" | "repeated_pattern" | "competitor_signal";
 
 function inferTrustTier(params: {
@@ -363,6 +385,81 @@ export function deriveProjectInsightPatch(
       synthesis.artifacts.map((artifact) => artifact.metadata.competitor_signal ?? "")
     ),
     contradictionIds: synthesis.contradictions.map((contradiction) => contradiction.id)
+  };
+}
+
+export function deriveProjectMemoryPatch(params: {
+  record: Pick<RunRecord, "run">;
+  synthesis: EvidenceSynthesis;
+  decision: {
+    value: "go" | "no_go" | "unclear";
+    confidence: "low" | "medium" | "high";
+    why: string;
+  };
+  now: string;
+}): ProjectMemoryPatch {
+  const topicCounts = new Map<
+    string,
+    {
+      count: number;
+      highTrustCount: number;
+      lastSeenAt: string;
+    }
+  >();
+  for (const claim of params.synthesis.claims) {
+    if (!claim.topicKey) continue;
+    const current = topicCounts.get(claim.topicKey) ?? {
+      count: 0,
+      highTrustCount: 0,
+      lastSeenAt: params.now
+    };
+    current.count += 1;
+    if (claim.trustTier === "high") {
+      current.highTrustCount += 1;
+    }
+    current.lastSeenAt = params.now;
+    topicCounts.set(claim.topicKey, current);
+  }
+
+  const claimById = new Map(params.synthesis.claims.map((claim) => [claim.id, claim]));
+  const contradictionCounts = new Map<string, { count: number; lastSeenAt: string }>();
+  for (const contradiction of params.synthesis.contradictions) {
+    const topics = contradiction.claimIds
+      .map((claimId) => claimById.get(claimId)?.topicKey)
+      .filter((topicKey): topicKey is string => Boolean(topicKey));
+    for (const topicKey of new Set(topics)) {
+      const current = contradictionCounts.get(topicKey) ?? {
+        count: 0,
+        lastSeenAt: params.now
+      };
+      current.count += 1;
+      current.lastSeenAt = params.now;
+      contradictionCounts.set(topicKey, current);
+    }
+  }
+
+  return {
+    decisionLedger: [
+      {
+        runId: params.record.run.id,
+        title: params.record.run.title,
+        decision: params.decision.value,
+        confidence: params.decision.confidence,
+        why: params.decision.why,
+        createdAt: params.record.run.createdAt
+      }
+    ],
+    topicLedger: Array.from(topicCounts.entries()).map(([topicKey, value]) => ({
+      topicKey,
+      count: value.count,
+      highTrustCount: value.highTrustCount,
+      lastSeenAt: value.lastSeenAt
+    })),
+    contradictionLedger: Array.from(contradictionCounts.entries()).map(([topicKey, value]) => ({
+      topicKey,
+      count: value.count,
+      lastSeenAt: value.lastSeenAt
+    }))
   };
 }
 

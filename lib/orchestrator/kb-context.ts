@@ -258,16 +258,38 @@ export async function buildKnowledgeContext(params: {
   ]);
   const scoredNotes = queriedNotes.slice(0, 3);
 
-  const priorDecisions = runRecords
-    .filter((run) => run.run.id !== record.run.id && run.run.status === "decided" && run.decision)
+  const priorDecisions = (
+    projectRecord.memory?.decisionLedger?.length
+      ? projectRecord.memory.decisionLedger
+      : runRecords
+          .filter((run) => run.run.id !== record.run.id && run.run.status === "decided" && run.decision)
+          .map((run) => ({
+            runId: run.run.id,
+            title: run.run.title,
+            decision: run.decision!.value,
+            confidence: run.decision!.confidence,
+            why: run.decision!.why,
+            createdAt: run.run.createdAt
+          }))
+  )
+    .filter((run) => run.runId !== record.run.id)
     .slice(0, 3)
     .map((run) => ({
-      runId: run.run.id,
-      title: run.run.title,
-      decision: run.decision!.value,
-      why: run.decision!.why,
-      createdAt: run.run.createdAt
+      runId: run.runId,
+      title: run.title,
+      decision: run.decision,
+      why: run.why,
+      createdAt: run.createdAt
     }));
+
+  const memoryTopics = (projectRecord.memory?.topicLedger ?? [])
+    .sort((left, right) => right.count - left.count || right.lastSeenAt.localeCompare(left.lastSeenAt))
+    .slice(0, 3)
+    .map((entry) => `${entry.topicKey} (${entry.count})`);
+  const contradictionTopics = (projectRecord.memory?.contradictionLedger ?? [])
+    .sort((left, right) => right.count - left.count || right.lastSeenAt.localeCompare(left.lastSeenAt))
+    .slice(0, 3)
+    .map((entry) => `${entry.topicKey} (${entry.count})`);
 
   const queryExpansion = takeUnique(
     [
@@ -275,7 +297,8 @@ export async function buildKnowledgeContext(params: {
       ...scoredNotes.flatMap((note) => note.reusableClaims.slice(0, 2)),
       ...projectRecord.insights.repeatedProblems,
       ...projectRecord.insights.repeatedPatterns,
-      ...projectRecord.insights.competitorSignals
+      ...projectRecord.insights.competitorSignals,
+      ...memoryTopics
     ],
     8
   );
@@ -287,7 +310,8 @@ export async function buildKnowledgeContext(params: {
       ),
       ...projectRecord.promotionCandidates.map(
         (candidate) => `이미 승격 후보에 있는 패턴: ${candidate.title}`
-      )
+      ),
+      ...contradictionTopics.map((topic) => `반복 상충 토픽: ${topic}`)
     ],
     6
   );
@@ -300,6 +324,7 @@ export async function buildKnowledgeContext(params: {
       ...projectRecord.insights.repeatedProblems.map(
         (problem) => `반복 문제의 최신 지속 여부 확인: ${problem}`
       ),
+      ...contradictionTopics.map((topic) => `상충 토픽 재검증: ${topic}`),
       "기존 내부 지식을 반복하지 말고 최신 official/primary_data 근거를 우선 수집"
     ],
     6

@@ -218,6 +218,27 @@ describe("executeResearchRun", () => {
     expect(storedProject.insights.competitorSignals).toContain(
       "릴스가 편집 자동화를 밀고 있다"
     );
+    expect(storedProject.memory.decisionLedger[0]).toMatchObject({
+      runId: run.run.id,
+      title: "숏츠 시장 진입",
+      decision: "go",
+      confidence: "high"
+    });
+    expect(storedProject.memory.topicLedger).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          topicKey: "short-form-demand",
+          count: 1,
+          highTrustCount: 1
+        }),
+        expect.objectContaining({
+          topicKey: "competitor-loop",
+          count: 1,
+          highTrustCount: 1
+        })
+      ])
+    );
+    expect(storedProject.memory.contradictionLedger).toEqual([]);
   });
 
   it("persists expansion once at collecting and keeps it stable across later stages", async () => {
