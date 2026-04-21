@@ -170,6 +170,24 @@ const TOOLS: ToolDefinition[] = [
     }
   },
   {
+    name: "execute_recommended_action",
+    description: "Execute an action object returned by recommendedNextAction or nextToolCall.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            arguments: { type: "object" }
+          },
+          required: ["name", "arguments"]
+        }
+      },
+      required: ["action"]
+    }
+  },
+  {
     name: "fetch_web",
     description: "Fetch a single URL through the router and return one SourceArtifact. Never throws; failures return an artifact.",
     inputSchema: {
@@ -454,6 +472,13 @@ function optionalStringArray(value: unknown, name: string): string[] | undefined
     throw new Error(`${name} must be a non-empty string array`);
   }
   return value;
+}
+
+function requireObject(value: unknown, name: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${name} must be an object`);
+  }
+  return value as Record<string, unknown>;
 }
 
 function toToolResult(payload: unknown) {
@@ -1001,7 +1026,7 @@ async function callTool(
     promoteDigestToProject?: typeof promoteDigestToProject;
     runSchedulerTick?: typeof runSchedulerTick;
   }
-) {
+): Promise<ReturnType<typeof toToolResult>> {
   const projectId = args?.projectId;
   const runId = args?.runId;
   const executeResearchRunFn = deps?.executeResearchRun ?? executeResearchRun;
@@ -1102,6 +1127,21 @@ async function callTool(
       return toToolResult({
         ...withMcpSummary(record),
         followupCandidate
+      });
+    }
+    case "execute_recommended_action": {
+      const action = requireObject(args?.action, "action");
+      const actionName = requireString(action.name, "action.name");
+      if (actionName === "execute_recommended_action") {
+        throw new Error("execute_recommended_action cannot execute itself");
+      }
+      const actionArgs = requireObject(action.arguments, "action.arguments");
+      return toToolResult({
+        executedAction: {
+          name: actionName,
+          arguments: actionArgs
+        },
+        result: (await callTool(actionName, actionArgs, deps)).structuredContent
       });
     }
     case "fetch_web": {
