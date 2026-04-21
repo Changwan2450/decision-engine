@@ -31,6 +31,10 @@ type RecentShape = {
   extraParams?: Record<string, string>;
 };
 
+type ComparisonCandidate = {
+  query: string;
+};
+
 const DEFAULT_SOURCES: ExpandedSource[] = ["jina-search", "reddit-search", "hn-algolia"];
 
 function encodeBaseQuery(input: NormalizedRunInput): string {
@@ -55,23 +59,61 @@ function dedupeCaseInsensitive(values: string[]): string[] {
   return deduped;
 }
 
-function resolveComparisonTokens(
+function buildComparisonQueriesFromTokens(
+  baseQuery: string,
+  tokens: string[]
+): ComparisonCandidate[] {
+  return tokens.map((token) => ({
+    query: `${baseQuery} vs ${token}`
+  }));
+}
+
+function inferComparisonQueryFromText(text: string): string | null {
+  const normalized = text
+    .normalize("NFKC")
+    .replace(/\s*[—–|:]\s*.*/u, "")
+    .trim();
+  const match = normalized.match(/^(.+?)\s+(vs|versus|대)\s+(.+)$/iu);
+  if (!match) return null;
+
+  const left = match[1]?.trim();
+  const operator = match[2]?.trim();
+  const right = match[3]?.trim();
+  if (!left || !operator || !right) return null;
+
+  return `${left} ${operator} ${right}`;
+}
+
+function resolveComparisonQueries(
   input: NormalizedRunInput,
   options: ExpansionOptions
-): string[] {
+): ComparisonCandidate[] {
   const limit = options.maxComparisonTokens ?? 3;
 
   if (options.comparisonTokens) {
-    return dedupeCaseInsensitive(
+    return buildComparisonQueriesFromTokens(
+      encodeBaseQuery(input),
       options.comparisonTokens.map((token) => token.trim()).filter(Boolean)
-    ).slice(0, limit);
+    )
+      .filter((candidate, index, all) =>
+        all.findIndex((entry) => entry.query.toLowerCase() === candidate.query.toLowerCase()) === index
+      )
+      .slice(0, limit);
   }
 
-  if (!input.comparisonAxis) return [];
+  if (input.comparisonAxis) {
+    return buildComparisonQueriesFromTokens(
+      encodeBaseQuery(input),
+      dedupeCaseInsensitive(
+        input.comparisonAxis.split(",").map((token) => token.trim()).filter(Boolean)
+      ).slice(0, limit)
+    );
+  }
 
-  return dedupeCaseInsensitive(
-    input.comparisonAxis.split(",").map((token) => token.trim()).filter(Boolean)
-  ).slice(0, limit);
+  const inferred =
+    inferComparisonQueryFromText(input.title) ??
+    inferComparisonQueryFromText(input.naturalLanguage);
+  return inferred ? [{ query: inferred }] : [];
 }
 
 function shapeRecentForSource(
@@ -136,12 +178,12 @@ function buildUrl(
 function resolveAxes(
   input: NormalizedRunInput,
   options: ExpansionOptions,
-  comparisonTokens: string[]
+  comparisonQueries: ComparisonCandidate[]
 ): ExpansionAxis[] {
   if (options.axes) return options.axes;
 
   const axes: ExpansionAxis[] = ["official", "recent"];
-  if (comparisonTokens.length > 0) axes.push("comparison");
+  if (comparisonQueries.length > 0) axes.push("comparison");
   return axes;
 }
 
@@ -159,13 +201,14 @@ export function expandQuery(
   const maxPerAxis = options.maxPerAxis ?? 3;
   const maxUrlsPerRun =
     options.maxUrlsPerRun ?? getResearchBudgetConfig().maxUrlsPerRun;
-  const comparisonTokens = resolveComparisonTokens(input, options);
-  const axes = resolveAxes(input, options, comparisonTokens);
+  const comparisonQueries = resolveComparisonQueries(input, options);
+  const axes = resolveAxes(input, options, comparisonQueries);
 
   if (input.urls.length >= maxUrlsPerRun) {
     let wouldHaveGenerated = 0;
     for (const axis of axes) {
-      const tokenCount = axis === "comparison" ? Math.max(comparisonTokens.length, 1) : 1;
+      const tokenCount =
+        axis === "comparison" ? Math.max(comparisonQueries.length, 1) : 1;
       wouldHaveGenerated += Math.min(maxPerAxis, tokenCount * sources.length);
     }
     return { expanded: [], dropped: wouldHaveGenerated };
@@ -180,7 +223,7 @@ export function expandQuery(
     let addedForAxis = 0;
     const candidates =
       axis === "comparison"
-        ? comparisonTokens.map((token) => ({ query: `${baseQuery} vs ${token}` }))
+        ? comparisonQueries
         : axis === "counter"
           ? [{ query: `${baseQuery} problems OR issues OR drawbacks OR 단점 OR 문제` }]
           : [{ query: baseQuery }];

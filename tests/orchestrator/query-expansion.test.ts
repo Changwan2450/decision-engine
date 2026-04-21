@@ -96,6 +96,60 @@ describe("expandQuery", () => {
     ]);
   });
 
+  it("infers comparison expansion from a title-level vs query when comparisonAxis is empty", () => {
+    const result = expandQuery(
+      {
+        title: "TypeScript monolith vs microservices — 팀 생산성 판단",
+        naturalLanguage: "",
+        pastedContent: "",
+        urls: [],
+        goal: "",
+        target: "",
+        comparisonAxis: ""
+      },
+      {
+        sources: ["jina-search"],
+        now: new Date("2026-04-18T00:00:00.000Z")
+      }
+    );
+
+    expect(result.expanded.filter((entry) => entry.axis === "comparison")).toEqual([
+      {
+        axis: "comparison",
+        query: "TypeScript monolith vs microservices",
+        source: "jina-search",
+        url: "https://s.jina.ai/?q=TypeScript+monolith+vs+microservices"
+      }
+    ]);
+  });
+
+  it("infers comparison expansion from Korean-English mixed titles", () => {
+    const result = expandQuery(
+      {
+        title: "React Server Components vs SPA — 실전 도입 후회",
+        naturalLanguage: "",
+        pastedContent: "",
+        urls: [],
+        goal: "",
+        target: "",
+        comparisonAxis: ""
+      },
+      {
+        sources: ["reddit-search"],
+        now: new Date("2026-04-18T00:00:00.000Z")
+      }
+    );
+
+    expect(result.expanded.filter((entry) => entry.axis === "comparison")).toEqual([
+      {
+        axis: "comparison",
+        query: "React Server Components vs SPA",
+        source: "reddit-search",
+        url: "https://www.reddit.com/search.json?q=React+Server+Components+vs+SPA&limit=25"
+      }
+    ]);
+  });
+
   it("includes counter axis only when explicitly requested", () => {
     const result = expandQuery(
       {
