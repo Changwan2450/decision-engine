@@ -172,7 +172,12 @@ const AMBIGUOUS_LONG_TOKEN_GUARD = new Set([
   "server",
   "component",
   "components",
-  "typescript"
+  "typescript",
+  "agent",
+  "agents",
+  "memory",
+  "prompt",
+  "prompts"
 ]);
 
 function isLongToken(token: string): boolean {
@@ -652,10 +657,13 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
         return false;
       }
       const ambiguousLongTokenCount = ambiguousLongTokens.length;
-      const requiredMatches =
+      let requiredMatches =
         ambiguousLongTokenCount === longTokens.length && ambiguousLongTokenCount >= 4
           ? 3
           : 2;
+      if (shortTokens.length > 0 && ambiguousLongTokenCount >= 3) {
+        requiredMatches = Math.max(requiredMatches, 3);
+      }
       return distinctMatchCount >= requiredMatches;
     }
     return true;

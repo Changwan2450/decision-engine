@@ -852,6 +852,53 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
   });
 
+  it("drops noisy AI agent-memory posts unless three broad title tokens match", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Rogue AI agents found each other and improved their own memory",
+                  selftext: "agent memory story with no prompt stuffing angle",
+                  permalink: "/r/artificial/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a2",
+                  title: "AI agent memory vs prompt stuffing in production",
+                  selftext: "tradeoffs in real systems",
+                  permalink: "/r/LocalLLaMA/comments/a2/example",
+                  created_utc: 1_700_000_100
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=AI+agent+memory+vs+prompt+stuffing"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("AI agent memory vs prompt stuffing in production");
+    expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
+  });
+
   it("drops long-anchor posts that match only one long token from a multi-token query", async () => {
     const adapter = createCommunitySearchJsonAdapter({
       exec: async () => ({
