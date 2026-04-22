@@ -131,6 +131,23 @@ Current coverage floor pack:
 - `react-rsc-vs-spa`
 - `rag-vs-long-context-korean`
 
+## Conditional Contradiction Retrieval
+
+Contradiction retrieval is not a global objective.
+It is enabled only for contradiction-sensitive queries and dispute verification.
+
+Requirements:
+
+- minimum counterevidence per case: `1`
+- max false contradiction rate: `0.2`
+- required trust classes: `2`
+
+Current conditional contradiction pack:
+
+- `ai-memory-vs-prompt-stuffing`
+- `vendor-claim-verification-rsc`
+- `policy-memo-rag-vs-finetune`
+
 ## Next Step
 
 The next slice should turn this contract into a stricter search eval harness:

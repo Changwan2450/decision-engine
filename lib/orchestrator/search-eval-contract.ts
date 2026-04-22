@@ -57,6 +57,13 @@ export type CoverageFloorRequirements = {
   maxAllowedCoverageOnlyCases: number;
 };
 
+export type ConditionalContradictionRequirements = {
+  activationRule: string;
+  minimumCounterevidencePerCase: number;
+  maxFalseContradictionRate: number;
+  requiredTrustClasses: number;
+};
+
 export const SEARCH_EVAL_CONTRACT_VERSION = "2026-04-22.v1";
 
 export const SEARCH_EVAL_METRIC_MATRIX: Record<
@@ -244,6 +251,37 @@ export const COVERAGE_FLOOR_SEARCH_EVAL_CASES: SearchEvalCase[] = [
     id: "rag-vs-long-context-korean",
     runType: "comparison_tradeoff_analysis",
     primaryBottleneck: "coverage_floor",
+    languageMix: "korean_english_mixed",
+    heldOut: true
+  }
+] as const;
+
+export const CONDITIONAL_CONTRADICTION_REQUIREMENTS: ConditionalContradictionRequirements = {
+  activationRule: "enable only for contradiction-sensitive query types or explicit dispute verification",
+  minimumCounterevidencePerCase: 1,
+  maxFalseContradictionRate: 0.2,
+  requiredTrustClasses: 2
+} as const;
+
+export const CONDITIONAL_CONTRADICTION_SEARCH_EVAL_CASES: SearchEvalCase[] = [
+  {
+    id: "ai-memory-vs-prompt-stuffing",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "conditional_contradiction_retrieval",
+    languageMix: "korean_english_mixed",
+    heldOut: false
+  },
+  {
+    id: "vendor-claim-verification-rsc",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "conditional_contradiction_retrieval",
+    languageMix: "english_only",
+    heldOut: true
+  },
+  {
+    id: "policy-memo-rag-vs-finetune",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "conditional_contradiction_retrieval",
     languageMix: "korean_english_mixed",
     heldOut: true
   }

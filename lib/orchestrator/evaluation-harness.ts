@@ -8,6 +8,7 @@ import {
   NON_COMPENSATORY_SHIP_BLOCKERS
 } from "@/lib/orchestrator/research-quality-contract";
 import {
+  CONDITIONAL_CONTRADICTION_SEARCH_EVAL_CASES,
   COVERAGE_FLOOR_SEARCH_EVAL_CASES,
   DOMAIN_SHIFTED_SEARCH_EVAL_CASES,
   SOURCE_COMPETITION_SEARCH_EVAL_CASES,
@@ -134,6 +135,7 @@ export type EvaluationHarnessReport = {
     heldOutCaseCount: number;
     sourceCompetitionCaseCount: number;
     coverageFloorCaseCount: number;
+    conditionalContradictionCaseCount: number;
   };
   summary: EvaluationReportSummary;
   evaluatedSamples: EvaluatedRunSampleSummary;
@@ -491,6 +493,7 @@ export function renderEvaluationMarkdownReport(report: EvaluationHarnessReport):
     `- heldOutCaseCount: ${report.searchContract.heldOutCaseCount}`,
     `- sourceCompetitionCaseCount: ${report.searchContract.sourceCompetitionCaseCount}`,
     `- coverageFloorCaseCount: ${report.searchContract.coverageFloorCaseCount}`,
+    `- conditionalContradictionCaseCount: ${report.searchContract.conditionalContradictionCaseCount}`,
     ""
   );
 
@@ -530,6 +533,9 @@ export function buildSearchContractSummary(): EvaluationHarnessReport["searchCon
   const domainShiftedSummary = summarizeSearchEvalCases(DOMAIN_SHIFTED_SEARCH_EVAL_CASES);
   const sourceCompetitionSummary = summarizeSearchEvalCases(SOURCE_COMPETITION_SEARCH_EVAL_CASES);
   const coverageFloorSummary = summarizeSearchEvalCases(COVERAGE_FLOOR_SEARCH_EVAL_CASES);
+  const conditionalContradictionSummary = summarizeSearchEvalCases(
+    CONDITIONAL_CONTRADICTION_SEARCH_EVAL_CASES
+  );
   return {
     version: SEARCH_EVAL_CONTRACT_VERSION,
     measuredMetrics: Object.entries(SEARCH_EVAL_METRIC_MATRIX)
@@ -540,7 +546,8 @@ export function buildSearchContractSummary(): EvaluationHarnessReport["searchCon
     domainShiftedCaseCount: domainShiftedSummary.totalCases,
     heldOutCaseCount: domainShiftedSummary.heldOutCases,
     sourceCompetitionCaseCount: sourceCompetitionSummary.totalCases,
-    coverageFloorCaseCount: coverageFloorSummary.totalCases
+    coverageFloorCaseCount: coverageFloorSummary.totalCases,
+    conditionalContradictionCaseCount: conditionalContradictionSummary.totalCases
   };
 }
 

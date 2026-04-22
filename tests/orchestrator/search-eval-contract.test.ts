@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  CONDITIONAL_CONTRADICTION_REQUIREMENTS,
+  CONDITIONAL_CONTRADICTION_SEARCH_EVAL_CASES,
   COVERAGE_FLOOR_REQUIREMENTS,
   COVERAGE_FLOOR_SEARCH_EVAL_CASES,
   DEFAULT_SEARCH_EVAL_CASES,
@@ -173,6 +175,39 @@ describe("search-eval-contract", () => {
       languageMixCounts: {
         korean_english_mixed: 3,
         english_only: 0
+      }
+    });
+  });
+
+  it("treats contradiction retrieval as a conditional mode under trust constraints", () => {
+    expect(CONDITIONAL_CONTRADICTION_REQUIREMENTS).toEqual({
+      activationRule: "enable only for contradiction-sensitive query types or explicit dispute verification",
+      minimumCounterevidencePerCase: 1,
+      maxFalseContradictionRate: 0.2,
+      requiredTrustClasses: 2
+    });
+    expect(CONDITIONAL_CONTRADICTION_SEARCH_EVAL_CASES.map((entry) => entry.id)).toEqual([
+      "ai-memory-vs-prompt-stuffing",
+      "vendor-claim-verification-rsc",
+      "policy-memo-rag-vs-finetune"
+    ]);
+    expect(
+      summarizeSearchEvalCases(CONDITIONAL_CONTRADICTION_SEARCH_EVAL_CASES)
+    ).toEqual({
+      totalCases: 3,
+      heldOutCases: 2,
+      bottleneckCounts: {
+        domain_shifted_recall: 0,
+        source_competition_ranking: 0,
+        coverage_floor: 0,
+        conditional_contradiction_retrieval: 3
+      },
+      runTypeCounts: {
+        comparison_tradeoff_analysis: 3
+      },
+      languageMixCounts: {
+        korean_english_mixed: 2,
+        english_only: 1
       }
     });
   });
