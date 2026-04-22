@@ -7,6 +7,15 @@ import {
   BASELINE_HARNESS_RULE,
   NON_COMPENSATORY_SHIP_BLOCKERS
 } from "@/lib/orchestrator/research-quality-contract";
+import {
+  SEARCH_EVAL_CONTRACT_VERSION,
+  SEARCH_EVAL_METRIC_MATRIX,
+  SEARCH_NON_SIGNAL_PROXY_BAN_LIST,
+  SEARCH_POLICY_GUARDRAILS,
+  summarizeSearchSignals,
+  type SearchEvalMetricId,
+  type SearchSignalSummary
+} from "@/lib/orchestrator/search-eval-contract";
 
 export type EvaluationBudget = {
   min?: number;
@@ -112,10 +121,18 @@ export type EvaluationReportSummary = {
 
 export type EvaluationHarnessReport = {
   projectId: string;
+  searchContract: {
+    version: string;
+    measuredMetrics: SearchEvalMetricId[];
+    proxyBanCount: number;
+    guardrailCount: number;
+  };
   summary: EvaluationReportSummary;
   evaluatedSamples: EvaluatedRunSampleSummary;
   results: EvaluationCaseResult[];
 };
+
+export { summarizeSearchSignals };
 
 export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
   {
@@ -452,8 +469,18 @@ export function renderEvaluationMarkdownReport(report: EvaluationHarnessReport):
     for (const caseId of report.summary.failedCaseIds) {
       lines.push(`- ${caseId}`);
     }
-    lines.push("");
+      lines.push("");
   }
+
+  lines.push(
+    "## Search Eval Contract",
+    "",
+    `- version: \`${report.searchContract.version}\``,
+    `- measuredMetrics: ${report.searchContract.measuredMetrics.join(", ")}`,
+    `- proxyBanCount: ${report.searchContract.proxyBanCount}`,
+    `- guardrailCount: ${report.searchContract.guardrailCount}`,
+    ""
+  );
 
   lines.push(
     "## Evaluated Run Samples",
@@ -485,6 +512,17 @@ export function renderEvaluationMarkdownReport(report: EvaluationHarnessReport):
   }
 
   return lines.join("\n");
+}
+
+export function buildSearchContractSummary(): EvaluationHarnessReport["searchContract"] {
+  return {
+    version: SEARCH_EVAL_CONTRACT_VERSION,
+    measuredMetrics: Object.entries(SEARCH_EVAL_METRIC_MATRIX)
+      .filter(([, definition]) => definition.measurable)
+      .map(([metricId]) => metricId as SearchEvalMetricId),
+    proxyBanCount: SEARCH_NON_SIGNAL_PROXY_BAN_LIST.length,
+    guardrailCount: SEARCH_POLICY_GUARDRAILS.length
+  };
 }
 
 function assertBudget(

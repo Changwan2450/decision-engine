@@ -6,6 +6,7 @@ import {
   evaluateSummary,
   listNonCompensatoryShipBlockers,
   renderEvaluationMarkdownReport,
+  summarizeSearchSignals,
   summarizeEvaluatedRunSamples,
   summarizeEvaluationResults,
   summarizeEvaluationRun
@@ -231,6 +232,138 @@ describe("evaluation-harness", () => {
     });
   });
 
+  it("summarizes measurable search signals for retrieval policy evaluation", () => {
+    const record = {
+      run: {
+        id: "run-1",
+        projectId: "project-1",
+        title: "React Server Components vs SPA — 실전 도입 후회",
+        mode: "standard",
+        status: "decided",
+        clarificationQuestions: [],
+        input: {
+          naturalLanguage: "",
+          pastedContent: "",
+          urls: []
+        },
+        createdAt: "2026-04-21T00:00:00.000Z",
+        updatedAt: "2026-04-21T00:00:00.000Z"
+      },
+      watchContext: null,
+      projectOrigin: null,
+      normalizedInput: null,
+      expansion: null,
+      kbContext: null,
+      decision: null,
+      prdSeed: null,
+      artifacts: [
+        {
+          id: "artifact-1",
+          adapter: "community-search-json",
+          sourceType: "community",
+          title: "App Router (RSC) vs SPA",
+          url: "https://example.com/community",
+          canonicalUrl: "https://example.com/community",
+          snippet: "snippet",
+          content: "content",
+          sourcePriority: "community",
+          metadata: {
+            fetcher: "community-search-json",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        },
+        {
+          id: "artifact-2",
+          adapter: "agent-reach",
+          sourceType: "web",
+          title: "React Server Components docs",
+          url: "https://react.dev/rsc",
+          canonicalUrl: "https://react.dev/rsc",
+          snippet: "snippet",
+          content: "content",
+          sourcePriority: "official",
+          metadata: {
+            fetcher: "agent-reach",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        }
+      ],
+      claims: [
+        {
+          id: "claim-1",
+          artifactId: "artifact-1",
+          text: "RSC can reduce client bundle size in some paths",
+          topicKey: "server-components",
+          stance: "support",
+          citationIds: ["citation-1"]
+        },
+        {
+          id: "claim-2",
+          artifactId: "artifact-2",
+          text: "React documents a server/client split model",
+          topicKey: "server-components",
+          stance: "oppose",
+          citationIds: ["citation-2"]
+        }
+      ],
+      citations: [
+        {
+          id: "citation-1",
+          artifactId: "artifact-1",
+          url: "https://example.com/community",
+          title: "App Router (RSC) vs SPA",
+          priority: "community"
+        },
+        {
+          id: "citation-2",
+          artifactId: "artifact-2",
+          url: "https://react.dev/rsc",
+          title: "React Server Components docs",
+          priority: "official"
+        }
+      ],
+      contradictions: [
+        {
+          id: "contradiction-1",
+          claimIds: ["claim-1", "claim-2"],
+          status: "flagged",
+          resolution: "unresolved",
+          kind: "mixed",
+          tierA: "community",
+          tierB: "official"
+        }
+      ],
+      evidenceSummary: null,
+      advisory: null
+    } satisfies RunRecord;
+
+    expect(summarizeSearchSignals(record)).toEqual({
+      supportEvidenceCount: 1,
+      counterevidenceCount: 1,
+      contradictionCount: 1,
+      falseContradictionRate: 0,
+      trustWeightedSourceDiversity: 4,
+      decisiveEvidencePosition: 1,
+      measuredMetrics: [
+        "support_recall_floor",
+        "counterevidence_recall_floor",
+        "false_contradiction_rate",
+        "trust_weighted_source_diversity",
+        "decisive_evidence_position"
+      ],
+      unmeasuredMetrics: [
+        "manual_rescue_rate",
+        "appropriate_abstention_rate"
+      ]
+    });
+  });
+
   it("enforces non-compensatory blockers in baseline comparison", () => {
     expect(
       evaluateBaselineGuardrails({
@@ -287,6 +420,18 @@ describe("evaluation-harness", () => {
   it("renders a markdown proof report for operator-visible evidence", () => {
     const markdown = renderEvaluationMarkdownReport({
       projectId: "project-1",
+      searchContract: {
+        version: "2026-04-22.v1",
+        measuredMetrics: [
+          "support_recall_floor",
+          "counterevidence_recall_floor",
+          "false_contradiction_rate",
+          "trust_weighted_source_diversity",
+          "decisive_evidence_position"
+        ],
+        proxyBanCount: 5,
+        guardrailCount: 4
+      },
       summary: {
         totalCases: 1,
         passedCases: 1,
@@ -345,6 +490,8 @@ describe("evaluation-harness", () => {
 
     expect(markdown).toContain("# Research Engine Evaluation Report");
     expect(markdown).toContain("projectId: `project-1`");
+    expect(markdown).toContain("## Search Eval Contract");
+    expect(markdown).toContain("support_recall_floor");
     expect(markdown).toContain("### react-rsc-vs-spa");
     expect(markdown).toContain("App Router (RSC) vs SPA");
   });

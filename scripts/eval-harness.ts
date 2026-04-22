@@ -2,6 +2,7 @@
 import { createProjectRecord, readRunRecord } from "@/lib/storage/workspace";
 import { handleMcpRequest } from "@/lib/mcp/server";
 import {
+  buildSearchContractSummary,
   DEFAULT_EVALUATED_RUN_SAMPLES,
   DEFAULT_EVALUATION_CASES,
   evaluateSummary,
@@ -85,7 +86,17 @@ async function main() {
     )
   );
   process.stdout.write(
-    `${JSON.stringify({ projectId, summary: report, evaluatedSamples, results }, null, 2)}\n`
+    `${JSON.stringify(
+      {
+        projectId,
+        searchContract: buildSearchContractSummary(),
+        summary: report,
+        evaluatedSamples,
+        results
+      },
+      null,
+      2
+    )}\n`
   );
   if (hasFailure) {
     process.exit(1);

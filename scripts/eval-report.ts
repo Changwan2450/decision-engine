@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { createProjectRecord, readRunRecord } from "@/lib/storage/workspace";
 import { handleMcpRequest } from "@/lib/mcp/server";
 import {
+  buildSearchContractSummary,
   DEFAULT_EVALUATED_RUN_SAMPLES,
   DEFAULT_EVALUATION_CASES,
   evaluateSummary,
@@ -101,6 +102,7 @@ async function buildReport(): Promise<EvaluationHarnessReport> {
 
   return {
     projectId,
+    searchContract: buildSearchContractSummary(),
     summary: summarizeEvaluationResults(results),
     evaluatedSamples: summarizeEvaluatedRunSamples(
       cases,
