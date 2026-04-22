@@ -5,10 +5,18 @@ export type EvaluationBudget = {
   max?: number;
 };
 
+export type ResearchRunType =
+  | "exploratory_scan"
+  | "comparison_tradeoff_analysis"
+  | "longitudinal_watch"
+  | "contradiction_resolution"
+  | "pre_decision_verification";
+
 export type EvaluationCase = {
   id: string;
   title: string;
   query: string;
+  runType: ResearchRunType;
   tags: string[];
   expected: {
     communityCount: EvaluationBudget;
@@ -36,11 +44,33 @@ export type EvaluationResult = {
 
 export type EvaluationCaseResult = {
   id: string;
+  runType: ResearchRunType;
   tags: string[];
   summary: EvaluationSummary;
   expected: EvaluationCase["expected"];
   pass: boolean;
   failures: string[];
+};
+
+export type EvaluatedRunSample = {
+  id: string;
+  caseId: string;
+  runType: ResearchRunType;
+  judgedAt: string;
+  basis: "manual_review";
+  summary: {
+    overall: "good" | "mixed" | "bad";
+    strengths: string[];
+    concerns: string[];
+    blockers: string[];
+  };
+};
+
+export type EvaluatedRunSampleSummary = {
+  totalSamples: number;
+  coveredCaseIds: string[];
+  missingCaseIds: string[];
+  runTypeCounts: Record<ResearchRunType, number>;
 };
 
 export type EvaluationReportSummary = {
@@ -64,6 +94,7 @@ export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
   {
     id: "react-rsc-vs-spa",
     title: "React Server Components vs SPA — 실전 도입 후회",
+    runType: "comparison_tradeoff_analysis",
     query: [
       "React Server Components vs SPA",
       "목표: 결정",
@@ -81,6 +112,7 @@ export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
   {
     id: "typescript-monolith-vs-microservices",
     title: "TypeScript monolith vs microservices — 팀 생산성 판단",
+    runType: "comparison_tradeoff_analysis",
     query: [
       "TypeScript monolith vs microservices",
       "목표: 결정",
@@ -98,6 +130,7 @@ export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
   {
     id: "rust-vs-go",
     title: "Rust vs Go for systems programming — 팀 도입 결정",
+    runType: "comparison_tradeoff_analysis",
     query: [
       "Rust vs Go for systems programming",
       "목표: 결정",
@@ -115,6 +148,7 @@ export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
   {
     id: "ai-memory-vs-prompt-stuffing",
     title: "AI agent memory vs prompt stuffing — 구조 선택",
+    runType: "comparison_tradeoff_analysis",
     query: [
       "AI agent memory vs prompt stuffing",
       "목표: 결정",
@@ -127,6 +161,75 @@ export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
       contradictionCount: { max: 0 },
       leakedAuthClaimCount: { max: 0 },
       placeholderCount: { max: 0 }
+    }
+  }
+];
+
+export const DEFAULT_EVALUATED_RUN_SAMPLES: EvaluatedRunSample[] = [
+  {
+    id: "sample-react-rsc-vs-spa",
+    caseId: "react-rsc-vs-spa",
+    runType: "comparison_tradeoff_analysis",
+    judgedAt: "2026-04-22T00:00:00.000Z",
+    basis: "manual_review",
+    summary: {
+      overall: "good",
+      strengths: [
+        "placeholder/auth leak 없이 comparative evidence를 회수한다",
+        "off-topic community noise가 과거 대비 줄어들었다"
+      ],
+      concerns: ["contradiction yield가 0으로 보수적이다"],
+      blockers: []
+    }
+  },
+  {
+    id: "sample-typescript-monolith-vs-microservices",
+    caseId: "typescript-monolith-vs-microservices",
+    runType: "comparison_tradeoff_analysis",
+    judgedAt: "2026-04-22T00:00:00.000Z",
+    basis: "manual_review",
+    summary: {
+      overall: "good",
+      strengths: [
+        "domain-shifted comparative query의 recall을 회복했다",
+        "broad TypeScript noise가 이전보다 줄었다"
+      ],
+      concerns: ["architecture 일반론이 일부 남을 수 있다"],
+      blockers: []
+    }
+  },
+  {
+    id: "sample-rust-vs-go",
+    caseId: "rust-vs-go",
+    runType: "comparison_tradeoff_analysis",
+    judgedAt: "2026-04-22T00:00:00.000Z",
+    basis: "manual_review",
+    summary: {
+      overall: "good",
+      strengths: [
+        "community signal 양이 충분하고 placeholder/auth leak이 없다",
+        "systems programming comparative query에서 안정적이다"
+      ],
+      concerns: ["contradiction yield는 query에 따라 0 또는 1로 흔들릴 수 있다"],
+      blockers: []
+    }
+  },
+  {
+    id: "sample-ai-memory-vs-prompt-stuffing",
+    caseId: "ai-memory-vs-prompt-stuffing",
+    runType: "comparison_tradeoff_analysis",
+    judgedAt: "2026-04-22T00:00:00.000Z",
+    basis: "manual_review",
+    summary: {
+      overall: "mixed",
+      strengths: [
+        "broad AI noise를 크게 줄이면서 relevant signal을 일부 회수한다"
+      ],
+      concerns: [
+        "coverage floor가 낮아 recall 민감도가 높다",
+        "comparative evidence diversity가 다른 cases보다 약하다"
+      ],
+      blockers: []
     }
   }
 ];
@@ -238,6 +341,35 @@ export function summarizeEvaluationResults(
       coverage: metricFailures.communityCount === 0,
       contradiction: metricFailures.contradictionCount === 0
     }
+  };
+}
+
+export function summarizeEvaluatedRunSamples(
+  cases: EvaluationCase[],
+  samples: EvaluatedRunSample[]
+): EvaluatedRunSampleSummary {
+  const coveredCaseIds = Array.from(new Set(samples.map((sample) => sample.caseId)));
+  const missingCaseIds = cases
+    .map((entry) => entry.id)
+    .filter((caseId) => !coveredCaseIds.includes(caseId));
+
+  const runTypeCounts: Record<ResearchRunType, number> = {
+    exploratory_scan: 0,
+    comparison_tradeoff_analysis: 0,
+    longitudinal_watch: 0,
+    contradiction_resolution: 0,
+    pre_decision_verification: 0
+  };
+
+  for (const sample of samples) {
+    runTypeCounts[sample.runType] += 1;
+  }
+
+  return {
+    totalSamples: samples.length,
+    coveredCaseIds,
+    missingCaseIds,
+    runTypeCounts
   };
 }
 

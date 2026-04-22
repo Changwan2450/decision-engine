@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_EVALUATED_RUN_SAMPLES,
   DEFAULT_EVALUATION_CASES,
   evaluateSummary,
+  summarizeEvaluatedRunSamples,
   summarizeEvaluationResults,
   summarizeEvaluationRun
 } from "@/lib/orchestrator/evaluation-harness";
@@ -117,6 +119,11 @@ describe("evaluation-harness", () => {
       "ai-memory-vs-prompt-stuffing"
     ]);
     expect(DEFAULT_EVALUATION_CASES.every((entry) => entry.tags.includes("comparative"))).toBe(true);
+    expect(
+      DEFAULT_EVALUATION_CASES.every(
+        (entry) => entry.runType === "comparison_tradeoff_analysis"
+      )
+    ).toBe(true);
   });
 
   it("summarizes case results into adoption-friendly gate status", () => {
@@ -124,6 +131,7 @@ describe("evaluation-harness", () => {
       summarizeEvaluationResults([
         {
           id: "react-rsc-vs-spa",
+          runType: "comparison_tradeoff_analysis",
           tags: ["comparative"],
           summary: {
             runId: "run-1",
@@ -146,6 +154,7 @@ describe("evaluation-harness", () => {
         },
         {
           id: "ai-memory-vs-prompt-stuffing",
+          runType: "comparison_tradeoff_analysis",
           tags: ["comparative", "ai"],
           summary: {
             runId: "run-2",
@@ -185,6 +194,35 @@ describe("evaluation-harness", () => {
         trust: false,
         coverage: false,
         contradiction: false
+      }
+    });
+  });
+
+  it("tracks manual evaluated run samples as bootstrap evidence for the contract", () => {
+    expect(DEFAULT_EVALUATED_RUN_SAMPLES.map((entry) => entry.caseId)).toEqual([
+      "react-rsc-vs-spa",
+      "typescript-monolith-vs-microservices",
+      "rust-vs-go",
+      "ai-memory-vs-prompt-stuffing"
+    ]);
+
+    expect(
+      summarizeEvaluatedRunSamples(DEFAULT_EVALUATION_CASES, DEFAULT_EVALUATED_RUN_SAMPLES)
+    ).toEqual({
+      totalSamples: 4,
+      coveredCaseIds: [
+        "react-rsc-vs-spa",
+        "typescript-monolith-vs-microservices",
+        "rust-vs-go",
+        "ai-memory-vs-prompt-stuffing"
+      ],
+      missingCaseIds: [],
+      runTypeCounts: {
+        exploratory_scan: 0,
+        comparison_tradeoff_analysis: 4,
+        longitudinal_watch: 0,
+        contradiction_resolution: 0,
+        pre_decision_verification: 0
       }
     });
   });

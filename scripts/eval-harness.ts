@@ -2,8 +2,10 @@
 import { createProjectRecord, readRunRecord } from "@/lib/storage/workspace";
 import { handleMcpRequest } from "@/lib/mcp/server";
 import {
+  DEFAULT_EVALUATED_RUN_SAMPLES,
   DEFAULT_EVALUATION_CASES,
   evaluateSummary,
+  summarizeEvaluatedRunSamples,
   summarizeEvaluationResults,
   summarizeEvaluationRun
 } from "@/lib/orchestrator/evaluation-harness";
@@ -66,6 +68,7 @@ async function main() {
     hasFailure = hasFailure || !evaluation.pass;
     results.push({
       id: testCase.id,
+      runType: testCase.runType,
       tags: testCase.tags,
       summary,
       expected: testCase.expected,
@@ -75,7 +78,15 @@ async function main() {
   }
 
   const report = summarizeEvaluationResults(results);
-  process.stdout.write(`${JSON.stringify({ projectId, summary: report, results }, null, 2)}\n`);
+  const evaluatedSamples = summarizeEvaluatedRunSamples(
+    cases,
+    DEFAULT_EVALUATED_RUN_SAMPLES.filter((sample) =>
+      cases.some((entry) => entry.id === sample.caseId)
+    )
+  );
+  process.stdout.write(
+    `${JSON.stringify({ projectId, summary: report, evaluatedSamples, results }, null, 2)}\n`
+  );
   if (hasFailure) {
     process.exit(1);
   }
