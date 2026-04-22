@@ -1,16 +1,10 @@
 import type { RunRecord } from "@/lib/storage/schema";
+import type { ResearchRunType } from "@/lib/orchestrator/research-quality-contract";
 
 export type EvaluationBudget = {
   min?: number;
   max?: number;
 };
-
-export type ResearchRunType =
-  | "exploratory_scan"
-  | "comparison_tradeoff_analysis"
-  | "longitudinal_watch"
-  | "contradiction_resolution"
-  | "pre_decision_verification";
 
 export type EvaluationCase = {
   id: string;
