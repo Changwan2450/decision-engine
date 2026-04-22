@@ -96,6 +96,14 @@ function normalizeComparisonQuery(query: string): string {
     return "AI agent memory vs RAG stuffing";
   }
 
+  if (
+    lower.includes("postgres") &&
+    lower.includes("rls") &&
+    lower.includes("authorization")
+  ) {
+    return "Postgres row level security vs application authorization";
+  }
+
   return normalized;
 }
 

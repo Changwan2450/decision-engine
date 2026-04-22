@@ -475,6 +475,48 @@ describe("evidence synthesis", () => {
     expect(synthesis.contradictions).toHaveLength(0);
   });
 
+  it("drops navigation bullets and falls back to official doc paragraphs", () => {
+    const artifacts: SourceArtifact[] = [
+      {
+        id: "artifact-postgres-doc",
+        adapter: "scrapling",
+        sourceType: "web",
+        title: "www.postgresql.org/ddl-rowsecurity.html",
+        url: "https://www.postgresql.org/docs/current/ddl-rowsecurity.html",
+        snippet: "",
+        content: [
+          "[](/)",
+          "",
+          "- [Home](/)",
+          "",
+          "- [Documentation](/docs/)",
+          "",
+          "## 5.9. Row Security Policies",
+          "",
+          "In addition to the SQL-standard privilege system available through GRANT, tables can have row security policies that restrict, on a per-user basis, which rows can be returned by normal queries or inserted, updated, or deleted by data modification commands.",
+          "",
+          "When row security is enabled on a table, all normal access to the table for selecting rows or modifying rows must be allowed by a row security policy. If no policy exists for the table, a default-deny policy is used, meaning that no rows are visible or can be modified."
+        ].join("\n"),
+        sourcePriority: "official",
+        metadata: {}
+      }
+    ];
+
+    const synthesis = synthesizeEvidenceFromArtifacts(artifacts, {
+      now: "2026-04-23T00:00:00.000Z",
+      recencySensitive: false
+    });
+
+    expect(synthesis.claims).toHaveLength(2);
+    expect(synthesis.claims[0].text).toContain("row security policies");
+    expect(synthesis.claims[0].text).not.toContain("Home");
+    expect(synthesis.claims[1].text).toContain("default-deny policy");
+    expect(synthesis.claims[0]).toMatchObject({
+      sourceTier: "official",
+      trustTier: "high"
+    });
+  });
+
   it("keeps real titles in anchor context", () => {
     const artifacts: SourceArtifact[] = [
       {

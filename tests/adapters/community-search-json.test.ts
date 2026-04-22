@@ -56,6 +56,17 @@ describe("isCommunitySearchJsonUrl()", () => {
 });
 
 describe("createCommunitySearchJsonAdapter()", () => {
+  it("does not support community search urls when community target is disabled", () => {
+    const adapter = createCommunitySearchJsonAdapter();
+
+    expect(
+      adapter.supports({
+        ...makePlan(["https://www.reddit.com/search.json?q=postgres+rls"]),
+        sourceTargets: ["web"]
+      })
+    ).toBe(false);
+  });
+
   it("fans out reddit t3 search hits into one artifact per post", async () => {
     const normalize = vi.fn(async ({ payload }) => String(payload));
     const storeRaw = vi.fn(async () => "p/runs/r/raw/community-search-json/x.json");
@@ -2322,5 +2333,127 @@ describe("createCommunitySearchJsonAdapter()", () => {
 
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0].title).toBe("Monorepo vs Polyrepo debate");
+  });
+
+  it("drops off-topic access-control posts for postgres rls comparative queries and keeps row-level-security matches", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "My birth control was tampered with",
+                  selftext: "I need advice",
+                  permalink: "/r/relationships/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a2",
+                  title: "Postgres row level security vs application authorization",
+                  selftext: "Tenant isolation tradeoffs in SaaS",
+                  permalink: "/r/postgres/comments/a2/example",
+                  created_utc: 1_700_000_100
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=Postgres+RLS+vs+app+authorization+%E2%80%94+B2B+SaaS+access+control"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe(
+      "Postgres row level security vs application authorization"
+    );
+    expect(artifacts[0].metadata.community_filter_dropped).toBe("1");
+  });
+
+  it("drops live-like postgres rls security noise and keeps only access-control relevant titles", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title:
+                    "Ex-Gaijin CM (13 years): former employees retained access to player data",
+                  selftext: "security and disclosure incident",
+                  permalink: "/r/games/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a2",
+                  title:
+                    "Postgres row level security vs application authorization for multi-tenant SaaS",
+                  selftext: "tenant isolation and auditability tradeoffs",
+                  permalink: "/r/postgresql/comments/a2/example",
+                  created_utc: 1_700_000_100
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a3",
+                  title:
+                    "I have created a high-level programming language for developping secure web applications",
+                  selftext: "generic security platform pitch",
+                  permalink: "/r/programming/comments/a3/example",
+                  created_utc: 1_700_000_200
+                }
+              },
+              {
+                kind: "t3",
+                data: {
+                  id: "a4",
+                  title:
+                    "The client requested that I use PostgreSQL instead of MongoDB",
+                  selftext: "generic enterprise database discussion",
+                  permalink: "/r/webdev/comments/a4/example",
+                  created_utc: 1_700_000_300
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=Postgres+row+level+security+vs+application+authorization"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toContain(
+      "Postgres row level security vs application authorization"
+    );
+    expect(artifacts[0].metadata.community_filter_dropped).toBe("3");
   });
 });

@@ -248,6 +248,9 @@ export function createCommunitySearchJsonAdapter(deps?: CreateOpts): ResearchAda
   return {
     name: ADAPTER_NAME,
     supports(plan: ResearchPlan) {
+      if (!plan.sourceTargets.includes("community")) {
+        return false;
+      }
       return plan.normalizedInput.urls.some((url) => isCommunitySearchJsonUrl(url));
     },
     async execute(plan: ResearchPlan) {
@@ -344,7 +347,7 @@ async function fetchSearchUrl(args: {
   try {
     const parsed = parseSearchBody(url, response.body);
     const filtered = parsed.items.filter((item) =>
-      isPostRelevant(item.title, item.relevanceBody ?? item.content, tokens)
+      isPostRelevant(item.title, item.relevanceBody ?? item.content, tokens, query ?? "")
     );
     droppedCount = parsed.items.length - filtered.length;
     items = filtered.map((item) => ({
@@ -634,9 +637,15 @@ function extractDistinctiveTokens(query: string): {
   };
 }
 
-function isPostRelevant(title: string, body: string, tokens: string[]): boolean {
+function isPostRelevant(
+  title: string,
+  body: string,
+  tokens: string[],
+  rawQuery: string
+): boolean {
   if (tokens.length === 0) return true;
   const normalizedTitle = title.normalize("NFKC").toLowerCase();
+  const normalizedQuery = rawQuery.normalize("NFKC").toLowerCase();
   const longTokens = tokens.filter(isLongToken);
   if (longTokens.length > 0) {
     const shortTokens = tokens.filter((token) => !isLongToken(token));
@@ -648,6 +657,19 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
       ambiguousLongTokens.includes("react") &&
       ambiguousLongTokens.includes("server") &&
       ambiguousLongTokens.includes("components");
+    const hasPostgresRlsAuthorizationQuery =
+      (longTokens.includes("postgres") &&
+        ((shortTokens.includes("rls") &&
+          (longTokens.includes("authorization") || longTokens.includes("application"))) ||
+          (longTokens.includes("level") &&
+            longTokens.includes("security") &&
+            (longTokens.includes("authorization") || longTokens.includes("application"))))) ||
+      (matchesToken(normalizedQuery, "postgres") &&
+        (matchesToken(normalizedQuery, "rls") ||
+          normalizedQuery.includes("row level security")) &&
+        (matchesToken(normalizedQuery, "authorization") ||
+          normalizedQuery.includes("app authorization") ||
+          normalizedQuery.includes("application authorization")));
     const hasReactServerComponentsPhrase =
       normalizedTitle.includes("react server components") ||
       (matchesToken(normalizedTitle, "react") &&
@@ -656,9 +678,24 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
       hasReactServerComponentsPhrase ||
       (matchesToken(normalizedTitle, "rsc") &&
         (normalizedTitle.includes("app router") || matchesToken(normalizedTitle, "spa")));
+    const hasPostgresRlsAlias =
+      (matchesToken(normalizedTitle, "postgres") || normalizedTitle.includes("postgresql")) &&
+      (normalizedTitle.includes("row level security") || matchesToken(normalizedTitle, "rls"));
+    const hasAppAuthorizationAlias =
+      matchesToken(normalizedTitle, "authorization") ||
+      matchesToken(normalizedTitle, "auth") ||
+      matchesToken(normalizedTitle, "application") ||
+      matchesToken(normalizedTitle, "app") ||
+      matchesToken(normalizedTitle, "tenant");
+    const hasPostgresAuthorizationTarget =
+      hasPostgresRlsAlias &&
+      (longTokens.includes("authorization") || longTokens.includes("application"));
     const matchedLongTokens = longTokens.filter((token) =>
       matchesAmbiguousLongToken(normalizedTitle, token)
     );
+    if (hasPostgresRlsAuthorizationQuery) {
+      return hasPostgresAuthorizationTarget && hasAppAuthorizationAlias;
+    }
     if (
       matchedLongTokens.length === 0 &&
       hasReactServerComponentsQuery &&

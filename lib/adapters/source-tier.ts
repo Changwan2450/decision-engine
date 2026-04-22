@@ -17,7 +17,10 @@ const COMMUNITY_HOSTS = new Set([
   "news.ycombinator.com"
 ]);
 
-const OFFICIAL_HOSTS = new Set<string>([]);
+const OFFICIAL_HOSTS = new Set<string>([
+  "postgresql.org",
+  "www.postgresql.org"
+]);
 
 const PRIMARY_HOSTS = new Set<string>([]);
 

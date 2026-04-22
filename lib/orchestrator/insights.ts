@@ -174,6 +174,51 @@ function shouldSuppressFallbackClaims(artifact: SourceArtifact): boolean {
   );
 }
 
+function normalizeFallbackClaimText(text: string): string {
+  return text
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/gu, "$1")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function isLowSignalFallbackClaimLine(text: string): boolean {
+  const normalized = normalizeFallbackClaimText(text);
+
+  if (!normalized) {
+    return true;
+  }
+
+  return (
+    /^[-/|]+$/u.test(normalized) ||
+    /^(home|about|download|documentation|community|developers|support|donate|your account)$/iu.test(
+      normalized
+    ) ||
+    /^(prev|up|next)$/iu.test(normalized) ||
+    /^(supported versions|development versions|unsupported versions|sql commands)$/iu.test(
+      normalized
+    ) ||
+    /^chapter\s+\d+/iu.test(normalized)
+  );
+}
+
+function extractFallbackParagraphClaims(raw: string): ClaimSeed[] {
+  const paragraphs = raw
+    .split(/\n\s*\n/gu)
+    .map((paragraph) => normalizeFallbackClaimText(paragraph))
+    .filter((paragraph) => paragraph.length >= 120)
+    .filter((paragraph) => !paragraph.startsWith("## "))
+    .filter((paragraph) => !isLowSignalFallbackClaimText(paragraph))
+    .filter((paragraph) => !isLowSignalFallbackClaimLine(paragraph))
+    .map((paragraph) => {
+      const sentences = paragraph.match(/[^.!?]+[.!?]+/gu) ?? [paragraph];
+      return sentences.slice(0, 2).join(" ").trim();
+    })
+    .filter((paragraph) => paragraph.length >= 80)
+    .slice(0, 3);
+
+  return paragraphs.map((text) => ({ text, stance: inferClaimStance(text) }));
+}
+
 function parseClaimSeeds(artifact: SourceArtifact): ClaimSeed[] {
   const serialized = artifact.metadata.claims_json;
 
@@ -191,17 +236,29 @@ function parseClaimSeeds(artifact: SourceArtifact): ClaimSeed[] {
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.startsWith("- "))
-    .map((line) => line.replace(/^- /, "").trim());
+    .map((line) => line.replace(/^- /, "").trim())
+    .map((line) => normalizeFallbackClaimText(line))
+    .filter((line) => !isLowSignalFallbackClaimLine(line));
 
   if (lines.length > 0) {
     return lines.map((text) => ({ text, stance: inferClaimStance(text) }));
+  }
+
+  const paragraphClaims = extractFallbackParagraphClaims(raw);
+  if (paragraphClaims.length > 0) {
+    return paragraphClaims;
   }
 
   if (!raw || isLowSignalFallbackClaimText(raw)) {
     return [];
   }
 
-  return [{ text: raw, stance: inferClaimStance(raw) }];
+  const normalized = normalizeFallbackClaimText(raw);
+  if (!normalized || isLowSignalFallbackClaimLine(normalized)) {
+    return [];
+  }
+
+  return [{ text: normalized, stance: inferClaimStance(normalized) }];
 }
 
 function comparePriority(left: Citation, right: Citation): number {

@@ -177,6 +177,33 @@ describe("expandQuery", () => {
     ]);
   });
 
+  it("normalizes postgres rls comparative queries toward row-level-security wording", () => {
+    const result = expandQuery(
+      {
+        title: "Postgres RLS vs app authorization — B2B SaaS access control",
+        naturalLanguage: "",
+        pastedContent: "",
+        urls: [],
+        goal: "",
+        target: "",
+        comparisonAxis: ""
+      },
+      {
+        sources: ["reddit-search"],
+        now: new Date("2026-04-23T00:00:00.000Z")
+      }
+    );
+
+    expect(result.expanded.filter((entry) => entry.axis === "comparison")).toEqual([
+      {
+        axis: "comparison",
+        query: "Postgres row level security vs application authorization",
+        source: "reddit-search",
+        url: "https://www.reddit.com/search.json?q=Postgres+row+level+security+vs+application+authorization&limit=25"
+      }
+    ]);
+  });
+
   it("prefers inferred title comparison over comparisonAxis tokens when the title is already comparative", () => {
     const result = expandQuery(
       {

@@ -24,6 +24,8 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
+import { createHash } from "node:crypto";
+
 import type {
   ResearchAdapter,
   ResearchPlan,
@@ -167,7 +169,7 @@ async function fetchOne(args: {
   } = args;
   const canonical = canonicalize(url);
   const sourceType = classifyUrl(url);
-  const id = `${ADAPTER_NAME}-${index}`;
+  const id = `${ADAPTER_NAME}-${hashString(canonical || url || String(index))}`;
 
   let response: ScraplingResponse | null = null;
   let outcome: FetchOutcome = failedOutcome("error");
@@ -366,6 +368,10 @@ function coerceDateIso(s: string | undefined): string | undefined {
 
 function defaultSnippet(text: string): string {
   return text.replace(/\s+/g, " ").trim().slice(0, 240);
+}
+
+function hashString(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 8);
 }
 
 function pickRawPayload(

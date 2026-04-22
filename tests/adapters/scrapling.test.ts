@@ -122,6 +122,7 @@ describe("createScraplingAdapter() — success path", () => {
     const [a] = await adapter.execute(makePlan(["https://example.com/a"]));
     expect(a).toBeDefined();
     expect(a.adapter).toBe("scrapling");
+    expect(a.id).toMatch(/^scrapling-[a-f0-9]{8}$/);
     expect(a.sourceType).toBe("web");
     expect(a.title).toBe("Hello world");
     expect(a.content).toBe("Page body text here.");
@@ -160,6 +161,20 @@ describe("createScraplingAdapter() — success path", () => {
     );
     expect(a.sourceType).toBe("community");
     expect(a.metadata.source_label).toBe("community/success");
+  });
+
+  it("uses distinct artifact ids for different urls in the same run", async () => {
+    const adapter = createScraplingAdapter({
+      now: fixedNow,
+      exec: makeExec({ status: "success", title: "t", text: "body" }),
+      normalize: async () => "body",
+      storeRaw: async () => "p/runs/r/raw/scrapling/fake.txt"
+    });
+
+    const [a] = await adapter.execute(makePlan(["https://example.com/a"]));
+    const [b] = await adapter.execute(makePlan(["https://example.com/b"]));
+
+    expect(a.id).not.toBe(b.id);
   });
 
   it("tags Korean community hosts as community", async () => {
@@ -449,11 +464,8 @@ describe("createScraplingAdapter() — multi-URL batching", () => {
       ])
     );
     expect(result).toHaveLength(3);
-    expect(result.map((r) => r.id)).toEqual([
-      "scrapling-0",
-      "scrapling-1",
-      "scrapling-2"
-    ]);
+    expect(new Set(result.map((r) => r.id)).size).toBe(3);
+    expect(result.every((r) => /^scrapling-[a-f0-9]{8}$/.test(r.id))).toBe(true);
     for (const a of result) {
       assertMetadataContract(a.metadata);
       expect(a.metadata.fetch_status).toBe("success");
