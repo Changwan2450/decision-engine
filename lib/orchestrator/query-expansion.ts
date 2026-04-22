@@ -84,6 +84,21 @@ function inferComparisonQueryFromText(text: string): string | null {
   return `${left} ${operator} ${right}`;
 }
 
+function normalizeComparisonQuery(query: string): string {
+  const normalized = query.normalize("NFKC");
+  const lower = normalized.toLowerCase();
+
+  if (
+    lower.includes("memory") &&
+    lower.includes("prompt stuffing") &&
+    (lower.includes("ai") || lower.includes("agent"))
+  ) {
+    return "AI agent memory vs RAG stuffing";
+  }
+
+  return normalized;
+}
+
 function resolveComparisonQueries(
   input: NormalizedRunInput,
   options: ExpansionOptions
@@ -106,7 +121,7 @@ function resolveComparisonQueries(
 
   if (input.comparisonAxis) {
     if (inferred) {
-      return [{ query: inferred }];
+      return [{ query: normalizeComparisonQuery(inferred) }];
     }
     return buildComparisonQueriesFromTokens(
       encodeBaseQuery(input),
@@ -116,7 +131,7 @@ function resolveComparisonQueries(
     );
   }
 
-  return inferred ? [{ query: inferred }] : [];
+  return inferred ? [{ query: normalizeComparisonQuery(inferred) }] : [];
 }
 
 function shapeRecentForSource(

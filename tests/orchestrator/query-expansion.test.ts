@@ -150,6 +150,33 @@ describe("expandQuery", () => {
     ]);
   });
 
+  it("normalizes unstable prompt-stuffing comparison queries toward rag stuffing", () => {
+    const result = expandQuery(
+      {
+        title: "AI agent memory vs prompt stuffing — 구조 선택",
+        naturalLanguage: "",
+        pastedContent: "",
+        urls: [],
+        goal: "",
+        target: "",
+        comparisonAxis: ""
+      },
+      {
+        sources: ["reddit-search"],
+        now: new Date("2026-04-18T00:00:00.000Z")
+      }
+    );
+
+    expect(result.expanded.filter((entry) => entry.axis === "comparison")).toEqual([
+      {
+        axis: "comparison",
+        query: "AI agent memory vs RAG stuffing",
+        source: "reddit-search",
+        url: "https://www.reddit.com/search.json?q=AI+agent+memory+vs+RAG+stuffing&limit=25"
+      }
+    ]);
+  });
+
   it("prefers inferred title comparison over comparisonAxis tokens when the title is already comparative", () => {
     const result = expandQuery(
       {

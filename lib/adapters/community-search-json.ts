@@ -735,6 +735,23 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
       if (
         shortTokens.includes("ai") &&
         matchedAmbiguousLongTokens.includes("memory") &&
+        specificAsciiLongTokens.includes("stuffing") &&
+        normalizedTitle.includes("this week in memory")
+      ) {
+        return false;
+      }
+      if (
+        shortTokens.includes("ai") &&
+        matchedAmbiguousLongTokens.includes("memory") &&
+        specificAsciiLongTokens.includes("stuffing") &&
+        !matchesToken(normalizedTitle, "stuffing") &&
+        !AI_MEMORY_RESCUE_SIGNAL.some((token) => matchesToken(normalizedTitle, token))
+      ) {
+        return false;
+      }
+      if (
+        shortTokens.includes("ai") &&
+        matchedAmbiguousLongTokens.includes("memory") &&
         AI_MEMORY_RESCUE_SIGNAL.some((token) => matchesToken(normalizedTitle, token))
       ) {
         return true;

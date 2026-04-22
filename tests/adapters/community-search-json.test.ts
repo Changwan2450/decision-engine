@@ -1082,6 +1082,78 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts[0].title).toBe("Your ChatGPT Memory Isn’t What You Think It Is");
   });
 
+  it("drops generic AI memory incident posts when stuffing is missing and no rescue signal exists", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title:
+                    'The Lobstar Wilde $450K loss was a memory failure that affects every AI agent with a wallet',
+                  selftext: "incident report",
+                  permalink: "/r/ai/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=AI+agent+memory+vs+RAG+stuffing&limit=25"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(0);
+  });
+
+  it("drops generic ai memory roundup posts for stuffing comparisons", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title:
+                    "This Week in Memory: Hypergraph RAG, Claude Expands Memory to All Paid Users",
+                  selftext: "weekly roundup",
+                  permalink: "/r/mem0/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=AI+agent+memory+vs+RAG+stuffing&limit=25"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(0);
+  });
+
   it("still drops AI memory noise without strong model or agent context", async () => {
     const adapter = createCommunitySearchJsonAdapter({
       exec: async () => ({

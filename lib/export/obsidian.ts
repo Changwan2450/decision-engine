@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, stat, writeFile as writeFileFs } from "node:fs/promises";
+import { mkdir, realpath, stat, writeFile as writeFileFs } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { OBSIDIAN_VAULT_PATH } from "@/lib/config";
@@ -8,6 +8,7 @@ import type { DecisionHistoryItem } from "@/lib/orchestrator/decision-history";
 import type { ProjectRecord, RunRecord } from "@/lib/storage/schema";
 
 const execFileAsync = promisify(execFile);
+let resolvedQmdNodeBinDir: string | null | undefined;
 
 function getVaultRoot(): string {
   return process.env.OBSIDIAN_VAULT_PATH ?? OBSIDIAN_VAULT_PATH;
@@ -56,10 +57,41 @@ async function pathExists(targetPath: string): Promise<boolean> {
   }
 }
 
+async function resolveQmdNodeBinDir(): Promise<string | null> {
+  if (resolvedQmdNodeBinDir !== undefined) {
+    return resolvedQmdNodeBinDir;
+  }
+
+  try {
+    const { stdout } = await execFileAsync("sh", ["-lc", "command -v qmd"]);
+    const qmdPath = stdout.trim();
+    if (!qmdPath) {
+      resolvedQmdNodeBinDir = null;
+      return resolvedQmdNodeBinDir;
+    }
+
+    const realQmdPath = await realpath(qmdPath);
+    const packageRoot = path.dirname(path.dirname(realQmdPath));
+    const nodePath = path.join(packageRoot, "..", "..", "..", "..", "bin", "node");
+    resolvedQmdNodeBinDir = path.dirname(nodePath);
+    return resolvedQmdNodeBinDir;
+  } catch {
+    resolvedQmdNodeBinDir = null;
+    return resolvedQmdNodeBinDir;
+  }
+}
+
 async function runKbScript(vaultRoot: string, scriptName: string, extraArgs: string[] = []) {
   const scriptPath = path.join(vaultRoot, "scripts", scriptName);
+  const qmdNodeBinDir = await resolveQmdNodeBinDir();
   const result = await execFileAsync("python3", [scriptPath, "--root", vaultRoot, ...extraArgs], {
-    cwd: vaultRoot
+    cwd: vaultRoot,
+    env: {
+      ...process.env,
+      PATH: qmdNodeBinDir
+        ? `${qmdNodeBinDir}${path.delimiter}${process.env.PATH ?? ""}`
+        : process.env.PATH
+    }
   }).then(
     (value) => ({ stdout: value.stdout, stderr: value.stderr }),
     (error: NodeJS.ErrnoException & { stdout?: string; stderr?: string }) => {
