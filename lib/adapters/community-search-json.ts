@@ -639,18 +639,39 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
   const normalizedTitle = title.normalize("NFKC").toLowerCase();
   const longTokens = tokens.filter(isLongToken);
   if (longTokens.length > 0) {
+    const shortTokens = tokens.filter((token) => !isLongToken(token));
+    const ambiguousLongTokens = longTokens.filter((token) =>
+      AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
+    );
+    const hasReactServerComponentsQuery =
+      shortTokens.includes("spa") &&
+      ambiguousLongTokens.includes("react") &&
+      ambiguousLongTokens.includes("server") &&
+      ambiguousLongTokens.includes("components");
+    const hasReactServerComponentsPhrase =
+      normalizedTitle.includes("react server components") ||
+      (matchesToken(normalizedTitle, "react") &&
+        normalizedTitle.includes("server components"));
+    const hasReactServerComponentsAlias =
+      hasReactServerComponentsPhrase ||
+      (matchesToken(normalizedTitle, "rsc") &&
+        (normalizedTitle.includes("app router") || matchesToken(normalizedTitle, "spa")));
     const matchedLongTokens = longTokens.filter((token) =>
       matchesAmbiguousLongToken(normalizedTitle, token)
     );
+    if (
+      matchedLongTokens.length === 0 &&
+      hasReactServerComponentsQuery &&
+      matchesToken(normalizedTitle, "spa") &&
+      hasReactServerComponentsAlias
+    ) {
+      return true;
+    }
     if (matchedLongTokens.length === 0) {
       return false;
     }
     if (longTokens.some((token) => AMBIGUOUS_LONG_TOKEN_GUARD.has(token))) {
       const distinctMatchCount = new Set(matchedLongTokens).size;
-      const shortTokens = tokens.filter((token) => !isLongToken(token));
-      const ambiguousLongTokens = longTokens.filter((token) =>
-        AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
-      );
       const nonAmbiguousLongTokens = longTokens.filter(
         (token) => !AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
       );
@@ -673,15 +694,6 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
       const hasAiAmbiguousLongTokens = ambiguousLongTokens.some((token) =>
         AI_AMBIGUOUS_LONG_TOKEN_GUARD.has(token)
       );
-      const hasReactServerComponentsQuery =
-        shortTokens.includes("spa") &&
-        ambiguousLongTokens.includes("react") &&
-        ambiguousLongTokens.includes("server") &&
-        ambiguousLongTokens.includes("components");
-      const hasReactServerComponentsPhrase =
-        normalizedTitle.includes("react server components") ||
-        (matchesToken(normalizedTitle, "react") &&
-          normalizedTitle.includes("server components"));
       if (
         shortTokens.length === 0 &&
         nonAmbiguousLongTokens.length > 0 &&
@@ -692,9 +704,25 @@ function isPostRelevant(title: string, body: string, tokens: string[]): boolean 
       if (
         hasReactServerComponentsQuery &&
         !matchesToken(normalizedTitle, "spa") &&
-        !hasReactServerComponentsPhrase
+        !hasReactServerComponentsAlias
       ) {
         return false;
+      }
+      if (
+        hasReactServerComponentsQuery &&
+        !matchesToken(normalizedTitle, "spa") &&
+        !matchesToken(normalizedTitle, "rsc") &&
+        !normalizedTitle.includes("app router") &&
+        (normalizedTitle.includes("vulnerab") || normalizedTitle.includes("security"))
+      ) {
+        return false;
+      }
+      if (
+        hasReactServerComponentsQuery &&
+        matchesToken(normalizedTitle, "spa") &&
+        hasReactServerComponentsAlias
+      ) {
+        return true;
       }
       if (
         shortTokens.length > 0 &&

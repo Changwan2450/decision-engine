@@ -1363,6 +1363,77 @@ describe("createCommunitySearchJsonAdapter()", () => {
     expect(artifacts[0].title).toBe("How are folks feeling about React Server Components?");
   });
 
+  it("keeps react comparative posts with app-router rsc alias", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "App Router (RSC) vs SPA in production: regrets and lessons",
+                  selftext: "migration discussion",
+                  permalink: "/r/reactjs/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=React+Server+Components+vs+SPA+%EB%8F%84%EC%9E%85+%ED%9B%84%ED%9A%8C"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].title).toBe("App Router (RSC) vs SPA in production: regrets and lessons");
+  });
+
+  it("drops security posts for react comparative queries without comparative markers", async () => {
+    const adapter = createCommunitySearchJsonAdapter({
+      exec: async () => ({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            children: [
+              {
+                kind: "t3",
+                data: {
+                  id: "a1",
+                  title: "Critical Security Vulnerability in React Server Components",
+                  selftext: "security advisory",
+                  permalink: "/r/reactjs/comments/a1/example",
+                  created_utc: 1_700_000_000
+                }
+              }
+            ]
+          }
+        })
+      }),
+      now: fixedNow,
+      normalize: async ({ payload }) => String(payload),
+      storeRaw: async () => "p/runs/r/raw/community-search-json/reddit.json"
+    });
+
+    const artifacts = await adapter.execute(
+      makePlan([
+        "https://www.reddit.com/search.json?q=React+Server+Components+vs+SPA+%EB%8F%84%EC%9E%85+%ED%9B%84%ED%9A%8C"
+      ])
+    );
+
+    expect(artifacts).toHaveLength(0);
+  });
+
   it("drops server-components posts that omit react in comparative react queries", async () => {
     const adapter = createCommunitySearchJsonAdapter({
       exec: async () => ({
