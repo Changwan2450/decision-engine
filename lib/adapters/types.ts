@@ -62,6 +62,7 @@ export type KnowledgeContext = {
     contextClass: string | null;
     preferredComparisonAxes: string[];
     prioritizedTopics: string[];
+    trustQualifiedTopics: string[];
     reviewBias: "fresh_first" | "comparison_axes_first" | "contradiction_first";
     appliedAdjustments: string[];
   } | null;

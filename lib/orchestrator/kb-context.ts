@@ -276,13 +276,19 @@ export async function buildKnowledgeContext(params: {
   const currentContextClass = CONTEXT_BOUNDARY_SPEC.classes[currentRunType];
   const preferredComparisonAxes = takeUnique(
     activeDecisionLedger
-      .filter((entry) => entry.contextClass === currentContextClass)
+      .filter(
+        (entry) =>
+          entry.contextClass === currentContextClass &&
+          entry.confidence === "high" &&
+          !!entry.comparisonAxis
+      )
       .map((entry) => entry.comparisonAxis ?? "")
       .filter(Boolean),
     3
   );
-  const prioritizedTopics = takeUnique(
+  const trustQualifiedTopics = takeUnique(
     activeTopicLedger
+      .filter((entry) => entry.highTrustCount > 0)
       .sort((left, right) => {
         const leftScore = left.highTrustCount * 10 + left.count;
         const rightScore = right.highTrustCount * 10 + right.count;
@@ -292,8 +298,17 @@ export async function buildKnowledgeContext(params: {
       .map((entry) => entry.topicKey),
     2
   );
+  const prioritizedTopics = takeUnique(
+    trustQualifiedTopics.length > 0
+      ? trustQualifiedTopics
+      : activeTopicLedger
+          .sort((left, right) => right.count - left.count || right.lastSeenAt.localeCompare(left.lastSeenAt))
+          .slice(0, 2)
+          .map((entry) => entry.topicKey),
+    2
+  );
   const reviewBias: "fresh_first" | "comparison_axes_first" | "contradiction_first" =
-    activeContradictionLedger.length > 0
+    activeContradictionLedger.length > 0 && trustQualifiedTopics.length > 0
       ? "contradiction_first"
       : preferredComparisonAxes.length > 0
         ? "comparison_axes_first"
@@ -302,10 +317,15 @@ export async function buildKnowledgeContext(params: {
     ...(preferredComparisonAxes.length > 0
       ? [`comparison-axis-priority:${preferredComparisonAxes.join(" | ")}`]
       : []),
+    ...(trustQualifiedTopics.length > 0
+      ? [`trust-topic-priority:${trustQualifiedTopics.join(" | ")}`]
+      : []),
     ...(prioritizedTopics.length > 0
       ? [`topic-priority:${prioritizedTopics.join(" | ")}`]
       : []),
-    ...(activeContradictionLedger.length > 0 ? ["contradiction-first-review"] : [])
+    ...(activeContradictionLedger.length > 0 && trustQualifiedTopics.length > 0
+      ? ["contradiction-first-review"]
+      : [])
   ];
   const adaptivePolicy =
     appliedAdjustments.length > 0
@@ -314,6 +334,7 @@ export async function buildKnowledgeContext(params: {
           contextClass: currentContextClass,
           preferredComparisonAxes,
           prioritizedTopics,
+          trustQualifiedTopics,
           reviewBias,
           appliedAdjustments
         }
@@ -322,6 +343,7 @@ export async function buildKnowledgeContext(params: {
           contextClass: currentContextClass,
           preferredComparisonAxes: [],
           prioritizedTopics: [],
+          trustQualifiedTopics: [],
           reviewBias: "fresh_first" as const,
           appliedAdjustments: []
         };

@@ -241,9 +241,11 @@ describe("kb-context qmd fallback", () => {
       contextClass: "comparison",
       preferredComparisonAxes: ["monorepo vs polyrepo"],
       prioritizedTopics: ["monorepo"],
+      trustQualifiedTopics: ["monorepo"],
       reviewBias: "contradiction_first",
       appliedAdjustments: [
         "comparison-axis-priority:monorepo vs polyrepo",
+        "trust-topic-priority:monorepo",
         "topic-priority:monorepo",
         "contradiction-first-review"
       ]
@@ -356,8 +358,128 @@ describe("kb-context qmd fallback", () => {
       contextClass: "comparison",
       preferredComparisonAxes: [],
       prioritizedTopics: [],
+      trustQualifiedTopics: [],
       reviewBias: "fresh_first",
       appliedAdjustments: []
+    });
+  });
+
+  it("keeps adaptive policy conservative when only low-trust topic memory exists", async () => {
+    setQmdClientForTests({
+      async operatorNotes() {
+        return [];
+      },
+      async queryNotes() {
+        return [];
+      }
+    });
+
+    const context = await buildKnowledgeContext({
+      vaultRoot: "/tmp",
+      record: {
+        run: {
+          id: "run-4",
+          projectId: "project-1",
+          title: "Tradeoff review",
+          mode: "standard",
+          status: "draft",
+          clarificationQuestions: [],
+          input: {
+            naturalLanguage: "tradeoff review",
+            pastedContent: "",
+            urls: []
+          },
+          createdAt: "2026-04-21T00:00:00.000Z",
+          updatedAt: "2026-04-21T00:00:00.000Z"
+        },
+        watchContext: null,
+        projectOrigin: null,
+        normalizedInput: {
+          title: "Tradeoff review",
+          naturalLanguage: "tradeoff review",
+          pastedContent: "",
+          urls: [],
+          goal: "결정",
+          target: "팀",
+          comparisonAxis: "A vs B"
+        },
+        expansion: null,
+        kbContext: null,
+        decision: null,
+        prdSeed: null,
+        artifacts: [],
+        claims: [],
+        citations: [],
+        contradictions: [],
+        evidenceSummary: null,
+        advisory: null
+      },
+      projectRecord: {
+        project: {
+          id: "project-1",
+          name: "Project",
+          description: "desc",
+          createdAt: "2026-04-20T00:00:00.000Z",
+          updatedAt: "2026-04-21T00:00:00.000Z"
+        },
+        insights: {
+          repeatedProblems: [],
+          repeatedPatterns: [],
+          competitorSignals: [],
+          contradictionIds: []
+        },
+        memory: {
+          decisionLedger: [
+            {
+              runId: "run-1",
+              title: "Low-confidence prior",
+              decision: "go",
+              confidence: "medium",
+              why: "partial",
+              createdAt: "2026-04-20T00:00:00.000Z",
+              comparisonAxis: "legacy axis",
+              runType: "comparison_tradeoff_analysis",
+              contextClass: "comparison",
+              contractVersion: "2026-04-22.v1",
+              retainedAt: "2026-04-20T00:00:00.000Z",
+              expiresAt: "2026-05-20T00:00:00.000Z"
+            }
+          ],
+          topicLedger: [
+            {
+              topicKey: "noisy-topic",
+              count: 4,
+              highTrustCount: 0,
+              lastSeenAt: "2026-04-20T00:00:00.000Z",
+              contractVersion: "2026-04-22.v1",
+              retainedAt: "2026-04-20T00:00:00.000Z",
+              expiresAt: "2026-05-11T00:00:00.000Z"
+            }
+          ],
+          contradictionLedger: [
+            {
+              topicKey: "noisy-topic",
+              count: 2,
+              lastSeenAt: "2026-04-20T00:00:00.000Z",
+              contractVersion: "2026-04-22.v1",
+              retainedAt: "2026-04-20T00:00:00.000Z",
+              expiresAt: "2026-05-11T00:00:00.000Z"
+            }
+          ]
+        },
+        promotionCandidates: []
+      },
+      runRecords: []
+    });
+
+    expect(context.adaptivePolicy).toEqual({
+      mode: "project_adaptive",
+      contextClass: "comparison",
+      preferredComparisonAxes: [],
+      prioritizedTopics: ["noisy-topic"],
+      trustQualifiedTopics: [],
+      reviewBias: "fresh_first",
+      appliedAdjustments: ["topic-priority:noisy-topic"]
     });
   });
 });

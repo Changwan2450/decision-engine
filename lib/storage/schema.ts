@@ -49,6 +49,7 @@ export const knowledgeContextSchema = z.object({
       contextClass: z.string().min(1).nullable().default(null),
       preferredComparisonAxes: z.array(z.string()).default([]),
       prioritizedTopics: z.array(z.string()).default([]),
+      trustQualifiedTopics: z.array(z.string()).default([]),
       reviewBias: z.enum(["fresh_first", "comparison_axes_first", "contradiction_first"]),
       appliedAdjustments: z.array(z.string()).default([])
     })
