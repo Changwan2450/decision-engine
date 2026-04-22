@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_EVALUATED_RUN_SAMPLES,
   DEFAULT_EVALUATION_CASES,
+  evaluateBaselineGuardrails,
   evaluateSummary,
+  listNonCompensatoryShipBlockers,
   summarizeEvaluatedRunSamples,
   summarizeEvaluationResults,
   summarizeEvaluationRun
@@ -194,7 +196,8 @@ describe("evaluation-harness", () => {
         trust: false,
         coverage: false,
         contradiction: false
-      }
+      },
+      blockerIds: []
     });
   });
 
@@ -225,5 +228,58 @@ describe("evaluation-harness", () => {
         pre_decision_verification: 0
       }
     });
+  });
+
+  it("enforces non-compensatory blockers in baseline comparison", () => {
+    expect(
+      evaluateBaselineGuardrails({
+        freshNoMemory: {
+          runId: "fresh",
+          title: "comparison",
+          communityCount: 5,
+          contradictionCount: 1,
+          leakedAuthClaimCount: 0,
+          placeholderCount: 0,
+          runAnchors: [],
+          communityTitles: []
+        },
+        adaptivePolicyOn: {
+          runId: "adaptive",
+          title: "comparison",
+          communityCount: 4,
+          contradictionCount: 0,
+          leakedAuthClaimCount: 0,
+          placeholderCount: 0,
+          runAnchors: [],
+          communityTitles: []
+        },
+        freshnessMinimumViolated: true,
+        provenanceCompletenessRegressed: true
+      })
+    ).toEqual({
+      pass: false,
+      blockerIds: [
+        "contradiction_exposure_regression",
+        "source_diversity_floor_collapse",
+        "freshness_minimum_violation",
+        "provenance_completeness_regression"
+      ],
+      rollbackTriggered: true,
+      comparisonRule:
+        "adaptive_policy_on must beat fresh_no_memory on allowed quality metrics",
+      failRule:
+        "any non-compensatory blocker breach fails regardless of packaging/helpfulness gains",
+      rollbackTrigger: "adaptive policy loses to fresh_no_memory on guarded metrics"
+    });
+  });
+
+  it("keeps ship blockers explicit for enforcement and rollback", () => {
+    expect(listNonCompensatoryShipBlockers()).toEqual([
+      "contradiction_exposure_regression",
+      "source_diversity_floor_collapse",
+      "freshness_minimum_violation",
+      "provenance_completeness_regression",
+      "cross_context_contamination"
+    ]);
   });
 });

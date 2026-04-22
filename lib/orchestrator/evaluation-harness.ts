@@ -1,5 +1,12 @@
 import type { RunRecord } from "@/lib/storage/schema";
-import type { ResearchRunType } from "@/lib/orchestrator/research-quality-contract";
+import type {
+  ResearchRunType,
+  ShipBlockerId
+} from "@/lib/orchestrator/research-quality-contract";
+import {
+  BASELINE_HARNESS_RULE,
+  NON_COMPENSATORY_SHIP_BLOCKERS
+} from "@/lib/orchestrator/research-quality-contract";
 
 export type EvaluationBudget = {
   min?: number;
@@ -34,6 +41,24 @@ export type EvaluationSummary = {
 export type EvaluationResult = {
   pass: boolean;
   failures: string[];
+};
+
+export type BaselineGuardrailInput = {
+  freshNoMemory: EvaluationSummary;
+  adaptivePolicyOn: EvaluationSummary;
+  projectMemoryOnly?: EvaluationSummary;
+  freshnessMinimumViolated?: boolean;
+  provenanceCompletenessRegressed?: boolean;
+  crossContextContamination?: boolean;
+};
+
+export type BaselineGuardrailResult = {
+  pass: boolean;
+  blockerIds: ShipBlockerId[];
+  rollbackTriggered: boolean;
+  comparisonRule: string;
+  failRule: string;
+  rollbackTrigger: string;
 };
 
 export type EvaluationCaseResult = {
@@ -82,6 +107,7 @@ export type EvaluationReportSummary = {
     coverage: boolean;
     contradiction: boolean;
   };
+  blockerIds: ShipBlockerId[];
 };
 
 export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
@@ -334,8 +360,44 @@ export function summarizeEvaluationResults(
         metricFailures.placeholderCount === 0,
       coverage: metricFailures.communityCount === 0,
       contradiction: metricFailures.contradictionCount === 0
-    }
+    },
+    blockerIds: []
   };
+}
+
+export function evaluateBaselineGuardrails(
+  input: BaselineGuardrailInput
+): BaselineGuardrailResult {
+  const blockerIds: ShipBlockerId[] = [];
+
+  if (input.adaptivePolicyOn.contradictionCount < input.freshNoMemory.contradictionCount) {
+    blockerIds.push("contradiction_exposure_regression");
+  }
+  if (input.adaptivePolicyOn.communityCount < input.freshNoMemory.communityCount) {
+    blockerIds.push("source_diversity_floor_collapse");
+  }
+  if (input.freshnessMinimumViolated) {
+    blockerIds.push("freshness_minimum_violation");
+  }
+  if (input.provenanceCompletenessRegressed) {
+    blockerIds.push("provenance_completeness_regression");
+  }
+  if (input.crossContextContamination) {
+    blockerIds.push("cross_context_contamination");
+  }
+
+  return {
+    pass: blockerIds.length === 0,
+    blockerIds,
+    rollbackTriggered: blockerIds.length > 0,
+    comparisonRule: BASELINE_HARNESS_RULE.comparisonRule,
+    failRule: BASELINE_HARNESS_RULE.failRule,
+    rollbackTrigger: BASELINE_HARNESS_RULE.rollbackTrigger
+  };
+}
+
+export function listNonCompensatoryShipBlockers(): ShipBlockerId[] {
+  return Object.keys(NON_COMPENSATORY_SHIP_BLOCKERS) as ShipBlockerId[];
 }
 
 export function summarizeEvaluatedRunSamples(
