@@ -63,11 +63,29 @@ These are not search-quality signals:
 - `ai-memory-vs-prompt-stuffing`
   - primary bottleneck: `conditional_contradiction_retrieval`
 
+## Domain-Shifted Recall Pack
+
+The contract now tracks an expanded domain-shifted recall pack instead of relying only on the fixed 4-case harness.
+
+- total cases: `6`
+- held-out cases: `4`
+- language mix:
+  - `korean_english_mixed`: `4`
+  - `english_only`: `2`
+
+Current domain-shifted pack:
+
+- `react-rsc-vs-spa`
+- `typescript-monolith-vs-microservices`
+- `nextjs-app-router-vs-spa`
+- `rag-vs-long-context-korean`
+- `postgres-rls-vs-app-authorization`
+- `otel-vs-vendor-apm`
+
 ## Next Step
 
 The next slice should turn this contract into a stricter search eval harness:
 
-- expand beyond the fixed 4-case pack
 - add held-out hard queries
 - separate recall failures from synthesis failures
 - add budget and stopping-rule checks to live search evaluation

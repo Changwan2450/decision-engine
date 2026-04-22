@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SEARCH_EVAL_CASES,
+  DOMAIN_SHIFTED_SEARCH_EVAL_CASES,
   SEARCH_EVAL_CONTRACT_VERSION,
   SEARCH_EVAL_METRIC_MATRIX,
   SEARCH_NON_SIGNAL_PROXY_BAN_LIST,
   SEARCH_POLICY_GUARDRAILS,
+  summarizeSearchEvalCases,
   summarizeSearchSignals
 } from "@/lib/orchestrator/search-eval-contract";
 import type { RunRecord } from "@/lib/storage/schema";
@@ -56,6 +58,41 @@ describe("search-eval-contract", () => {
       "source_competition_ranking",
       "conditional_contradiction_retrieval"
     ]);
+  });
+
+  it("ships an expanded domain-shifted recall pack instead of relying on the fixed 4-case set", () => {
+    expect(DOMAIN_SHIFTED_SEARCH_EVAL_CASES.map((entry) => entry.id)).toEqual([
+      "react-rsc-vs-spa",
+      "typescript-monolith-vs-microservices",
+      "nextjs-app-router-vs-spa",
+      "rag-vs-long-context-korean",
+      "postgres-rls-vs-app-authorization",
+      "otel-vs-vendor-apm"
+    ]);
+    expect(
+      DOMAIN_SHIFTED_SEARCH_EVAL_CASES.every(
+        (entry) => entry.primaryBottleneck === "domain_shifted_recall"
+      )
+    ).toBe(true);
+    expect(
+      summarizeSearchEvalCases(DOMAIN_SHIFTED_SEARCH_EVAL_CASES)
+    ).toEqual({
+      totalCases: 6,
+      heldOutCases: 4,
+      bottleneckCounts: {
+        domain_shifted_recall: 6,
+        source_competition_ranking: 0,
+        coverage_floor: 0,
+        conditional_contradiction_retrieval: 0
+      },
+      runTypeCounts: {
+        comparison_tradeoff_analysis: 6
+      },
+      languageMixCounts: {
+        korean_english_mixed: 4,
+        english_only: 2
+      }
+    });
   });
 
   it("summarizes measurable search signals without pretending unmeasurable quality", () => {

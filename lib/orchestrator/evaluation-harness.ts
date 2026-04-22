@@ -8,10 +8,12 @@ import {
   NON_COMPENSATORY_SHIP_BLOCKERS
 } from "@/lib/orchestrator/research-quality-contract";
 import {
+  DOMAIN_SHIFTED_SEARCH_EVAL_CASES,
   SEARCH_EVAL_CONTRACT_VERSION,
   SEARCH_EVAL_METRIC_MATRIX,
   SEARCH_NON_SIGNAL_PROXY_BAN_LIST,
   SEARCH_POLICY_GUARDRAILS,
+  summarizeSearchEvalCases,
   summarizeSearchSignals,
   type SearchEvalMetricId,
   type SearchSignalSummary
@@ -126,6 +128,8 @@ export type EvaluationHarnessReport = {
     measuredMetrics: SearchEvalMetricId[];
     proxyBanCount: number;
     guardrailCount: number;
+    domainShiftedCaseCount: number;
+    heldOutCaseCount: number;
   };
   summary: EvaluationReportSummary;
   evaluatedSamples: EvaluatedRunSampleSummary;
@@ -479,6 +483,8 @@ export function renderEvaluationMarkdownReport(report: EvaluationHarnessReport):
     `- measuredMetrics: ${report.searchContract.measuredMetrics.join(", ")}`,
     `- proxyBanCount: ${report.searchContract.proxyBanCount}`,
     `- guardrailCount: ${report.searchContract.guardrailCount}`,
+    `- domainShiftedCaseCount: ${report.searchContract.domainShiftedCaseCount}`,
+    `- heldOutCaseCount: ${report.searchContract.heldOutCaseCount}`,
     ""
   );
 
@@ -515,13 +521,16 @@ export function renderEvaluationMarkdownReport(report: EvaluationHarnessReport):
 }
 
 export function buildSearchContractSummary(): EvaluationHarnessReport["searchContract"] {
+  const domainShiftedSummary = summarizeSearchEvalCases(DOMAIN_SHIFTED_SEARCH_EVAL_CASES);
   return {
     version: SEARCH_EVAL_CONTRACT_VERSION,
     measuredMetrics: Object.entries(SEARCH_EVAL_METRIC_MATRIX)
       .filter(([, definition]) => definition.measurable)
       .map(([metricId]) => metricId as SearchEvalMetricId),
     proxyBanCount: SEARCH_NON_SIGNAL_PROXY_BAN_LIST.length,
-    guardrailCount: SEARCH_POLICY_GUARDRAILS.length
+    guardrailCount: SEARCH_POLICY_GUARDRAILS.length,
+    domainShiftedCaseCount: domainShiftedSummary.totalCases,
+    heldOutCaseCount: domainShiftedSummary.heldOutCases
   };
 }
 

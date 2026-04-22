@@ -19,6 +19,8 @@ export type SearchEvalCase = {
   id: string;
   runType: "comparison_tradeoff_analysis";
   primaryBottleneck: SearchPrimaryBottleneck;
+  languageMix: "korean_english_mixed" | "english_only";
+  heldOut: boolean;
 };
 
 export type SearchSignalSummary = {
@@ -30,6 +32,14 @@ export type SearchSignalSummary = {
   decisiveEvidencePosition: number | null;
   measuredMetrics: SearchEvalMetricId[];
   unmeasuredMetrics: SearchEvalMetricId[];
+};
+
+export type SearchEvalCaseSummary = {
+  totalCases: number;
+  heldOutCases: number;
+  bottleneckCounts: Record<SearchPrimaryBottleneck, number>;
+  runTypeCounts: Record<SearchEvalCase["runType"], number>;
+  languageMixCounts: Record<SearchEvalCase["languageMix"], number>;
 };
 
 export const SEARCH_EVAL_CONTRACT_VERSION = "2026-04-22.v1";
@@ -90,22 +100,75 @@ export const DEFAULT_SEARCH_EVAL_CASES: SearchEvalCase[] = [
   {
     id: "react-rsc-vs-spa",
     runType: "comparison_tradeoff_analysis",
-    primaryBottleneck: "domain_shifted_recall"
+    primaryBottleneck: "domain_shifted_recall",
+    languageMix: "korean_english_mixed",
+    heldOut: false
   },
   {
     id: "typescript-monolith-vs-microservices",
     runType: "comparison_tradeoff_analysis",
-    primaryBottleneck: "domain_shifted_recall"
+    primaryBottleneck: "domain_shifted_recall",
+    languageMix: "korean_english_mixed",
+    heldOut: false
   },
   {
     id: "rust-vs-go",
     runType: "comparison_tradeoff_analysis",
-    primaryBottleneck: "source_competition_ranking"
+    primaryBottleneck: "source_competition_ranking",
+    languageMix: "korean_english_mixed",
+    heldOut: false
   },
   {
     id: "ai-memory-vs-prompt-stuffing",
     runType: "comparison_tradeoff_analysis",
-    primaryBottleneck: "conditional_contradiction_retrieval"
+    primaryBottleneck: "conditional_contradiction_retrieval",
+    languageMix: "korean_english_mixed",
+    heldOut: false
+  }
+] as const;
+
+export const DOMAIN_SHIFTED_SEARCH_EVAL_CASES: SearchEvalCase[] = [
+  {
+    id: "react-rsc-vs-spa",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "domain_shifted_recall",
+    languageMix: "korean_english_mixed",
+    heldOut: false
+  },
+  {
+    id: "typescript-monolith-vs-microservices",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "domain_shifted_recall",
+    languageMix: "korean_english_mixed",
+    heldOut: false
+  },
+  {
+    id: "nextjs-app-router-vs-spa",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "domain_shifted_recall",
+    languageMix: "english_only",
+    heldOut: true
+  },
+  {
+    id: "rag-vs-long-context-korean",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "domain_shifted_recall",
+    languageMix: "korean_english_mixed",
+    heldOut: true
+  },
+  {
+    id: "postgres-rls-vs-app-authorization",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "domain_shifted_recall",
+    languageMix: "english_only",
+    heldOut: true
+  },
+  {
+    id: "otel-vs-vendor-apm",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "domain_shifted_recall",
+    languageMix: "korean_english_mixed",
+    heldOut: true
   }
 ] as const;
 
@@ -170,5 +233,35 @@ export function summarizeSearchSignals(record: RunRecord): SearchSignalSummary {
     decisiveEvidencePosition,
     measuredMetrics: MEASURED_SEARCH_METRICS,
     unmeasuredMetrics: UNMEASURED_SEARCH_METRICS
+  };
+}
+
+export function summarizeSearchEvalCases(cases: SearchEvalCase[]): SearchEvalCaseSummary {
+  const bottleneckCounts: Record<SearchPrimaryBottleneck, number> = {
+    domain_shifted_recall: 0,
+    source_competition_ranking: 0,
+    coverage_floor: 0,
+    conditional_contradiction_retrieval: 0
+  };
+  const runTypeCounts: Record<SearchEvalCase["runType"], number> = {
+    comparison_tradeoff_analysis: 0
+  };
+  const languageMixCounts: Record<SearchEvalCase["languageMix"], number> = {
+    korean_english_mixed: 0,
+    english_only: 0
+  };
+
+  for (const entry of cases) {
+    bottleneckCounts[entry.primaryBottleneck] += 1;
+    runTypeCounts[entry.runType] += 1;
+    languageMixCounts[entry.languageMix] += 1;
+  }
+
+  return {
+    totalCases: cases.length,
+    heldOutCases: cases.filter((entry) => entry.heldOut).length,
+    bottleneckCounts,
+    runTypeCounts,
+    languageMixCounts
   };
 }
