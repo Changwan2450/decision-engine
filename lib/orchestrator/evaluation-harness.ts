@@ -110,6 +110,13 @@ export type EvaluationReportSummary = {
   blockerIds: ShipBlockerId[];
 };
 
+export type EvaluationHarnessReport = {
+  projectId: string;
+  summary: EvaluationReportSummary;
+  evaluatedSamples: EvaluatedRunSampleSummary;
+  results: EvaluationCaseResult[];
+};
+
 export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
   {
     id: "react-rsc-vs-spa",
@@ -427,6 +434,57 @@ export function summarizeEvaluatedRunSamples(
     missingCaseIds,
     runTypeCounts
   };
+}
+
+export function renderEvaluationMarkdownReport(report: EvaluationHarnessReport): string {
+  const lines: string[] = [
+    "# Research Engine Evaluation Report",
+    "",
+    `- projectId: \`${report.projectId}\``,
+    `- totalCases: ${report.summary.totalCases}`,
+    `- passedCases: ${report.summary.passedCases}`,
+    `- gateStatus: trust=${report.summary.gateStatus.trust}, coverage=${report.summary.gateStatus.coverage}, contradiction=${report.summary.gateStatus.contradiction}`,
+    ""
+  ];
+
+  if (report.summary.failedCaseIds.length > 0) {
+    lines.push("## Failed Cases", "");
+    for (const caseId of report.summary.failedCaseIds) {
+      lines.push(`- ${caseId}`);
+    }
+    lines.push("");
+  }
+
+  lines.push(
+    "## Evaluated Run Samples",
+    "",
+    `- totalSamples: ${report.evaluatedSamples.totalSamples}`,
+    `- coveredCaseIds: ${report.evaluatedSamples.coveredCaseIds.join(", ") || "(none)"}`,
+    `- missingCaseIds: ${report.evaluatedSamples.missingCaseIds.join(", ") || "(none)"}`,
+    ""
+  );
+
+  lines.push("## Case Results", "");
+  for (const result of report.results) {
+    lines.push(`### ${result.id}`, "");
+    lines.push(`- runType: ${result.runType}`);
+    lines.push(`- pass: ${result.pass}`);
+    lines.push(`- communityCount: ${result.summary.communityCount}`);
+    lines.push(`- contradictionCount: ${result.summary.contradictionCount}`);
+    lines.push(`- leakedAuthClaimCount: ${result.summary.leakedAuthClaimCount}`);
+    lines.push(`- placeholderCount: ${result.summary.placeholderCount}`);
+    lines.push(`- runId: \`${result.summary.runId}\``);
+    lines.push(`- runAnchors: ${result.summary.runAnchors.join(", ") || "(none)"}`);
+    lines.push(
+      `- communityTitles: ${result.summary.communityTitles.slice(0, 6).join(" | ") || "(none)"}`
+    );
+    if (result.failures.length > 0) {
+      lines.push(`- failures: ${result.failures.join(" ; ")}`);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
 }
 
 function assertBudget(

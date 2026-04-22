@@ -5,6 +5,7 @@ import {
   evaluateBaselineGuardrails,
   evaluateSummary,
   listNonCompensatoryShipBlockers,
+  renderEvaluationMarkdownReport,
   summarizeEvaluatedRunSamples,
   summarizeEvaluationResults,
   summarizeEvaluationRun
@@ -281,5 +282,70 @@ describe("evaluation-harness", () => {
       "provenance_completeness_regression",
       "cross_context_contamination"
     ]);
+  });
+
+  it("renders a markdown proof report for operator-visible evidence", () => {
+    const markdown = renderEvaluationMarkdownReport({
+      projectId: "project-1",
+      summary: {
+        totalCases: 1,
+        passedCases: 1,
+        failedCaseIds: [],
+        metricFailures: {
+          communityCount: 0,
+          contradictionCount: 0,
+          leakedAuthClaimCount: 0,
+          placeholderCount: 0
+        },
+        gateStatus: {
+          trust: true,
+          coverage: true,
+          contradiction: true
+        },
+        blockerIds: []
+      },
+      evaluatedSamples: {
+        totalSamples: 1,
+        coveredCaseIds: ["react-rsc-vs-spa"],
+        missingCaseIds: [],
+        runTypeCounts: {
+          exploratory_scan: 0,
+          comparison_tradeoff_analysis: 1,
+          longitudinal_watch: 0,
+          contradiction_resolution: 0,
+          pre_decision_verification: 0
+        }
+      },
+      results: [
+        {
+          id: "react-rsc-vs-spa",
+          runType: "comparison_tradeoff_analysis",
+          tags: ["comparative"],
+          summary: {
+            runId: "run-1",
+            title: "React Server Components vs SPA",
+            communityCount: 5,
+            contradictionCount: 0,
+            leakedAuthClaimCount: 0,
+            placeholderCount: 0,
+            runAnchors: ["server-components"],
+            communityTitles: ["App Router (RSC) vs SPA"]
+          },
+          expected: {
+            communityCount: { min: 3, max: 6 },
+            contradictionCount: { max: 0 },
+            leakedAuthClaimCount: { max: 0 },
+            placeholderCount: { max: 0 }
+          },
+          pass: true,
+          failures: []
+        }
+      ]
+    });
+
+    expect(markdown).toContain("# Research Engine Evaluation Report");
+    expect(markdown).toContain("projectId: `project-1`");
+    expect(markdown).toContain("### react-rsc-vs-spa");
+    expect(markdown).toContain("App Router (RSC) vs SPA");
   });
 });
