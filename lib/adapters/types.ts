@@ -57,6 +57,14 @@ export type KnowledgeContext = {
   queryExpansion: string[];
   duplicateWarnings: string[];
   freshEvidenceFocus: string[];
+  adaptivePolicy: {
+    mode: "fresh" | "project_adaptive";
+    contextClass: string | null;
+    preferredComparisonAxes: string[];
+    prioritizedTopics: string[];
+    reviewBias: "fresh_first" | "comparison_axes_first" | "contradiction_first";
+    appliedAdjustments: string[];
+  } | null;
 };
 
 export type ResearchPlan = {

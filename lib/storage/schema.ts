@@ -42,7 +42,18 @@ export const knowledgeContextSchema = z.object({
   ).default([]),
   queryExpansion: z.array(z.string()).default([]),
   duplicateWarnings: z.array(z.string()).default([]),
-  freshEvidenceFocus: z.array(z.string()).default([])
+  freshEvidenceFocus: z.array(z.string()).default([]),
+  adaptivePolicy: z
+    .object({
+      mode: z.enum(["fresh", "project_adaptive"]),
+      contextClass: z.string().min(1).nullable().default(null),
+      preferredComparisonAxes: z.array(z.string()).default([]),
+      prioritizedTopics: z.array(z.string()).default([]),
+      reviewBias: z.enum(["fresh_first", "comparison_axes_first", "contradiction_first"]),
+      appliedAdjustments: z.array(z.string()).default([])
+    })
+    .nullable()
+    .default(null)
 });
 
 export const expandedQuerySchema = z.object({
@@ -78,6 +89,7 @@ export const projectMemoryDecisionSchema = z.object({
   confidence: z.enum(["low", "medium", "high"]),
   why: z.string().min(1),
   createdAt: z.string().datetime(),
+  comparisonAxis: z.string().min(1).nullable().default(null),
   runType: z.string().min(1).nullable().default(null),
   contextClass: z.string().min(1).nullable().default(null),
   contractVersion: z.string().min(1).default("legacy"),

@@ -49,7 +49,8 @@ const plan: ResearchPlan = {
     duplicateWarnings: ["이미 다룬 런: 이전 숏츠 판단 (go)"],
     freshEvidenceFocus: [
       "기존 내부 지식을 반복하지 말고 최신 official/primary_data 근거를 우선 수집"
-    ]
+    ],
+    adaptivePolicy: null
   }
 };
 

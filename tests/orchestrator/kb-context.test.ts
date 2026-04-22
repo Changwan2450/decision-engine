@@ -188,6 +188,7 @@ describe("kb-context qmd fallback", () => {
               confidence: "high",
               why: "근거가 충분했다.",
               createdAt: "2026-04-20T00:00:00.000Z",
+              comparisonAxis: "monorepo vs polyrepo",
               runType: "comparison_tradeoff_analysis",
               contextClass: "comparison",
               contractVersion: "2026-04-22.v1",
@@ -230,9 +231,23 @@ describe("kb-context qmd fallback", () => {
       })
     ]);
     expect(context.queryExpansion).toContain("monorepo (3)");
+    expect(context.queryExpansion).toContain("monorepo vs polyrepo");
     expect(context.duplicateWarnings).toContain("이미 다룬 런: Prior decision (go)");
     expect(context.duplicateWarnings).toContain("반복 상충 토픽: ci-complexity (2)");
+    expect(context.freshEvidenceFocus).toContain("우선 재검증 토픽: monorepo");
     expect(context.freshEvidenceFocus).toContain("상충 토픽 재검증: ci-complexity (2)");
+    expect(context.adaptivePolicy).toEqual({
+      mode: "project_adaptive",
+      contextClass: "comparison",
+      preferredComparisonAxes: ["monorepo vs polyrepo"],
+      prioritizedTopics: ["monorepo"],
+      reviewBias: "contradiction_first",
+      appliedAdjustments: [
+        "comparison-axis-priority:monorepo vs polyrepo",
+        "topic-priority:monorepo",
+        "contradiction-first-review"
+      ]
+    });
   });
 
   it("ignores expired or legacy thin memory when building context", async () => {
@@ -308,6 +323,7 @@ describe("kb-context qmd fallback", () => {
               confidence: "high",
               why: "old",
               createdAt: "2026-04-10T00:00:00.000Z",
+              comparisonAxis: null,
               runType: null,
               contextClass: null,
               contractVersion: "legacy",
@@ -335,5 +351,13 @@ describe("kb-context qmd fallback", () => {
 
     expect(context.priorDecisions).toEqual([]);
     expect(context.queryExpansion).not.toContain("expired-topic (2)");
+    expect(context.adaptivePolicy).toEqual({
+      mode: "fresh",
+      contextClass: "comparison",
+      preferredComparisonAxes: [],
+      prioritizedTopics: [],
+      reviewBias: "fresh_first",
+      appliedAdjustments: []
+    });
   });
 });

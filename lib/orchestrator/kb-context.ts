@@ -5,7 +5,11 @@ import { promisify } from "node:util";
 import { OBSIDIAN_VAULT_PATH } from "@/lib/config";
 import type { KnowledgeContext, KnowledgeContextNote, SourceArtifact } from "@/lib/adapters/types";
 import type { ProjectRecord, RunRecord } from "@/lib/storage/schema";
-import { RESEARCH_QUALITY_CONTRACT_VERSION } from "@/lib/orchestrator/research-quality-contract";
+import {
+  CONTEXT_BOUNDARY_SPEC,
+  RESEARCH_QUALITY_CONTRACT_VERSION,
+  type ResearchRunType
+} from "@/lib/orchestrator/research-quality-contract";
 
 const execFileAsync = promisify(execFile);
 const ALWAYS_ON_OPERATOR_NOTE_PATHS = new Set([
@@ -268,6 +272,59 @@ export async function buildKnowledgeContext(params: {
   const activeContradictionLedger = (projectRecord.memory?.contradictionLedger ?? []).filter((entry) =>
     isActiveGovernedMemoryEntry(entry, record.run.createdAt)
   );
+  const currentRunType = inferCurrentRunType(record);
+  const currentContextClass = CONTEXT_BOUNDARY_SPEC.classes[currentRunType];
+  const preferredComparisonAxes = takeUnique(
+    activeDecisionLedger
+      .filter((entry) => entry.contextClass === currentContextClass)
+      .map((entry) => entry.comparisonAxis ?? "")
+      .filter(Boolean),
+    3
+  );
+  const prioritizedTopics = takeUnique(
+    activeTopicLedger
+      .sort((left, right) => {
+        const leftScore = left.highTrustCount * 10 + left.count;
+        const rightScore = right.highTrustCount * 10 + right.count;
+        return rightScore - leftScore || right.lastSeenAt.localeCompare(left.lastSeenAt);
+      })
+      .slice(0, 2)
+      .map((entry) => entry.topicKey),
+    2
+  );
+  const reviewBias: "fresh_first" | "comparison_axes_first" | "contradiction_first" =
+    activeContradictionLedger.length > 0
+      ? "contradiction_first"
+      : preferredComparisonAxes.length > 0
+        ? "comparison_axes_first"
+        : "fresh_first";
+  const appliedAdjustments = [
+    ...(preferredComparisonAxes.length > 0
+      ? [`comparison-axis-priority:${preferredComparisonAxes.join(" | ")}`]
+      : []),
+    ...(prioritizedTopics.length > 0
+      ? [`topic-priority:${prioritizedTopics.join(" | ")}`]
+      : []),
+    ...(activeContradictionLedger.length > 0 ? ["contradiction-first-review"] : [])
+  ];
+  const adaptivePolicy =
+    appliedAdjustments.length > 0
+      ? {
+          mode: "project_adaptive" as const,
+          contextClass: currentContextClass,
+          preferredComparisonAxes,
+          prioritizedTopics,
+          reviewBias,
+          appliedAdjustments
+        }
+      : {
+          mode: "fresh" as const,
+          contextClass: currentContextClass,
+          preferredComparisonAxes: [],
+          prioritizedTopics: [],
+          reviewBias: "fresh_first" as const,
+          appliedAdjustments: []
+        };
 
   const priorDecisions = (
     activeDecisionLedger.length
@@ -304,6 +361,8 @@ export async function buildKnowledgeContext(params: {
 
   const queryExpansion = takeUnique(
     [
+      ...preferredComparisonAxes,
+      ...prioritizedTopics,
       ...scoredNotes.map((note) => note.title),
       ...scoredNotes.flatMap((note) => note.reusableClaims.slice(0, 2)),
       ...projectRecord.insights.repeatedProblems,
@@ -329,6 +388,7 @@ export async function buildKnowledgeContext(params: {
 
   const freshEvidenceFocus = takeUnique(
     [
+      ...prioritizedTopics.map((topic) => `우선 재검증 토픽: ${topic}`),
       ...projectRecord.insights.competitorSignals.map(
         (signal) => `최신 경쟁사 근거로 재검증: ${signal}`
       ),
@@ -347,7 +407,8 @@ export async function buildKnowledgeContext(params: {
     priorDecisions,
     queryExpansion,
     duplicateWarnings,
-    freshEvidenceFocus
+    freshEvidenceFocus,
+    adaptivePolicy
   };
 }
 
@@ -360,6 +421,29 @@ function isActiveGovernedMemoryEntry(
     typeof entry.expiresAt === "string" &&
     entry.expiresAt > now
   );
+}
+
+function inferCurrentRunType(record: Pick<RunRecord, "watchContext" | "normalizedInput">): ResearchRunType {
+  if (record.watchContext?.watchTargetId) {
+    return "longitudinal_watch";
+  }
+
+  const title = record.normalizedInput?.title ?? "";
+  const naturalLanguage = record.normalizedInput?.naturalLanguage ?? "";
+  const goal = record.normalizedInput?.goal ?? "";
+  const comparisonAxis = record.normalizedInput?.comparisonAxis ?? "";
+  const haystack = [title, naturalLanguage, goal, comparisonAxis].join(" ").toLowerCase();
+
+  if (comparisonAxis || /\bvs\b|versus|대/.test(haystack)) {
+    return "comparison_tradeoff_analysis";
+  }
+  if (/상충|contradiction|반증|re-?check/.test(haystack)) {
+    return "contradiction_resolution";
+  }
+  if (/결정|판단|verify|verification|검증/.test(haystack)) {
+    return "pre_decision_verification";
+  }
+  return "exploratory_scan";
 }
 
 function stanceFromDecision(value: "go" | "no_go" | "unclear"): "support" | "oppose" | "neutral" {

@@ -58,6 +58,7 @@ export type ProjectMemoryPatch = {
     confidence: "low" | "medium" | "high";
     why: string;
     createdAt: string;
+    comparisonAxis: string | null;
     runType: ResearchRunType | null;
     contextClass: string | null;
     contractVersion: string;
@@ -467,6 +468,7 @@ export function deriveProjectMemoryPatch(params: {
         confidence: params.decision.confidence,
         why: params.decision.why,
         createdAt: params.record.run.createdAt,
+        comparisonAxis: params.record.normalizedInput?.comparisonAxis?.trim() || null,
         runType,
         contextClass,
         contractVersion: RESEARCH_QUALITY_CONTRACT_VERSION,

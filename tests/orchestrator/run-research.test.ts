@@ -223,6 +223,7 @@ describe("executeResearchRun", () => {
       title: "숏츠 시장 진입",
       decision: "go",
       confidence: "high",
+      comparisonAxis: "쇼츠 vs 릴스",
       contractVersion: "2026-04-22.v1",
       runType: "comparison_tradeoff_analysis",
       contextClass: "comparison"
