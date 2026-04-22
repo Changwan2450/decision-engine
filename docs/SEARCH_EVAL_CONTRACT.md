@@ -82,6 +82,38 @@ Current domain-shifted pack:
 - `postgres-rls-vs-app-authorization`
 - `otel-vs-vendor-apm`
 
+## Retrieval Policy Profiles
+
+Search quality is constrained by explicit retrieval policy, not open-ended fan-out.
+
+- `comparison_tradeoff_analysis`
+  - max source branches: `4`
+  - max query expansions per branch: `2`
+  - contradiction mode: `conditional`
+- `pre_decision_verification`
+  - max source branches: `5`
+  - max query expansions per branch: `2`
+  - contradiction mode: `required`
+
+Core policy rule:
+
+- stop when decisive evidence exists across trust classes, or when budget is exhausted
+- abstain when decisive evidence/freshness minimum is still missing at the budget boundary
+
+## Source Competition Pack
+
+The contract now separately tracks a source competition / ranking pack.
+
+- total cases: `4`
+- focus: decisive evidence position and trust-aware source competition
+
+Current source competition pack:
+
+- `rust-vs-go`
+- `postgres-rls-vs-app-authorization`
+- `otel-vs-vendor-apm`
+- `react-rsc-vs-spa`
+
 ## Next Step
 
 The next slice should turn this contract into a stricter search eval harness:

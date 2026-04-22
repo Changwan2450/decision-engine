@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SEARCH_EVAL_CASES,
   DOMAIN_SHIFTED_SEARCH_EVAL_CASES,
+  RETRIEVAL_POLICY_PROFILES,
   SEARCH_EVAL_CONTRACT_VERSION,
   SEARCH_EVAL_METRIC_MATRIX,
   SEARCH_NON_SIGNAL_PROXY_BAN_LIST,
   SEARCH_POLICY_GUARDRAILS,
+  SOURCE_COMPETITION_SEARCH_EVAL_CASES,
   summarizeSearchEvalCases,
   summarizeSearchSignals
 } from "@/lib/orchestrator/search-eval-contract";
@@ -91,6 +93,51 @@ describe("search-eval-contract", () => {
       languageMixCounts: {
         korean_english_mixed: 4,
         english_only: 2
+      }
+    });
+  });
+
+  it("defines budgeted retrieval policy profiles instead of vague search intelligence", () => {
+    expect(RETRIEVAL_POLICY_PROFILES.comparison_tradeoff_analysis).toEqual({
+      maxSourceBranches: 4,
+      maxQueryExpansionsPerBranch: 2,
+      contradictionMode: "conditional",
+      stopRule: "stop when decisive evidence exists across >=2 trust classes or budget is exhausted",
+      abstainRule: "abstain when decisive evidence is absent after branch budget is exhausted"
+    });
+    expect(RETRIEVAL_POLICY_PROFILES.pre_decision_verification).toEqual({
+      maxSourceBranches: 5,
+      maxQueryExpansionsPerBranch: 2,
+      contradictionMode: "required",
+      stopRule: "stop only after freshness and counterevidence checks both succeed or budget is exhausted",
+      abstainRule: "abstain when freshness/provenance minimum is unmet at budget boundary"
+    });
+  });
+
+  it("ships a source competition pack for ranking and decisive-evidence position", () => {
+    expect(SOURCE_COMPETITION_SEARCH_EVAL_CASES.map((entry) => entry.id)).toEqual([
+      "rust-vs-go",
+      "postgres-rls-vs-app-authorization",
+      "otel-vs-vendor-apm",
+      "react-rsc-vs-spa"
+    ]);
+    expect(
+      summarizeSearchEvalCases(SOURCE_COMPETITION_SEARCH_EVAL_CASES)
+    ).toEqual({
+      totalCases: 4,
+      heldOutCases: 3,
+      bottleneckCounts: {
+        domain_shifted_recall: 0,
+        source_competition_ranking: 4,
+        coverage_floor: 0,
+        conditional_contradiction_retrieval: 0
+      },
+      runTypeCounts: {
+        comparison_tradeoff_analysis: 4
+      },
+      languageMixCounts: {
+        korean_english_mixed: 3,
+        english_only: 1
       }
     });
   });

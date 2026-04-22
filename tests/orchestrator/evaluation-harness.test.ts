@@ -432,7 +432,8 @@ describe("evaluation-harness", () => {
         proxyBanCount: 5,
         guardrailCount: 4,
         domainShiftedCaseCount: 6,
-        heldOutCaseCount: 4
+        heldOutCaseCount: 4,
+        sourceCompetitionCaseCount: 4
       },
       summary: {
         totalCases: 1,
@@ -495,6 +496,7 @@ describe("evaluation-harness", () => {
     expect(markdown).toContain("## Search Eval Contract");
     expect(markdown).toContain("support_recall_floor");
     expect(markdown).toContain("domainShiftedCaseCount: 6");
+    expect(markdown).toContain("sourceCompetitionCaseCount: 4");
     expect(markdown).toContain("### react-rsc-vs-spa");
     expect(markdown).toContain("App Router (RSC) vs SPA");
   });

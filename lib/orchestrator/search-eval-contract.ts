@@ -42,6 +42,14 @@ export type SearchEvalCaseSummary = {
   languageMixCounts: Record<SearchEvalCase["languageMix"], number>;
 };
 
+export type RetrievalPolicyProfile = {
+  maxSourceBranches: number;
+  maxQueryExpansionsPerBranch: number;
+  contradictionMode: "disabled" | "conditional" | "required";
+  stopRule: string;
+  abstainRule: string;
+};
+
 export const SEARCH_EVAL_CONTRACT_VERSION = "2026-04-22.v1";
 
 export const SEARCH_EVAL_METRIC_MATRIX: Record<
@@ -171,6 +179,82 @@ export const DOMAIN_SHIFTED_SEARCH_EVAL_CASES: SearchEvalCase[] = [
     heldOut: true
   }
 ] as const;
+
+export const SOURCE_COMPETITION_SEARCH_EVAL_CASES: SearchEvalCase[] = [
+  {
+    id: "rust-vs-go",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "source_competition_ranking",
+    languageMix: "korean_english_mixed",
+    heldOut: false
+  },
+  {
+    id: "postgres-rls-vs-app-authorization",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "source_competition_ranking",
+    languageMix: "english_only",
+    heldOut: true
+  },
+  {
+    id: "otel-vs-vendor-apm",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "source_competition_ranking",
+    languageMix: "korean_english_mixed",
+    heldOut: true
+  },
+  {
+    id: "react-rsc-vs-spa",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "source_competition_ranking",
+    languageMix: "korean_english_mixed",
+    heldOut: true
+  }
+] as const;
+
+export const RETRIEVAL_POLICY_PROFILES: Record<
+  | "exploratory_scan"
+  | "comparison_tradeoff_analysis"
+  | "longitudinal_watch"
+  | "contradiction_resolution"
+  | "pre_decision_verification",
+  RetrievalPolicyProfile
+> = {
+  exploratory_scan: {
+    maxSourceBranches: 4,
+    maxQueryExpansionsPerBranch: 1,
+    contradictionMode: "disabled",
+    stopRule: "stop when at least 3 trust classes are represented or branch budget is exhausted",
+    abstainRule: "abstain when no usable evidence survives after branch budget is exhausted"
+  },
+  comparison_tradeoff_analysis: {
+    maxSourceBranches: 4,
+    maxQueryExpansionsPerBranch: 2,
+    contradictionMode: "conditional",
+    stopRule: "stop when decisive evidence exists across >=2 trust classes or budget is exhausted",
+    abstainRule: "abstain when decisive evidence is absent after branch budget is exhausted"
+  },
+  longitudinal_watch: {
+    maxSourceBranches: 3,
+    maxQueryExpansionsPerBranch: 1,
+    contradictionMode: "conditional",
+    stopRule: "stop when delta evidence is resolved across prior and fresh branches or budget is exhausted",
+    abstainRule: "abstain when fresh delta evidence is insufficient at budget boundary"
+  },
+  contradiction_resolution: {
+    maxSourceBranches: 5,
+    maxQueryExpansionsPerBranch: 2,
+    contradictionMode: "required",
+    stopRule: "stop only after both supporting and opposing trust-qualified evidence are present or budget is exhausted",
+    abstainRule: "abstain when either support or counterevidence branch is missing at budget boundary"
+  },
+  pre_decision_verification: {
+    maxSourceBranches: 5,
+    maxQueryExpansionsPerBranch: 2,
+    contradictionMode: "required",
+    stopRule: "stop only after freshness and counterevidence checks both succeed or budget is exhausted",
+    abstainRule: "abstain when freshness/provenance minimum is unmet at budget boundary"
+  }
+};
 
 const sourcePriorityWeight = {
   official: 3,
