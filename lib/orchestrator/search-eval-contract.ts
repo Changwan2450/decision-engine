@@ -50,6 +50,13 @@ export type RetrievalPolicyProfile = {
   abstainRule: string;
 };
 
+export type CoverageFloorRequirements = {
+  minimumUsableEvidencePerCase: number;
+  minimumTrustClassesPerCase: number;
+  maxPlaceholderOrAuthLeaks: number;
+  maxAllowedCoverageOnlyCases: number;
+};
+
 export const SEARCH_EVAL_CONTRACT_VERSION = "2026-04-22.v1";
 
 export const SEARCH_EVAL_METRIC_MATRIX: Record<
@@ -206,6 +213,37 @@ export const SOURCE_COMPETITION_SEARCH_EVAL_CASES: SearchEvalCase[] = [
     id: "react-rsc-vs-spa",
     runType: "comparison_tradeoff_analysis",
     primaryBottleneck: "source_competition_ranking",
+    languageMix: "korean_english_mixed",
+    heldOut: true
+  }
+] as const;
+
+export const COVERAGE_FLOOR_REQUIREMENTS: CoverageFloorRequirements = {
+  minimumUsableEvidencePerCase: 2,
+  minimumTrustClassesPerCase: 2,
+  maxPlaceholderOrAuthLeaks: 0,
+  maxAllowedCoverageOnlyCases: 3
+} as const;
+
+export const COVERAGE_FLOOR_SEARCH_EVAL_CASES: SearchEvalCase[] = [
+  {
+    id: "ai-memory-vs-prompt-stuffing",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "coverage_floor",
+    languageMix: "korean_english_mixed",
+    heldOut: false
+  },
+  {
+    id: "react-rsc-vs-spa",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "coverage_floor",
+    languageMix: "korean_english_mixed",
+    heldOut: false
+  },
+  {
+    id: "rag-vs-long-context-korean",
+    runType: "comparison_tradeoff_analysis",
+    primaryBottleneck: "coverage_floor",
     languageMix: "korean_english_mixed",
     heldOut: true
   }

@@ -8,6 +8,7 @@ import {
   NON_COMPENSATORY_SHIP_BLOCKERS
 } from "@/lib/orchestrator/research-quality-contract";
 import {
+  COVERAGE_FLOOR_SEARCH_EVAL_CASES,
   DOMAIN_SHIFTED_SEARCH_EVAL_CASES,
   SOURCE_COMPETITION_SEARCH_EVAL_CASES,
   SEARCH_EVAL_CONTRACT_VERSION,
@@ -132,6 +133,7 @@ export type EvaluationHarnessReport = {
     domainShiftedCaseCount: number;
     heldOutCaseCount: number;
     sourceCompetitionCaseCount: number;
+    coverageFloorCaseCount: number;
   };
   summary: EvaluationReportSummary;
   evaluatedSamples: EvaluatedRunSampleSummary;
@@ -488,6 +490,7 @@ export function renderEvaluationMarkdownReport(report: EvaluationHarnessReport):
     `- domainShiftedCaseCount: ${report.searchContract.domainShiftedCaseCount}`,
     `- heldOutCaseCount: ${report.searchContract.heldOutCaseCount}`,
     `- sourceCompetitionCaseCount: ${report.searchContract.sourceCompetitionCaseCount}`,
+    `- coverageFloorCaseCount: ${report.searchContract.coverageFloorCaseCount}`,
     ""
   );
 
@@ -526,6 +529,7 @@ export function renderEvaluationMarkdownReport(report: EvaluationHarnessReport):
 export function buildSearchContractSummary(): EvaluationHarnessReport["searchContract"] {
   const domainShiftedSummary = summarizeSearchEvalCases(DOMAIN_SHIFTED_SEARCH_EVAL_CASES);
   const sourceCompetitionSummary = summarizeSearchEvalCases(SOURCE_COMPETITION_SEARCH_EVAL_CASES);
+  const coverageFloorSummary = summarizeSearchEvalCases(COVERAGE_FLOOR_SEARCH_EVAL_CASES);
   return {
     version: SEARCH_EVAL_CONTRACT_VERSION,
     measuredMetrics: Object.entries(SEARCH_EVAL_METRIC_MATRIX)
@@ -535,7 +539,8 @@ export function buildSearchContractSummary(): EvaluationHarnessReport["searchCon
     guardrailCount: SEARCH_POLICY_GUARDRAILS.length,
     domainShiftedCaseCount: domainShiftedSummary.totalCases,
     heldOutCaseCount: domainShiftedSummary.heldOutCases,
-    sourceCompetitionCaseCount: sourceCompetitionSummary.totalCases
+    sourceCompetitionCaseCount: sourceCompetitionSummary.totalCases,
+    coverageFloorCaseCount: coverageFloorSummary.totalCases
   };
 }
 

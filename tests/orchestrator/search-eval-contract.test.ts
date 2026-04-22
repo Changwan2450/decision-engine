@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  COVERAGE_FLOOR_REQUIREMENTS,
+  COVERAGE_FLOOR_SEARCH_EVAL_CASES,
   DEFAULT_SEARCH_EVAL_CASES,
   DOMAIN_SHIFTED_SEARCH_EVAL_CASES,
   RETRIEVAL_POLICY_PROFILES,
@@ -138,6 +140,39 @@ describe("search-eval-contract", () => {
       languageMixCounts: {
         korean_english_mixed: 3,
         english_only: 1
+      }
+    });
+  });
+
+  it("treats coverage as a floor objective with a bounded evaluation pack", () => {
+    expect(COVERAGE_FLOOR_REQUIREMENTS).toEqual({
+      minimumUsableEvidencePerCase: 2,
+      minimumTrustClassesPerCase: 2,
+      maxPlaceholderOrAuthLeaks: 0,
+      maxAllowedCoverageOnlyCases: 3
+    });
+    expect(COVERAGE_FLOOR_SEARCH_EVAL_CASES.map((entry) => entry.id)).toEqual([
+      "ai-memory-vs-prompt-stuffing",
+      "react-rsc-vs-spa",
+      "rag-vs-long-context-korean"
+    ]);
+    expect(
+      summarizeSearchEvalCases(COVERAGE_FLOOR_SEARCH_EVAL_CASES)
+    ).toEqual({
+      totalCases: 3,
+      heldOutCases: 1,
+      bottleneckCounts: {
+        domain_shifted_recall: 0,
+        source_competition_ranking: 0,
+        coverage_floor: 3,
+        conditional_contradiction_retrieval: 0
+      },
+      runTypeCounts: {
+        comparison_tradeoff_analysis: 3
+      },
+      languageMixCounts: {
+        korean_english_mixed: 3,
+        english_only: 0
       }
     });
   });

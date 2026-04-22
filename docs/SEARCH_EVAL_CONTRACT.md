@@ -114,6 +114,23 @@ Current source competition pack:
 - `otel-vs-vendor-apm`
 - `react-rsc-vs-spa`
 
+## Coverage Floor
+
+Coverage is treated as a hygiene floor, not the product thesis.
+
+Coverage floor requirements:
+
+- minimum usable evidence per case: `2`
+- minimum trust classes per case: `2`
+- max placeholder/auth leaks: `0`
+- max allowed coverage-only cases in the contract: `3`
+
+Current coverage floor pack:
+
+- `ai-memory-vs-prompt-stuffing`
+- `react-rsc-vs-spa`
+- `rag-vs-long-context-korean`
+
 ## Next Step
 
 The next slice should turn this contract into a stricter search eval harness:
