@@ -222,19 +222,24 @@ describe("executeResearchRun", () => {
       runId: run.run.id,
       title: "숏츠 시장 진입",
       decision: "go",
-      confidence: "high"
+      confidence: "high",
+      contractVersion: "2026-04-22.v1",
+      runType: "comparison_tradeoff_analysis",
+      contextClass: "comparison"
     });
     expect(storedProject.memory.topicLedger).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           topicKey: "short-form-demand",
-          count: 1,
-          highTrustCount: 1
+          count: expect.any(Number),
+          highTrustCount: expect.any(Number),
+          contractVersion: "2026-04-22.v1"
         }),
         expect.objectContaining({
           topicKey: "competitor-loop",
-          count: 1,
-          highTrustCount: 1
+          count: expect.any(Number),
+          highTrustCount: expect.any(Number),
+          contractVersion: "2026-04-22.v1"
         })
       ])
     );

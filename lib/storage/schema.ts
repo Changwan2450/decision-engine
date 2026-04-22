@@ -77,20 +77,31 @@ export const projectMemoryDecisionSchema = z.object({
   decision: z.enum(["go", "no_go", "unclear"]),
   confidence: z.enum(["low", "medium", "high"]),
   why: z.string().min(1),
-  createdAt: z.string().datetime()
+  createdAt: z.string().datetime(),
+  runType: z.string().min(1).nullable().default(null),
+  contextClass: z.string().min(1).nullable().default(null),
+  contractVersion: z.string().min(1).default("legacy"),
+  retainedAt: z.string().datetime().nullable().default(null),
+  expiresAt: z.string().datetime().nullable().default(null)
 });
 
 export const projectMemoryTopicSchema = z.object({
   topicKey: z.string().min(1),
   count: z.number().int().positive(),
   highTrustCount: z.number().int().nonnegative().default(0),
-  lastSeenAt: z.string().datetime()
+  lastSeenAt: z.string().datetime(),
+  contractVersion: z.string().min(1).default("legacy"),
+  retainedAt: z.string().datetime().nullable().default(null),
+  expiresAt: z.string().datetime().nullable().default(null)
 });
 
 export const projectMemoryContradictionSchema = z.object({
   topicKey: z.string().min(1),
   count: z.number().int().positive(),
-  lastSeenAt: z.string().datetime()
+  lastSeenAt: z.string().datetime(),
+  contractVersion: z.string().min(1).default("legacy"),
+  retainedAt: z.string().datetime().nullable().default(null),
+  expiresAt: z.string().datetime().nullable().default(null)
 });
 
 export const projectMemorySchema = z.object({

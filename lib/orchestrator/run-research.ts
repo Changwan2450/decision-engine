@@ -25,6 +25,10 @@ import { buildKnowledgeArtifacts, buildKnowledgeContext } from "@/lib/orchestrat
 import { planRun } from "@/lib/orchestrator/plan-run";
 import { buildPrdSeed } from "@/lib/orchestrator/prd-seed";
 import {
+  RESEARCH_QUALITY_CONTRACT_VERSION,
+  RETENTION_ELIGIBILITY_SCHEMA
+} from "@/lib/orchestrator/research-quality-contract";
+import {
   findRunRecordById,
   listRunRecords,
   readProjectRecord,
@@ -278,27 +282,38 @@ function mergeUnique(left: string[], right: string[]): string[] {
 
 function mergeDecisionLedger(
   left: NonNullable<ProjectRecord["memory"]>["decisionLedger"],
-  right: NonNullable<ProjectRecord["memory"]>["decisionLedger"]
+  right: NonNullable<ProjectRecord["memory"]>["decisionLedger"],
+  now: string
 ): NonNullable<ProjectRecord["memory"]>["decisionLedger"] {
+  const retained = [...left, ...right].filter((entry) => isGovernedEntryActive(entry, now));
   const merged = new Map<string, ProjectRecord["memory"]["decisionLedger"][number]>(
-    left.map((entry) => [entry.runId, entry])
+    retained.map((entry) => [entry.runId, entry])
   );
-  for (const entry of right) {
-    merged.set(entry.runId, entry);
+  const values = Array.from(merged.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const byRunType = new Map<string, number>();
+  const limited: typeof values = [];
+  for (const entry of values) {
+    const runType = entry.runType ?? "unknown";
+    const count = byRunType.get(runType) ?? 0;
+    if (count >= RETENTION_ELIGIBILITY_SCHEMA.budgets.maxAdaptiveEntriesPerRunType) {
+      continue;
+    }
+    limited.push(entry);
+    byRunType.set(runType, count + 1);
   }
-  return Array.from(merged.values())
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 12);
+  return limited.slice(0, RETENTION_ELIGIBILITY_SCHEMA.budgets.maxAdaptiveEntriesPerProject);
 }
 
 function mergeTopicLedger(
   left: NonNullable<ProjectRecord["memory"]>["topicLedger"],
-  right: NonNullable<ProjectRecord["memory"]>["topicLedger"]
+  right: NonNullable<ProjectRecord["memory"]>["topicLedger"],
+  now: string
 ): NonNullable<ProjectRecord["memory"]>["topicLedger"] {
+  const retained = [...left, ...right].filter((entry) => isGovernedEntryActive(entry, now));
   const merged = new Map<string, ProjectRecord["memory"]["topicLedger"][number]>(
-    left.map((entry) => [entry.topicKey, { ...entry }])
+    retained.map((entry) => [entry.topicKey, { ...entry }])
   );
-  for (const entry of right) {
+  for (const entry of retained) {
     const current = merged.get(entry.topicKey);
     if (!current) {
       merged.set(entry.topicKey, { ...entry });
@@ -308,22 +323,27 @@ function mergeTopicLedger(
       topicKey: entry.topicKey,
       count: current.count + entry.count,
       highTrustCount: current.highTrustCount + entry.highTrustCount,
-      lastSeenAt: entry.lastSeenAt > current.lastSeenAt ? entry.lastSeenAt : current.lastSeenAt
+      lastSeenAt: entry.lastSeenAt > current.lastSeenAt ? entry.lastSeenAt : current.lastSeenAt,
+      contractVersion: RESEARCH_QUALITY_CONTRACT_VERSION,
+      retainedAt: entry.retainedAt ?? current.retainedAt,
+      expiresAt: laterIso(entry.expiresAt, current.expiresAt)
     });
   }
   return Array.from(merged.values())
     .sort((a, b) => b.count - a.count || b.lastSeenAt.localeCompare(a.lastSeenAt))
-    .slice(0, 24);
+    .slice(0, RETENTION_ELIGIBILITY_SCHEMA.budgets.maxAdaptiveEntriesPerProject);
 }
 
 function mergeContradictionLedger(
   left: NonNullable<ProjectRecord["memory"]>["contradictionLedger"],
-  right: NonNullable<ProjectRecord["memory"]>["contradictionLedger"]
+  right: NonNullable<ProjectRecord["memory"]>["contradictionLedger"],
+  now: string
 ): NonNullable<ProjectRecord["memory"]>["contradictionLedger"] {
+  const retained = [...left, ...right].filter((entry) => isGovernedEntryActive(entry, now));
   const merged = new Map<string, ProjectRecord["memory"]["contradictionLedger"][number]>(
-    left.map((entry) => [entry.topicKey, { ...entry }])
+    retained.map((entry) => [entry.topicKey, { ...entry }])
   );
-  for (const entry of right) {
+  for (const entry of retained) {
     const current = merged.get(entry.topicKey);
     if (!current) {
       merged.set(entry.topicKey, { ...entry });
@@ -332,12 +352,32 @@ function mergeContradictionLedger(
     merged.set(entry.topicKey, {
       topicKey: entry.topicKey,
       count: current.count + entry.count,
-      lastSeenAt: entry.lastSeenAt > current.lastSeenAt ? entry.lastSeenAt : current.lastSeenAt
+      lastSeenAt: entry.lastSeenAt > current.lastSeenAt ? entry.lastSeenAt : current.lastSeenAt,
+      contractVersion: RESEARCH_QUALITY_CONTRACT_VERSION,
+      retainedAt: entry.retainedAt ?? current.retainedAt,
+      expiresAt: laterIso(entry.expiresAt, current.expiresAt)
     });
   }
   return Array.from(merged.values())
     .sort((a, b) => b.count - a.count || b.lastSeenAt.localeCompare(a.lastSeenAt))
-    .slice(0, 24);
+    .slice(0, RETENTION_ELIGIBILITY_SCHEMA.budgets.maxAdaptiveEntriesPerProject);
+}
+
+function isGovernedEntryActive(
+  entry: { contractVersion: string; expiresAt: string | null },
+  now: string
+): boolean {
+  return (
+    entry.contractVersion === RESEARCH_QUALITY_CONTRACT_VERSION &&
+    typeof entry.expiresAt === "string" &&
+    entry.expiresAt > now
+  );
+}
+
+function laterIso(left: string | null, right: string | null): string | null {
+  if (!left) return right;
+  if (!right) return left;
+  return left > right ? left : right;
 }
 
 function singleUrlPlan(plan: ResearchPlan, url: string): ResearchPlan {
@@ -696,15 +736,18 @@ export async function executeResearchRun(
       memory: {
         decisionLedger: mergeDecisionLedger(
           projectRecord.memory?.decisionLedger ?? [],
-          memoryPatch.decisionLedger
+          memoryPatch.decisionLedger,
+          now
         ),
         topicLedger: mergeTopicLedger(
           projectRecord.memory?.topicLedger ?? [],
-          memoryPatch.topicLedger
+          memoryPatch.topicLedger,
+          now
         ),
         contradictionLedger: mergeContradictionLedger(
           projectRecord.memory?.contradictionLedger ?? [],
-          memoryPatch.contradictionLedger
+          memoryPatch.contradictionLedger,
+          now
         )
       },
       promotionCandidates,

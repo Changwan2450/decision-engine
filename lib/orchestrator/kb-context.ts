@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import { OBSIDIAN_VAULT_PATH } from "@/lib/config";
 import type { KnowledgeContext, KnowledgeContextNote, SourceArtifact } from "@/lib/adapters/types";
 import type { ProjectRecord, RunRecord } from "@/lib/storage/schema";
+import { RESEARCH_QUALITY_CONTRACT_VERSION } from "@/lib/orchestrator/research-quality-contract";
 
 const execFileAsync = promisify(execFile);
 const ALWAYS_ON_OPERATOR_NOTE_PATHS = new Set([
@@ -258,9 +259,19 @@ export async function buildKnowledgeContext(params: {
   ]);
   const scoredNotes = queriedNotes.slice(0, 3);
 
+  const activeDecisionLedger = (projectRecord.memory?.decisionLedger ?? []).filter((entry) =>
+    isActiveGovernedMemoryEntry(entry, record.run.createdAt)
+  );
+  const activeTopicLedger = (projectRecord.memory?.topicLedger ?? []).filter((entry) =>
+    isActiveGovernedMemoryEntry(entry, record.run.createdAt)
+  );
+  const activeContradictionLedger = (projectRecord.memory?.contradictionLedger ?? []).filter((entry) =>
+    isActiveGovernedMemoryEntry(entry, record.run.createdAt)
+  );
+
   const priorDecisions = (
-    projectRecord.memory?.decisionLedger?.length
-      ? projectRecord.memory.decisionLedger
+    activeDecisionLedger.length
+      ? activeDecisionLedger
       : runRecords
           .filter((run) => run.run.id !== record.run.id && run.run.status === "decided" && run.decision)
           .map((run) => ({
@@ -282,11 +293,11 @@ export async function buildKnowledgeContext(params: {
       createdAt: run.createdAt
     }));
 
-  const memoryTopics = (projectRecord.memory?.topicLedger ?? [])
+  const memoryTopics = activeTopicLedger
     .sort((left, right) => right.count - left.count || right.lastSeenAt.localeCompare(left.lastSeenAt))
     .slice(0, 3)
     .map((entry) => `${entry.topicKey} (${entry.count})`);
-  const contradictionTopics = (projectRecord.memory?.contradictionLedger ?? [])
+  const contradictionTopics = activeContradictionLedger
     .sort((left, right) => right.count - left.count || right.lastSeenAt.localeCompare(left.lastSeenAt))
     .slice(0, 3)
     .map((entry) => `${entry.topicKey} (${entry.count})`);
@@ -338,6 +349,17 @@ export async function buildKnowledgeContext(params: {
     duplicateWarnings,
     freshEvidenceFocus
   };
+}
+
+function isActiveGovernedMemoryEntry(
+  entry: { contractVersion: string; expiresAt: string | null },
+  now: string
+): boolean {
+  return (
+    entry.contractVersion === RESEARCH_QUALITY_CONTRACT_VERSION &&
+    typeof entry.expiresAt === "string" &&
+    entry.expiresAt > now
+  );
 }
 
 function stanceFromDecision(value: "go" | "no_go" | "unclear"): "support" | "oppose" | "neutral" {

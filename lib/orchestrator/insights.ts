@@ -16,6 +16,11 @@ import {
   type TrustTier
 } from "@/lib/domain/claims";
 import { promotionCandidateSchema, type RunRecord } from "@/lib/storage/schema";
+import {
+  CONTEXT_BOUNDARY_SPEC,
+  RESEARCH_QUALITY_CONTRACT_VERSION,
+  type ResearchRunType
+} from "@/lib/orchestrator/research-quality-contract";
 
 const sourcePriorityWeight = {
   official: 4,
@@ -53,17 +58,28 @@ export type ProjectMemoryPatch = {
     confidence: "low" | "medium" | "high";
     why: string;
     createdAt: string;
+    runType: ResearchRunType | null;
+    contextClass: string | null;
+    contractVersion: string;
+    retainedAt: string | null;
+    expiresAt: string | null;
   }>;
   topicLedger: Array<{
     topicKey: string;
     count: number;
     highTrustCount: number;
     lastSeenAt: string;
+    contractVersion: string;
+    retainedAt: string | null;
+    expiresAt: string | null;
   }>;
   contradictionLedger: Array<{
     topicKey: string;
     count: number;
     lastSeenAt: string;
+    contractVersion: string;
+    retainedAt: string | null;
+    expiresAt: string | null;
   }>;
 };
 
@@ -389,7 +405,7 @@ export function deriveProjectInsightPatch(
 }
 
 export function deriveProjectMemoryPatch(params: {
-  record: Pick<RunRecord, "run">;
+  record: Pick<RunRecord, "run" | "watchContext" | "normalizedInput">;
   synthesis: EvidenceSynthesis;
   decision: {
     value: "go" | "no_go" | "unclear";
@@ -398,6 +414,10 @@ export function deriveProjectMemoryPatch(params: {
   };
   now: string;
 }): ProjectMemoryPatch {
+  const runType = inferMemoryRunType(params.record);
+  const contextClass = CONTEXT_BOUNDARY_SPEC.classes[runType];
+  const decisionExpiry = addDays(params.now, 30);
+  const signalExpiry = addDays(params.now, 21);
   const topicCounts = new Map<
     string,
     {
@@ -446,21 +466,65 @@ export function deriveProjectMemoryPatch(params: {
         decision: params.decision.value,
         confidence: params.decision.confidence,
         why: params.decision.why,
-        createdAt: params.record.run.createdAt
+        createdAt: params.record.run.createdAt,
+        runType,
+        contextClass,
+        contractVersion: RESEARCH_QUALITY_CONTRACT_VERSION,
+        retainedAt: params.now,
+        expiresAt: decisionExpiry
       }
     ],
     topicLedger: Array.from(topicCounts.entries()).map(([topicKey, value]) => ({
       topicKey,
       count: value.count,
       highTrustCount: value.highTrustCount,
-      lastSeenAt: value.lastSeenAt
+      lastSeenAt: value.lastSeenAt,
+      contractVersion: RESEARCH_QUALITY_CONTRACT_VERSION,
+      retainedAt: params.now,
+      expiresAt: signalExpiry
     })),
     contradictionLedger: Array.from(contradictionCounts.entries()).map(([topicKey, value]) => ({
       topicKey,
       count: value.count,
-      lastSeenAt: value.lastSeenAt
+      lastSeenAt: value.lastSeenAt,
+      contractVersion: RESEARCH_QUALITY_CONTRACT_VERSION,
+      retainedAt: params.now,
+      expiresAt: signalExpiry
     }))
   };
+}
+
+function inferMemoryRunType(
+  record: Pick<RunRecord, "watchContext" | "normalizedInput">
+): ResearchRunType {
+  if (record.watchContext?.watchTargetId) {
+    return "longitudinal_watch";
+  }
+
+  const title = record.normalizedInput?.title ?? "";
+  const naturalLanguage = record.normalizedInput?.naturalLanguage ?? "";
+  const goal = record.normalizedInput?.goal ?? "";
+  const comparisonAxis = record.normalizedInput?.comparisonAxis ?? "";
+  const haystack = [title, naturalLanguage, goal, comparisonAxis]
+    .join(" ")
+    .toLowerCase();
+
+  if (comparisonAxis || /\bvs\b|versus|대/.test(haystack)) {
+    return "comparison_tradeoff_analysis";
+  }
+  if (/상충|contradiction|반증|re-?check/.test(haystack)) {
+    return "contradiction_resolution";
+  }
+  if (/결정|판단|verify|verification|검증/.test(haystack)) {
+    return "pre_decision_verification";
+  }
+  return "exploratory_scan";
+}
+
+function addDays(iso: string, days: number): string {
+  const date = new Date(iso);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString();
 }
 
 function isEligibleRun(record: RunRecord): boolean {

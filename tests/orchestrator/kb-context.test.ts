@@ -187,7 +187,12 @@ describe("kb-context qmd fallback", () => {
               decision: "go",
               confidence: "high",
               why: "근거가 충분했다.",
-              createdAt: "2026-04-20T00:00:00.000Z"
+              createdAt: "2026-04-20T00:00:00.000Z",
+              runType: "comparison_tradeoff_analysis",
+              contextClass: "comparison",
+              contractVersion: "2026-04-22.v1",
+              retainedAt: "2026-04-20T00:00:00.000Z",
+              expiresAt: "2026-05-20T00:00:00.000Z"
             }
           ],
           topicLedger: [
@@ -195,14 +200,20 @@ describe("kb-context qmd fallback", () => {
               topicKey: "monorepo",
               count: 3,
               highTrustCount: 2,
-              lastSeenAt: "2026-04-20T00:00:00.000Z"
+              lastSeenAt: "2026-04-20T00:00:00.000Z",
+              contractVersion: "2026-04-22.v1",
+              retainedAt: "2026-04-20T00:00:00.000Z",
+              expiresAt: "2026-05-11T00:00:00.000Z"
             }
           ],
           contradictionLedger: [
             {
               topicKey: "ci-complexity",
               count: 2,
-              lastSeenAt: "2026-04-20T00:00:00.000Z"
+              lastSeenAt: "2026-04-20T00:00:00.000Z",
+              contractVersion: "2026-04-22.v1",
+              retainedAt: "2026-04-20T00:00:00.000Z",
+              expiresAt: "2026-05-11T00:00:00.000Z"
             }
           ]
         },
@@ -222,5 +233,107 @@ describe("kb-context qmd fallback", () => {
     expect(context.duplicateWarnings).toContain("이미 다룬 런: Prior decision (go)");
     expect(context.duplicateWarnings).toContain("반복 상충 토픽: ci-complexity (2)");
     expect(context.freshEvidenceFocus).toContain("상충 토픽 재검증: ci-complexity (2)");
+  });
+
+  it("ignores expired or legacy thin memory when building context", async () => {
+    setQmdClientForTests({
+      async operatorNotes() {
+        return [];
+      },
+      async queryNotes() {
+        return [];
+      }
+    });
+
+    const context = await buildKnowledgeContext({
+      vaultRoot: "/tmp",
+      record: {
+        run: {
+          id: "run-3",
+          projectId: "project-1",
+          title: "Fresh decision",
+          mode: "standard",
+          status: "draft",
+          clarificationQuestions: [],
+          input: {
+            naturalLanguage: "fresh decision",
+            pastedContent: "",
+            urls: []
+          },
+          createdAt: "2026-04-21T00:00:00.000Z",
+          updatedAt: "2026-04-21T00:00:00.000Z"
+        },
+        watchContext: null,
+        projectOrigin: null,
+        normalizedInput: {
+          title: "Fresh decision",
+          naturalLanguage: "fresh decision",
+          pastedContent: "",
+          urls: [],
+          goal: "결정",
+          target: "팀",
+          comparisonAxis: "장단점"
+        },
+        expansion: null,
+        kbContext: null,
+        decision: null,
+        prdSeed: null,
+        artifacts: [],
+        claims: [],
+        citations: [],
+        contradictions: [],
+        evidenceSummary: null,
+        advisory: null
+      },
+      projectRecord: {
+        project: {
+          id: "project-1",
+          name: "Project",
+          description: "desc",
+          createdAt: "2026-04-20T00:00:00.000Z",
+          updatedAt: "2026-04-21T00:00:00.000Z"
+        },
+        insights: {
+          repeatedProblems: [],
+          repeatedPatterns: [],
+          competitorSignals: [],
+          contradictionIds: []
+        },
+        memory: {
+          decisionLedger: [
+            {
+              runId: "legacy-run",
+              title: "Legacy decision",
+              decision: "go",
+              confidence: "high",
+              why: "old",
+              createdAt: "2026-04-10T00:00:00.000Z",
+              runType: null,
+              contextClass: null,
+              contractVersion: "legacy",
+              retainedAt: null,
+              expiresAt: null
+            }
+          ],
+          topicLedger: [
+            {
+              topicKey: "expired-topic",
+              count: 2,
+              highTrustCount: 1,
+              lastSeenAt: "2026-04-10T00:00:00.000Z",
+              contractVersion: "2026-04-22.v1",
+              retainedAt: "2026-04-10T00:00:00.000Z",
+              expiresAt: "2026-04-15T00:00:00.000Z"
+            }
+          ],
+          contradictionLedger: []
+        },
+        promotionCandidates: []
+      },
+      runRecords: []
+    });
+
+    expect(context.priorDecisions).toEqual([]);
+    expect(context.queryExpansion).not.toContain("expired-topic (2)");
   });
 });
