@@ -11,6 +11,7 @@ import type {
   ResearchPlan,
   SourceArtifact
 } from "@/lib/adapters/types";
+import { RUN_RETENTION_POLICY } from "@/lib/orchestrator/research-quality-contract";
 import { setQmdClientForTests, setQmdRunnerForTests } from "@/lib/orchestrator/kb-context";
 
 let tempRoot: string | null = null;
@@ -858,5 +859,68 @@ describe("runResearch", () => {
     expect(artifacts[0]?.metadata.error).toContain("budget");
     expect(artifacts[1]?.metadata.fetch_status).toBe("error");
     expect(artifacts[1]?.metadata.error).toContain("fallback skipped");
+  });
+
+  it("compacts raw-backed artifact content after a decided run is stored", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "research-run-retention-"));
+    tempVault = await mkdtemp(path.join(os.tmpdir(), "research-vault-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+    process.env.OBSIDIAN_VAULT_PATH = tempVault;
+    setQmdClientForTests({
+      async operatorNotes() {
+        return [];
+      },
+      async queryNotes() {
+        return [];
+      }
+    });
+
+    const { createProjectRecord, createRunRecord, readRunRecord } = await import(
+      "@/lib/storage/workspace"
+    );
+    const { executeResearchRun } = await import("@/lib/orchestrator/run-research");
+
+    const project = await createProjectRecord({
+      name: "Retention",
+      description: "compact decided runs"
+    });
+    const run = await createRunRecord(project.project.id, {
+      title: "Postgres retention check",
+      naturalLanguage: [
+        "목표: official docs compaction 확인",
+        "대상: engineering",
+        "비교: rls vs auth"
+      ].join("\n")
+    });
+
+    const largeBody = "RLS paragraph ".repeat(400);
+
+    await executeResearchRun(project.project.id, run.run.id, {
+      now: "2026-04-24T00:00:00.000Z",
+      gather: async () => [
+        buildArtifact({
+          id: "artifact-official",
+          adapter: "scrapling",
+          fetcher: "scrapling",
+          sourceType: "web",
+          url: "https://www.postgresql.org/docs/current/ddl-rowsecurity.html",
+          title: "Postgres RLS",
+          snippet: "official doc",
+          content: largeBody,
+          rawRef: `${project.project.id}/runs/${run.run.id}/raw/scrapling/postgres.html`,
+          outcome: { status: "success" },
+          sourceLabel: "web/official",
+          sourcePriority: "official"
+        })
+      ]
+    });
+
+    const storedRun = await readRunRecord(project.project.id, run.run.id);
+    const artifact = storedRun.artifacts.find((entry) => entry.id === "artifact-official");
+
+    expect(storedRun.run.status).toBe("decided");
+    expect(artifact?.metadata.storage_compaction).toBe("inline_truncated");
+    expect(artifact?.content).toContain(RUN_RETENTION_POLICY.compactMarker);
+    expect((artifact?.content.length ?? 0)).toBeLessThan(largeBody.length);
   });
 });

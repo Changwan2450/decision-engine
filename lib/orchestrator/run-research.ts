@@ -29,6 +29,7 @@ import {
   RETENTION_ELIGIBILITY_SCHEMA
 } from "@/lib/orchestrator/research-quality-contract";
 import {
+  applyRunRetentionPolicy,
   findRunRecordById,
   listRunRecords,
   readProjectRecord,
@@ -606,7 +607,7 @@ export async function executeResearchRun(
   const clarificationQuestions = buildClarificationQuestions(plan.normalizedInput);
 
   if (shouldClarifyRun(plan.normalizedInput)) {
-    return updateRunRecord(projectId, runId, (record) => {
+    const clarified = await updateRunRecord(projectId, runId, (record) => {
       assertRunTransition(record.run.status, "awaiting_clarification");
       return {
         ...record,
@@ -621,6 +622,8 @@ export async function executeResearchRun(
         }
       };
     });
+    await applyRunRetentionPolicy(projectId, { now });
+    return clarified;
   }
 
   await updateRunRecord(projectId, runId, (record) => {
@@ -767,6 +770,7 @@ export async function executeResearchRun(
       console.error("Obsidian export failed", error);
     }
 
+    await applyRunRetentionPolicy(projectId, { now });
     return finalRecord;
   } catch (error) {
     await updateRunRecord(projectId, runId, (record) => ({
@@ -777,6 +781,7 @@ export async function executeResearchRun(
         updatedAt: now
       }
     }));
+    await applyRunRetentionPolicy(projectId, { now });
     throw error;
   }
 }

@@ -1,9 +1,10 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { WORKSPACE_ROOT } from "@/lib/config";
 import { createProject, type Project } from "@/lib/domain/projects";
 import { createRun, type Run } from "@/lib/domain/runs";
+import { RUN_RETENTION_POLICY } from "@/lib/orchestrator/research-quality-contract";
 import {
   digestSchema,
   inboxItemSchema,
@@ -31,6 +32,10 @@ function runsDir(projectId: string): string {
 
 function runFile(projectId: string, runId: string): string {
   return path.join(runsDir(projectId), `${runId}.json`);
+}
+
+function runStateDir(projectId: string, runId: string): string {
+  return path.join(runsDir(projectId), runId);
 }
 
 function watchTargetsDir(projectId: string): string {
@@ -67,6 +72,55 @@ async function writeJsonFile(filePath: string, value: unknown): Promise<void> {
   await writeFile(filePath, JSON.stringify(value, null, 2));
 }
 
+function ageHours(fromIso: string, toIso: string): number {
+  return Math.max(0, (new Date(toIso).getTime() - new Date(fromIso).getTime()) / (1000 * 60 * 60));
+}
+
+function compactArtifactContent(record: RunRecord): RunRecord {
+  if (record.run.status !== "decided" && record.run.status !== "failed") {
+    return record;
+  }
+
+  let changed = false;
+  const artifacts = record.artifacts.map((artifact) => {
+    if (!artifact.rawRef || artifact.content.length <= RUN_RETENTION_POLICY.maxInlineArtifactChars) {
+      return artifact;
+    }
+
+    changed = true;
+    return {
+      ...artifact,
+      content: [
+        artifact.content.slice(0, RUN_RETENTION_POLICY.maxInlineArtifactChars).trimEnd(),
+        RUN_RETENTION_POLICY.compactMarker
+      ].join("\n\n"),
+      metadata: {
+        ...artifact.metadata,
+        storage_compaction: "inline_truncated",
+        compacted_from_chars: String(artifact.content.length)
+      }
+    };
+  });
+
+  return changed ? { ...record, artifacts } : record;
+}
+
+function shouldPruneRun(record: RunRecord, now: string): boolean {
+  const pruneAfterHours =
+    record.run.status === "draft"
+      ? RUN_RETENTION_POLICY.pruneAfterHours.draft
+      : record.run.status === "awaiting_clarification"
+        ? RUN_RETENTION_POLICY.pruneAfterHours.awaiting_clarification
+        : record.run.status === "failed"
+          ? RUN_RETENTION_POLICY.pruneAfterHours.failed
+          : null;
+  if (!pruneAfterHours) {
+    return false;
+  }
+
+  return ageHours(record.run.updatedAt, now) >= pruneAfterHours;
+}
+
 export async function saveProjectRecord(record: ProjectRecord): Promise<void> {
   await writeJsonFile(projectFile(record.project.id), projectRecordSchema.parse(record));
 }
@@ -76,7 +130,10 @@ export async function readProjectRecord(projectId: string): Promise<ProjectRecor
 }
 
 export async function saveRunRecord(record: RunRecord): Promise<void> {
-  await writeJsonFile(runFile(record.run.projectId, record.run.id), runRecordSchema.parse(record));
+  await writeJsonFile(
+    runFile(record.run.projectId, record.run.id),
+    runRecordSchema.parse(compactArtifactContent(record))
+  );
 }
 
 export async function readRunRecord(projectId: string, runId: string): Promise<RunRecord> {
@@ -388,7 +445,35 @@ export async function createRunRecord(
   };
 
   await saveRunRecord(record);
+  await applyRunRetentionPolicy(projectId, { now });
   return record;
+}
+
+export async function applyRunRetentionPolicy(
+  projectId: string,
+  options?: { now?: string }
+): Promise<{ prunedRunIds: string[]; compactedRunIds: string[] }> {
+  const now = options?.now ?? new Date().toISOString();
+  const runs = await listRunRecords(projectId);
+  const prunedRunIds: string[] = [];
+  const compactedRunIds: string[] = [];
+
+  for (const record of runs) {
+    if (shouldPruneRun(record, now)) {
+      await rm(runFile(projectId, record.run.id), { force: true });
+      await rm(runStateDir(projectId, record.run.id), { recursive: true, force: true });
+      prunedRunIds.push(record.run.id);
+      continue;
+    }
+
+    const compacted = compactArtifactContent(record);
+    if (JSON.stringify(compacted.artifacts) !== JSON.stringify(record.artifacts)) {
+      await writeJsonFile(runFile(projectId, record.run.id), runRecordSchema.parse(compacted));
+      compactedRunIds.push(record.run.id);
+    }
+  }
+
+  return { prunedRunIds, compactedRunIds };
 }
 
 export async function createWatchTargetRecord(

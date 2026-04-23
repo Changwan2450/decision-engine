@@ -328,4 +328,49 @@ describe("workspace storage", () => {
       findRunsBySourceRunId(createdProject.project.id, "run-source-1")
     ).resolves.toMatchObject([{ run: { id: run.run.id } }]);
   });
+
+  it("prunes stale draft runs via retention policy", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "research-workspace-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+
+    const {
+      createProjectRecord,
+      createRunRecord,
+      updateRunRecord,
+      listRunRecords,
+      applyRunRetentionPolicy
+    } = await import("@/lib/storage/workspace");
+
+    const createdProject = await createProjectRecord({
+      name: "Retention",
+      description: "prune stale drafts"
+    });
+
+    const staleRun = await createRunRecord(createdProject.project.id, {
+      title: "old draft",
+      naturalLanguage: "목표: stale"
+    });
+    const keptRun = await createRunRecord(createdProject.project.id, {
+      title: "fresh draft",
+      naturalLanguage: "목표: fresh"
+    });
+
+    await updateRunRecord(createdProject.project.id, staleRun.run.id, (record) => ({
+      ...record,
+      run: {
+        ...record.run,
+        updatedAt: "2026-04-20T00:00:00.000Z"
+      }
+    }));
+
+    const result = await applyRunRetentionPolicy(createdProject.project.id, {
+      now: "2026-04-24T12:00:00.000Z"
+    });
+
+    const runs = await listRunRecords(createdProject.project.id);
+
+    expect(result.prunedRunIds).toContain(staleRun.run.id);
+    expect(runs.map((record) => record.run.id)).toContain(keptRun.run.id);
+    expect(runs.map((record) => record.run.id)).not.toContain(staleRun.run.id);
+  });
 });

@@ -253,3 +253,14 @@ export const CONTRACT_VERSIONING_AND_STATE_MIGRATION_RULE = {
   incompatibleVersionDefault: "invalidate_or_revalidate",
   silentMigrationAllowed: false
 } as const;
+
+export const RUN_RETENTION_POLICY = {
+  pruneAfterHours: {
+    draft: 24,
+    awaiting_clarification: 24,
+    failed: 72
+  },
+  compactAfterStatus: ["decided", "failed"] as const,
+  maxInlineArtifactChars: 1200,
+  compactMarker: "[compacted; see rawRef]"
+} as const;
