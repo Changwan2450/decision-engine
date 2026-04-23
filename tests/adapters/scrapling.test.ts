@@ -163,6 +163,20 @@ describe("createScraplingAdapter() — success path", () => {
     expect(a.metadata.source_label).toBe("community/success");
   });
 
+  it("marks official docs hosts with official sourcePriority", async () => {
+    const adapter = createScraplingAdapter({
+      now: fixedNow,
+      exec: makeExec({ status: "success", title: "t", text: "body" }),
+      normalize: async () => "body",
+      storeRaw: async () => "p/runs/r/raw/scrapling/postgres.txt"
+    });
+
+    const [a] = await adapter.execute(
+      makePlan(["https://www.postgresql.org/docs/current/ddl-rowsecurity.html"])
+    );
+    expect(a.sourcePriority).toBe("official");
+  });
+
   it("uses distinct artifact ids for different urls in the same run", async () => {
     const adapter = createScraplingAdapter({
       now: fixedNow,

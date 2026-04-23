@@ -376,4 +376,159 @@ describe("search-eval-contract", () => {
       ]
     });
   });
+
+  it("ignores internal kb artifacts and counts neutral external evidence as usable support", () => {
+    const record = {
+      run: {
+        id: "run-search-2",
+        projectId: "project-1",
+        title: "Postgres RLS vs app authorization",
+        mode: "standard",
+        status: "decided",
+        clarificationQuestions: [],
+        input: {
+          naturalLanguage: "",
+          pastedContent: "",
+          urls: []
+        },
+        createdAt: "2026-04-24T00:00:00.000Z",
+        updatedAt: "2026-04-24T00:00:00.000Z"
+      },
+      watchContext: null,
+      projectOrigin: null,
+      normalizedInput: null,
+      expansion: null,
+      kbContext: null,
+      decision: null,
+      prdSeed: null,
+      artifacts: [
+        {
+          id: "artifact-kb",
+          adapter: "kb-preread",
+          sourceType: "kb",
+          title: "KB Wiki Prior",
+          url: "https://kb.local/wiki/run-search-2",
+          canonicalUrl: "https://kb.local/wiki/run-search-2",
+          snippet: "snippet",
+          content: "content",
+          sourcePriority: "analysis",
+          sourceTier: "internal",
+          metadata: {
+            fetcher: "kb-preread",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        },
+        {
+          id: "artifact-official-1",
+          adapter: "scrapling",
+          sourceType: "web",
+          title: "Postgres RLS docs",
+          url: "https://www.postgresql.org/docs/current/ddl-rowsecurity.html",
+          canonicalUrl: "https://www.postgresql.org/docs/current/ddl-rowsecurity.html",
+          snippet: "snippet",
+          content: "content",
+          sourcePriority: "official",
+          sourceTier: "official",
+          metadata: {
+            fetcher: "scrapling",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        },
+        {
+          id: "artifact-official-2",
+          adapter: "scrapling",
+          sourceType: "web",
+          title: "Postgres GRANT docs",
+          url: "https://www.postgresql.org/docs/current/sql-grant.html",
+          canonicalUrl: "https://www.postgresql.org/docs/current/sql-grant.html",
+          snippet: "snippet",
+          content: "content",
+          sourcePriority: "official",
+          sourceTier: "official",
+          metadata: {
+            fetcher: "scrapling",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        },
+        {
+          id: "artifact-aggregator",
+          adapter: "scrapling",
+          sourceType: "web",
+          title: "s.jina.ai",
+          url: "https://s.jina.ai/?q=Postgres+row+level+security+vs+application+authorization",
+          canonicalUrl: "https://s.jina.ai/?q=Postgres+row+level+security+vs+application+authorization",
+          snippet: "snippet",
+          content: "content",
+          sourcePriority: "analysis",
+          sourceTier: "aggregator",
+          metadata: {
+            fetcher: "scrapling",
+            fetch_status: "success",
+            block_reason: "unknown",
+            bypass_level: "none",
+            login_required: "false"
+          }
+        }
+      ],
+      claims: [
+        {
+          id: "claim-kb",
+          artifactId: "artifact-kb",
+          text: "legacy internal prior",
+          topicKey: "legacy",
+          stance: "support",
+          citationIds: []
+        },
+        {
+          id: "claim-official-1",
+          artifactId: "artifact-official-1",
+          text: "RLS policies restrict rows visible to normal queries.",
+          topicKey: "rls",
+          stance: "neutral",
+          citationIds: []
+        },
+        {
+          id: "claim-official-2",
+          artifactId: "artifact-official-2",
+          text: "GRANT controls SQL-standard privileges separately from RLS policies.",
+          topicKey: "grant",
+          stance: "neutral",
+          citationIds: []
+        }
+      ],
+      citations: [],
+      contradictions: [],
+      evidenceSummary: null,
+      advisory: null
+    } satisfies RunRecord;
+
+    expect(summarizeSearchSignals(record)).toEqual({
+      supportEvidenceCount: 2,
+      counterevidenceCount: 0,
+      contradictionCount: 0,
+      falseContradictionRate: 0,
+      trustWeightedSourceDiversity: 5,
+      decisiveEvidencePosition: 1,
+      measuredMetrics: [
+        "support_recall_floor",
+        "counterevidence_recall_floor",
+        "false_contradiction_rate",
+        "trust_weighted_source_diversity",
+        "decisive_evidence_position"
+      ],
+      unmeasuredMetrics: [
+        "manual_rescue_rate",
+        "appropriate_abstention_rate"
+      ]
+    });
+  });
 });

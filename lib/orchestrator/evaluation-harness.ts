@@ -35,6 +35,8 @@ export type EvaluationCase = {
   tags: string[];
   expected: {
     communityCount: EvaluationBudget;
+    supportEvidenceCount?: EvaluationBudget;
+    trustWeightedSourceDiversity?: EvaluationBudget;
     contradictionCount: EvaluationBudget;
     leakedAuthClaimCount: EvaluationBudget;
     placeholderCount: EvaluationBudget;
@@ -45,6 +47,10 @@ export type EvaluationSummary = {
   runId: string;
   title: string;
   communityCount: number;
+  supportEvidenceCount: number;
+  counterevidenceCount: number;
+  trustWeightedSourceDiversity: number;
+  decisiveEvidencePosition: number | null;
   contradictionCount: number;
   leakedAuthClaimCount: number;
   placeholderCount: number;
@@ -112,6 +118,8 @@ export type EvaluationReportSummary = {
   failedCaseIds: string[];
   metricFailures: {
     communityCount: number;
+    supportEvidenceCount: number;
+    trustWeightedSourceDiversity: number;
     contradictionCount: number;
     leakedAuthClaimCount: number;
     placeholderCount: number;
@@ -219,6 +227,34 @@ export const DEFAULT_EVALUATION_CASES: EvaluationCase[] = [
   }
 ];
 
+export const HELD_OUT_DEEP_TOPIC_EVALUATION_CASES: EvaluationCase[] = [
+  {
+    id: "postgres-rls-vs-app-authorization",
+    title: "Postgres RLS vs app authorization — B2B SaaS access control",
+    runType: "comparison_tradeoff_analysis",
+    query: [
+      "Postgres RLS vs app authorization",
+      "goal: decision",
+      "target: B2B SaaS access control",
+      "comparison: tradeoffs, tenant isolation, operational complexity"
+    ].join("\n"),
+    tags: ["comparative", "deep-topic", "domain-shifted", "english-only", "held-out"],
+    expected: {
+      communityCount: { max: 0 },
+      supportEvidenceCount: { min: 2 },
+      trustWeightedSourceDiversity: { min: 4 },
+      contradictionCount: { max: 0 },
+      leakedAuthClaimCount: { max: 0 },
+      placeholderCount: { max: 0 }
+    }
+  }
+];
+
+export const AVAILABLE_EVALUATION_CASES: EvaluationCase[] = [
+  ...DEFAULT_EVALUATION_CASES,
+  ...HELD_OUT_DEEP_TOPIC_EVALUATION_CASES
+];
+
 export const DEFAULT_EVALUATED_RUN_SAMPLES: EvaluatedRunSample[] = [
   {
     id: "sample-react-rsc-vs-spa",
@@ -285,6 +321,23 @@ export const DEFAULT_EVALUATED_RUN_SAMPLES: EvaluatedRunSample[] = [
       ],
       blockers: []
     }
+  },
+  {
+    id: "sample-postgres-rls-vs-app-authorization",
+    caseId: "postgres-rls-vs-app-authorization",
+    runType: "comparison_tradeoff_analysis",
+    judgedAt: "2026-04-24T00:00:00.000Z",
+    basis: "manual_review",
+    summary: {
+      overall: "mixed",
+      strengths: [
+        "enterprise auth/db comparative query에서 community noise 없이 official docs evidence를 회수한다"
+      ],
+      concerns: [
+        "counterevidence branch는 아직 얕고 decisive evidence position을 더 앞당길 여지가 있다"
+      ],
+      blockers: []
+    }
   }
 ];
 
@@ -292,6 +345,7 @@ export function summarizeEvaluationRun(record: RunRecord): EvaluationSummary {
   const communityArtifacts = record.artifacts.filter(
     (artifact) => artifact.adapter === "community-search-json"
   );
+  const searchSignals = summarizeSearchSignals(record);
   const leakedAuthClaimCount = record.claims.filter((claim) => {
     const text = claim.text.toLowerCase();
     return (
@@ -311,6 +365,10 @@ export function summarizeEvaluationRun(record: RunRecord): EvaluationSummary {
     runId: record.run.id,
     title: record.run.title,
     communityCount: communityArtifacts.length,
+    supportEvidenceCount: searchSignals.supportEvidenceCount,
+    counterevidenceCount: searchSignals.counterevidenceCount,
+    trustWeightedSourceDiversity: searchSignals.trustWeightedSourceDiversity,
+    decisiveEvidencePosition: searchSignals.decisiveEvidencePosition,
     contradictionCount: record.contradictions.length,
     leakedAuthClaimCount,
     placeholderCount,
@@ -331,6 +389,22 @@ export function evaluateSummary(
 ): EvaluationResult {
   const failures: string[] = [];
   assertBudget("communityCount", summary.communityCount, expected.communityCount, failures);
+  if (expected.supportEvidenceCount) {
+    assertBudget(
+      "supportEvidenceCount",
+      summary.supportEvidenceCount,
+      expected.supportEvidenceCount,
+      failures
+    );
+  }
+  if (expected.trustWeightedSourceDiversity) {
+    assertBudget(
+      "trustWeightedSourceDiversity",
+      summary.trustWeightedSourceDiversity,
+      expected.trustWeightedSourceDiversity,
+      failures
+    );
+  }
   assertBudget(
     "contradictionCount",
     summary.contradictionCount,
@@ -361,6 +435,8 @@ export function summarizeEvaluationResults(
   const failedCaseIds: string[] = [];
   const metricFailures = {
     communityCount: 0,
+    supportEvidenceCount: 0,
+    trustWeightedSourceDiversity: 0,
     contradictionCount: 0,
     leakedAuthClaimCount: 0,
     placeholderCount: 0
@@ -373,6 +449,10 @@ export function summarizeEvaluationResults(
     for (const failure of result.failures) {
       if (failure.startsWith("communityCount ")) {
         metricFailures.communityCount += 1;
+      } else if (failure.startsWith("supportEvidenceCount ")) {
+        metricFailures.supportEvidenceCount += 1;
+      } else if (failure.startsWith("trustWeightedSourceDiversity ")) {
+        metricFailures.trustWeightedSourceDiversity += 1;
       } else if (failure.startsWith("contradictionCount ")) {
         metricFailures.contradictionCount += 1;
       } else if (failure.startsWith("leakedAuthClaimCount ")) {
@@ -392,7 +472,10 @@ export function summarizeEvaluationResults(
       trust:
         metricFailures.leakedAuthClaimCount === 0 &&
         metricFailures.placeholderCount === 0,
-      coverage: metricFailures.communityCount === 0,
+      coverage:
+        metricFailures.communityCount === 0 &&
+        metricFailures.supportEvidenceCount === 0 &&
+        metricFailures.trustWeightedSourceDiversity === 0,
       contradiction: metricFailures.contradictionCount === 0
     },
     blockerIds: []
@@ -512,6 +595,10 @@ export function renderEvaluationMarkdownReport(report: EvaluationHarnessReport):
     lines.push(`- runType: ${result.runType}`);
     lines.push(`- pass: ${result.pass}`);
     lines.push(`- communityCount: ${result.summary.communityCount}`);
+    lines.push(`- supportEvidenceCount: ${result.summary.supportEvidenceCount}`);
+    lines.push(
+      `- trustWeightedSourceDiversity: ${result.summary.trustWeightedSourceDiversity}`
+    );
     lines.push(`- contradictionCount: ${result.summary.contradictionCount}`);
     lines.push(`- leakedAuthClaimCount: ${result.summary.leakedAuthClaimCount}`);
     lines.push(`- placeholderCount: ${result.summary.placeholderCount}`);

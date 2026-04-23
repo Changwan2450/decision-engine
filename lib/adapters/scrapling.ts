@@ -43,6 +43,7 @@ import {
   truncateErrorMessage,
   type FetchOutcome
 } from "@/lib/adapters/contract";
+import { inferSourceTier } from "@/lib/adapters/source-tier";
 import {
   normalizeToMarkdown,
   type NormalizeFormat
@@ -278,10 +279,24 @@ async function fetchOne(args: {
     language,
     rawRef,
     outcome,
+    sourcePriority: resolveSourcePriority(canonical || url),
     sourceLabel: `${sourceType}/${outcome.status}`,
     rateLimitBucket: `scrapling/${mode}`,
     extra: errorMessage ? { error: errorMessage } : undefined
   });
+}
+
+function resolveSourcePriority(url: string): SourceArtifact["sourcePriority"] {
+  switch (inferSourceTier(url)) {
+    case "official":
+      return "official";
+    case "primary":
+      return "primary_data";
+    case "community":
+      return "community";
+    default:
+      return "analysis";
+  }
 }
 
 // ---- outcome parsing ---------------------------------------------------

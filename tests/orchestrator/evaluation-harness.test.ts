@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  AVAILABLE_EVALUATION_CASES,
   DEFAULT_EVALUATED_RUN_SAMPLES,
   DEFAULT_EVALUATION_CASES,
+  HELD_OUT_DEEP_TOPIC_EVALUATION_CASES,
   evaluateBaselineGuardrails,
   evaluateSummary,
   listNonCompensatoryShipBlockers,
@@ -78,6 +80,10 @@ describe("evaluation-harness", () => {
       runId: "run-1",
       title: "React Server Components vs SPA — 실전 도입 후회",
       communityCount: 1,
+      supportEvidenceCount: 1,
+      counterevidenceCount: 0,
+      trustWeightedSourceDiversity: 1,
+      decisiveEvidencePosition: 1,
       contradictionCount: 0,
       leakedAuthClaimCount: 0,
       placeholderCount: 0,
@@ -92,6 +98,10 @@ describe("evaluation-harness", () => {
         runId: "run-1",
         title: "t",
         communityCount: 7,
+        supportEvidenceCount: 0,
+        counterevidenceCount: 0,
+        trustWeightedSourceDiversity: 0,
+        decisiveEvidencePosition: null,
         contradictionCount: 2,
         leakedAuthClaimCount: 1,
         placeholderCount: 1,
@@ -141,6 +151,10 @@ describe("evaluation-harness", () => {
             runId: "run-1",
             title: "react",
             communityCount: 5,
+            supportEvidenceCount: 2,
+            counterevidenceCount: 0,
+            trustWeightedSourceDiversity: 4,
+            decisiveEvidencePosition: 1,
             contradictionCount: 0,
             leakedAuthClaimCount: 0,
             placeholderCount: 0,
@@ -164,6 +178,10 @@ describe("evaluation-harness", () => {
             runId: "run-2",
             title: "ai",
             communityCount: 0,
+            supportEvidenceCount: 0,
+            counterevidenceCount: 0,
+            trustWeightedSourceDiversity: 0,
+            decisiveEvidencePosition: null,
             contradictionCount: 1,
             leakedAuthClaimCount: 0,
             placeholderCount: 1,
@@ -190,6 +208,8 @@ describe("evaluation-harness", () => {
       failedCaseIds: ["ai-memory-vs-prompt-stuffing"],
       metricFailures: {
         communityCount: 1,
+        supportEvidenceCount: 0,
+        trustWeightedSourceDiversity: 0,
         contradictionCount: 1,
         leakedAuthClaimCount: 0,
         placeholderCount: 1
@@ -204,27 +224,39 @@ describe("evaluation-harness", () => {
   });
 
   it("tracks manual evaluated run samples as bootstrap evidence for the contract", () => {
+    expect(HELD_OUT_DEEP_TOPIC_EVALUATION_CASES.map((entry) => entry.id)).toEqual([
+      "postgres-rls-vs-app-authorization"
+    ]);
+    expect(AVAILABLE_EVALUATION_CASES.map((entry) => entry.id)).toEqual([
+      "react-rsc-vs-spa",
+      "typescript-monolith-vs-microservices",
+      "rust-vs-go",
+      "ai-memory-vs-prompt-stuffing",
+      "postgres-rls-vs-app-authorization"
+    ]);
     expect(DEFAULT_EVALUATED_RUN_SAMPLES.map((entry) => entry.caseId)).toEqual([
       "react-rsc-vs-spa",
       "typescript-monolith-vs-microservices",
       "rust-vs-go",
-      "ai-memory-vs-prompt-stuffing"
+      "ai-memory-vs-prompt-stuffing",
+      "postgres-rls-vs-app-authorization"
     ]);
 
     expect(
-      summarizeEvaluatedRunSamples(DEFAULT_EVALUATION_CASES, DEFAULT_EVALUATED_RUN_SAMPLES)
+      summarizeEvaluatedRunSamples(AVAILABLE_EVALUATION_CASES, DEFAULT_EVALUATED_RUN_SAMPLES)
     ).toEqual({
-      totalSamples: 4,
+      totalSamples: 5,
       coveredCaseIds: [
         "react-rsc-vs-spa",
         "typescript-monolith-vs-microservices",
         "rust-vs-go",
-        "ai-memory-vs-prompt-stuffing"
+        "ai-memory-vs-prompt-stuffing",
+        "postgres-rls-vs-app-authorization"
       ],
       missingCaseIds: [],
       runTypeCounts: {
         exploratory_scan: 0,
-        comparison_tradeoff_analysis: 4,
+        comparison_tradeoff_analysis: 5,
         longitudinal_watch: 0,
         contradiction_resolution: 0,
         pre_decision_verification: 0
@@ -371,6 +403,10 @@ describe("evaluation-harness", () => {
           runId: "fresh",
           title: "comparison",
           communityCount: 5,
+          supportEvidenceCount: 2,
+          counterevidenceCount: 1,
+          trustWeightedSourceDiversity: 4,
+          decisiveEvidencePosition: 1,
           contradictionCount: 1,
           leakedAuthClaimCount: 0,
           placeholderCount: 0,
@@ -381,6 +417,10 @@ describe("evaluation-harness", () => {
           runId: "adaptive",
           title: "comparison",
           communityCount: 4,
+          supportEvidenceCount: 2,
+          counterevidenceCount: 0,
+          trustWeightedSourceDiversity: 4,
+          decisiveEvidencePosition: 1,
           contradictionCount: 0,
           leakedAuthClaimCount: 0,
           placeholderCount: 0,
@@ -443,6 +483,8 @@ describe("evaluation-harness", () => {
         failedCaseIds: [],
         metricFailures: {
           communityCount: 0,
+          supportEvidenceCount: 0,
+          trustWeightedSourceDiversity: 0,
           contradictionCount: 0,
           leakedAuthClaimCount: 0,
           placeholderCount: 0
@@ -475,6 +517,10 @@ describe("evaluation-harness", () => {
             runId: "run-1",
             title: "React Server Components vs SPA",
             communityCount: 5,
+            supportEvidenceCount: 2,
+            counterevidenceCount: 0,
+            trustWeightedSourceDiversity: 4,
+            decisiveEvidencePosition: 1,
             contradictionCount: 0,
             leakedAuthClaimCount: 0,
             placeholderCount: 0,

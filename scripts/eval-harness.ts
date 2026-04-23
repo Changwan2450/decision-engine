@@ -2,6 +2,7 @@
 import { createProjectRecord, readRunRecord } from "@/lib/storage/workspace";
 import { handleMcpRequest } from "@/lib/mcp/server";
 import {
+  AVAILABLE_EVALUATION_CASES,
   buildSearchContractSummary,
   DEFAULT_EVALUATED_RUN_SAMPLES,
   DEFAULT_EVALUATION_CASES,
@@ -35,7 +36,7 @@ async function main() {
   );
   const cases =
     requestedCaseIds.size > 0
-      ? DEFAULT_EVALUATION_CASES.filter((entry) => requestedCaseIds.has(entry.id))
+      ? AVAILABLE_EVALUATION_CASES.filter((entry) => requestedCaseIds.has(entry.id))
       : DEFAULT_EVALUATION_CASES;
   if (cases.length === 0) {
     process.stderr.write("No evaluation cases matched the requested --case filters.\n");

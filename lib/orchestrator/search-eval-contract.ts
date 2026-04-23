@@ -353,15 +353,31 @@ const UNMEASURED_SEARCH_METRICS: SearchEvalMetricId[] = [
 ];
 
 export function summarizeSearchSignals(record: RunRecord): SearchSignalSummary {
-  const artifactOrder = new Map(record.artifacts.map((artifact, index) => [artifact.id, index + 1]));
+  const retrievalArtifacts = record.artifacts.filter(
+    (artifact) => artifact.sourceType !== "kb" && artifact.sourceTier !== "internal"
+  );
+  const retrievalArtifactIds = new Set(retrievalArtifacts.map((artifact) => artifact.id));
+  const artifactOrder = new Map(
+    retrievalArtifacts.map((artifact, index) => [artifact.id, index + 1])
+  );
   const supportEvidenceArtifactIds = new Set(
     record.claims
-      .filter((claim) => claim.stance === "support" && typeof claim.artifactId === "string")
+      .filter(
+        (claim) =>
+          claim.stance !== "oppose" &&
+          typeof claim.artifactId === "string" &&
+          retrievalArtifactIds.has(claim.artifactId)
+      )
       .map((claim) => claim.artifactId)
   );
   const counterevidenceArtifactIds = new Set(
     record.claims
-      .filter((claim) => claim.stance === "oppose" && typeof claim.artifactId === "string")
+      .filter(
+        (claim) =>
+          claim.stance === "oppose" &&
+          typeof claim.artifactId === "string" &&
+          retrievalArtifactIds.has(claim.artifactId)
+      )
       .map((claim) => claim.artifactId)
   );
 
@@ -375,7 +391,7 @@ export function summarizeSearchSignals(record: RunRecord): SearchSignalSummary {
   }
 
   const trustWeightedSourceDiversity = Array.from(
-    new Set(record.artifacts.map((artifact) => artifact.sourcePriority))
+    new Set(retrievalArtifacts.map((artifact) => artifact.sourcePriority))
   ).reduce((total, priority) => total + sourcePriorityWeight[priority], 0);
 
   const contradictionCount = record.contradictions.length;

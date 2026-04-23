@@ -5,6 +5,7 @@ import { dirname, resolve } from "node:path";
 import { createProjectRecord, readRunRecord } from "@/lib/storage/workspace";
 import { handleMcpRequest } from "@/lib/mcp/server";
 import {
+  AVAILABLE_EVALUATION_CASES,
   buildSearchContractSummary,
   DEFAULT_EVALUATED_RUN_SAMPLES,
   DEFAULT_EVALUATION_CASES,
@@ -59,7 +60,7 @@ async function buildReport(): Promise<EvaluationHarnessReport> {
   const { requestedCaseIds } = parseArgs(process.argv.slice(2));
   const cases =
     requestedCaseIds.size > 0
-      ? DEFAULT_EVALUATION_CASES.filter((entry) => requestedCaseIds.has(entry.id))
+      ? AVAILABLE_EVALUATION_CASES.filter((entry) => requestedCaseIds.has(entry.id))
       : DEFAULT_EVALUATION_CASES;
   if (cases.length === 0) {
     throw new Error("No evaluation cases matched the requested --case filters.");
