@@ -4,7 +4,10 @@ import path from "node:path";
 import { WORKSPACE_ROOT } from "@/lib/config";
 import { createProject, type Project } from "@/lib/domain/projects";
 import { createRun, type Run } from "@/lib/domain/runs";
-import { RUN_RETENTION_POLICY } from "@/lib/orchestrator/research-quality-contract";
+import {
+  classifyRunState,
+  RUN_RETENTION_POLICY
+} from "@/lib/orchestrator/research-quality-contract";
 import {
   digestSchema,
   inboxItemSchema,
@@ -77,7 +80,7 @@ function ageHours(fromIso: string, toIso: string): number {
 }
 
 function compactArtifactContent(record: RunRecord): RunRecord {
-  if (record.run.status !== "decided" && record.run.status !== "failed") {
+  if (classifyRunState(record.run.status) !== "decision_state" && record.run.status !== "failed") {
     return record;
   }
 
@@ -106,6 +109,10 @@ function compactArtifactContent(record: RunRecord): RunRecord {
 }
 
 function shouldPruneRun(record: RunRecord, now: string): boolean {
+  if (classifyRunState(record.run.status) !== "ephemeral") {
+    return false;
+  }
+
   const pruneAfterHours =
     record.run.status === "draft"
       ? RUN_RETENTION_POLICY.pruneAfterHours.draft

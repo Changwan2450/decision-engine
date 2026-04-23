@@ -28,6 +28,13 @@ export type ContextClass =
   | "contradiction"
   | "decision";
 
+export type StateClassification =
+  | "ephemeral"
+  | "evidence_record"
+  | "decision_state"
+  | "adaptive_memory"
+  | "promoted_knowledge";
+
 export const RESEARCH_QUALITY_CONTRACT_VERSION = "2026-04-22.v1";
 
 export const RUN_TYPE_QUALITY_MATRIX: Record<
@@ -253,6 +260,74 @@ export const CONTRACT_VERSIONING_AND_STATE_MIGRATION_RULE = {
   incompatibleVersionDefault: "invalidate_or_revalidate",
   silentMigrationAllowed: false
 } as const;
+
+export const STATE_CLASSIFICATION_CONTRACT: Record<
+  StateClassification,
+  {
+    purpose: string;
+    examples: string[];
+    retentionRule: string;
+  }
+> = {
+  ephemeral: {
+    purpose: "중간 작업 상태와 재시도 대기 상태",
+    examples: ["draft run", "awaiting clarification run", "failed retry state"],
+    retentionRule: "short_ttl_then_prune"
+  },
+  evidence_record: {
+    purpose: "재현과 감사에 필요한 원본 근거",
+    examples: ["raw payload", "normalized artifact", "citation provenance"],
+    retentionRule: "compact_and_keep_by_reference"
+  },
+  decision_state: {
+    purpose: "한 run의 핵심 판단 상태",
+    examples: ["claims", "contradictions", "evidence summary", "final decision"],
+    retentionRule: "keep_compact_operator_ready_state"
+  },
+  adaptive_memory: {
+    purpose: "반복 패턴 기반의 제한적 적응 상태",
+    examples: ["topic ledger", "decision ledger", "contradiction ledger"],
+    retentionRule: "retain_only_if_eval_gated"
+  },
+  promoted_knowledge: {
+    purpose: "장기 재사용 가치가 검증된 판단",
+    examples: ["KB note", "decision log", "promoted watch output"],
+    retentionRule: "promote_only_after_validation"
+  }
+} as const;
+
+export const STATE_CLASSIFICATION_RULES = {
+  ifUnclassified: "discard",
+  runStatusMap: {
+    draft: "ephemeral",
+    awaiting_clarification: "ephemeral",
+    collecting: "ephemeral",
+    synthesizing: "ephemeral",
+    failed: "ephemeral",
+    decided: "decision_state"
+  } as const,
+  artifactRule: "rawRef-backed artifacts are evidence_record; inline operator summary stays in decision_state",
+  memoryRule: "project memory is adaptive_memory and can never replace evidence_record or decision_state",
+  promotionRule: "only validated reusable outcomes may enter promoted_knowledge"
+} as const;
+
+export function classifyRunState(status: ResearchRunType | "draft" | "awaiting_clarification" | "collecting" | "synthesizing" | "decided" | "failed"): StateClassification {
+  if (
+    status === "draft" ||
+    status === "awaiting_clarification" ||
+    status === "collecting" ||
+    status === "synthesizing" ||
+    status === "failed"
+  ) {
+    return "ephemeral";
+  }
+
+  if (status === "decided") {
+    return "decision_state";
+  }
+
+  return "decision_state";
+}
 
 export const RUN_RETENTION_POLICY = {
   pruneAfterHours: {

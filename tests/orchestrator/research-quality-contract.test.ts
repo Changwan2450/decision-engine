@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   BASELINE_HARNESS_RULE,
+  classifyRunState,
   CONTEXT_BOUNDARY_SPEC,
   CONTRACT_VERSIONING_AND_STATE_MIGRATION_RULE,
   NON_COMPENSATORY_SHIP_BLOCKERS,
   NON_SIGNAL_PROXY_BAN_LIST,
   RETENTION_ELIGIBILITY_SCHEMA,
   RESEARCH_QUALITY_CONTRACT_VERSION,
+  STATE_CLASSIFICATION_CONTRACT,
+  STATE_CLASSIFICATION_RULES,
   RUN_TYPE_QUALITY_MATRIX
 } from "@/lib/orchestrator/research-quality-contract";
 
@@ -88,5 +91,27 @@ describe("research-quality-contract", () => {
         "any non-compensatory blocker breach fails regardless of packaging/helpfulness gains",
       rollbackTrigger: "adaptive policy loses to fresh_no_memory on guarded metrics"
     });
+  });
+
+  it("classifies retained state into explicit layers with discard default", () => {
+    expect(Object.keys(STATE_CLASSIFICATION_CONTRACT)).toEqual([
+      "ephemeral",
+      "evidence_record",
+      "decision_state",
+      "adaptive_memory",
+      "promoted_knowledge"
+    ]);
+    expect(STATE_CLASSIFICATION_RULES.ifUnclassified).toBe("discard");
+    expect(STATE_CLASSIFICATION_RULES.runStatusMap).toEqual({
+      draft: "ephemeral",
+      awaiting_clarification: "ephemeral",
+      collecting: "ephemeral",
+      synthesizing: "ephemeral",
+      failed: "ephemeral",
+      decided: "decision_state"
+    });
+    expect(classifyRunState("draft")).toBe("ephemeral");
+    expect(classifyRunState("failed")).toBe("ephemeral");
+    expect(classifyRunState("decided")).toBe("decision_state");
   });
 });
