@@ -71,4 +71,22 @@ describe("planRun source target policy", () => {
       ])
     );
   });
+
+  it("drops community target for observability vendor-vs-open-source comparative queries", () => {
+    const plan = planRun(
+      makeRecord({
+        title: "OpenTelemetry vs vendor APM — platform observability choice",
+        naturalLanguage: "goal: platform observability tradeoffs and lock-in"
+      })
+    );
+
+    expect(plan.sourceTargets).toEqual(["web"]);
+    expect(plan.expansion?.expanded.every((entry) => entry.source === "jina-search")).toBe(true);
+    expect(plan.normalizedInput.urls).toEqual(
+      expect.arrayContaining([
+        "https://opentelemetry.io/docs/concepts/observability-primer/",
+        "https://opentelemetry.io/docs/collector/"
+      ])
+    );
+  });
 });

@@ -177,6 +177,20 @@ describe("createScraplingAdapter() — success path", () => {
     expect(a.sourcePriority).toBe("official");
   });
 
+  it("marks opentelemetry docs hosts with official sourcePriority", async () => {
+    const adapter = createScraplingAdapter({
+      now: fixedNow,
+      exec: makeExec({ status: "success", title: "t", text: "body" }),
+      normalize: async () => "body",
+      storeRaw: async () => "p/runs/r/raw/scrapling/otel.txt"
+    });
+
+    const [a] = await adapter.execute(
+      makePlan(["https://opentelemetry.io/docs/concepts/observability-primer/"])
+    );
+    expect(a.sourcePriority).toBe("official");
+  });
+
   it("uses distinct artifact ids for different urls in the same run", async () => {
     const adapter = createScraplingAdapter({
       now: fixedNow,

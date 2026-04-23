@@ -19,7 +19,9 @@ const COMMUNITY_HOSTS = new Set([
 
 const OFFICIAL_HOSTS = new Set<string>([
   "postgresql.org",
-  "www.postgresql.org"
+  "www.postgresql.org",
+  "opentelemetry.io",
+  "www.opentelemetry.io"
 ]);
 
 const PRIMARY_HOSTS = new Set<string>([]);

@@ -225,38 +225,42 @@ describe("evaluation-harness", () => {
 
   it("tracks manual evaluated run samples as bootstrap evidence for the contract", () => {
     expect(HELD_OUT_DEEP_TOPIC_EVALUATION_CASES.map((entry) => entry.id)).toEqual([
-      "postgres-rls-vs-app-authorization"
+      "postgres-rls-vs-app-authorization",
+      "otel-vs-vendor-apm"
     ]);
     expect(AVAILABLE_EVALUATION_CASES.map((entry) => entry.id)).toEqual([
       "react-rsc-vs-spa",
       "typescript-monolith-vs-microservices",
       "rust-vs-go",
       "ai-memory-vs-prompt-stuffing",
-      "postgres-rls-vs-app-authorization"
+      "postgres-rls-vs-app-authorization",
+      "otel-vs-vendor-apm"
     ]);
     expect(DEFAULT_EVALUATED_RUN_SAMPLES.map((entry) => entry.caseId)).toEqual([
       "react-rsc-vs-spa",
       "typescript-monolith-vs-microservices",
       "rust-vs-go",
       "ai-memory-vs-prompt-stuffing",
-      "postgres-rls-vs-app-authorization"
+      "postgres-rls-vs-app-authorization",
+      "otel-vs-vendor-apm"
     ]);
 
     expect(
       summarizeEvaluatedRunSamples(AVAILABLE_EVALUATION_CASES, DEFAULT_EVALUATED_RUN_SAMPLES)
     ).toEqual({
-      totalSamples: 5,
+      totalSamples: 6,
       coveredCaseIds: [
         "react-rsc-vs-spa",
         "typescript-monolith-vs-microservices",
         "rust-vs-go",
         "ai-memory-vs-prompt-stuffing",
-        "postgres-rls-vs-app-authorization"
+        "postgres-rls-vs-app-authorization",
+        "otel-vs-vendor-apm"
       ],
       missingCaseIds: [],
       runTypeCounts: {
         exploratory_scan: 0,
-        comparison_tradeoff_analysis: 5,
+        comparison_tradeoff_analysis: 6,
         longitudinal_watch: 0,
         contradiction_resolution: 0,
         pre_decision_verification: 0

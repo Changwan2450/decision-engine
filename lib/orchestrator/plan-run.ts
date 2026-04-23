@@ -28,8 +28,11 @@ function shouldDeprioritizeCommunity(record: RunRecord): boolean {
     /(authorization|auth|access control|rbac|abac|permission|tenant|multi-tenant|security|rls|row level security)/.test(
       haystack
     );
+  const hasObservabilityVendorPattern =
+    /(opentelemetry|otel|observability|tracing|telemetry)/.test(haystack) &&
+    /(vendor apm|apm|datadog|new relic|dynatrace|elastic)/.test(haystack);
 
-  return isComparative && hasEnterpriseAuthPattern;
+  return isComparative && (hasEnterpriseAuthPattern || hasObservabilityVendorPattern);
 }
 
 function inferKnownSeedUrls(input: ReturnType<typeof normalizeRunInputs>): string[] {
@@ -53,6 +56,17 @@ function inferKnownSeedUrls(input: ReturnType<typeof normalizeRunInputs>): strin
     return [
       "https://www.postgresql.org/docs/current/ddl-rowsecurity.html",
       "https://www.postgresql.org/docs/current/sql-grant.html"
+    ];
+  }
+
+  const isOpenTelemetryVendorApm =
+    /(opentelemetry|otel)/.test(haystack) &&
+    /(vendor apm|apm|observability|tracing|telemetry)/.test(haystack);
+
+  if (isOpenTelemetryVendorApm) {
+    return [
+      "https://opentelemetry.io/docs/concepts/observability-primer/",
+      "https://opentelemetry.io/docs/collector/"
     ];
   }
 

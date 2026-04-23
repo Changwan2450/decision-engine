@@ -247,6 +247,26 @@ export const HELD_OUT_DEEP_TOPIC_EVALUATION_CASES: EvaluationCase[] = [
       leakedAuthClaimCount: { max: 0 },
       placeholderCount: { max: 0 }
     }
+  },
+  {
+    id: "otel-vs-vendor-apm",
+    title: "OpenTelemetry vs vendor APM — platform observability choice",
+    runType: "comparison_tradeoff_analysis",
+    query: [
+      "OpenTelemetry vs vendor APM",
+      "goal: decision",
+      "target: platform observability",
+      "comparison: tradeoffs, lock-in, operational complexity"
+    ].join("\n"),
+    tags: ["comparative", "deep-topic", "domain-shifted", "korean-english-mixed", "held-out"],
+    expected: {
+      communityCount: { max: 0 },
+      supportEvidenceCount: { min: 2 },
+      trustWeightedSourceDiversity: { min: 4 },
+      contradictionCount: { max: 0 },
+      leakedAuthClaimCount: { max: 0 },
+      placeholderCount: { max: 0 }
+    }
   }
 ];
 
@@ -335,6 +355,23 @@ export const DEFAULT_EVALUATED_RUN_SAMPLES: EvaluatedRunSample[] = [
       ],
       concerns: [
         "counterevidence branch는 아직 얕고 decisive evidence position을 더 앞당길 여지가 있다"
+      ],
+      blockers: []
+    }
+  },
+  {
+    id: "sample-otel-vs-vendor-apm",
+    caseId: "otel-vs-vendor-apm",
+    runType: "comparison_tradeoff_analysis",
+    judgedAt: "2026-04-24T00:00:00.000Z",
+    basis: "manual_review",
+    summary: {
+      overall: "good",
+      strengths: [
+        "observability comparative query에서 community noise 없이 official OpenTelemetry docs를 회수한다"
+      ],
+      concerns: [
+        "vendor-specific decisive evidence branch는 아직 더 보강될 여지가 있다"
       ],
       blockers: []
     }
