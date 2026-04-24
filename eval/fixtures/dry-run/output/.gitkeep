@@ -1,0 +1,3 @@
+# Auditor responses land here when run_dryrun.py executes.
+# File names: audit-output-raw-YYYYMMDDTHHMMSSZ.txt (verbatim API response)
+#             audit-output-YYYYMMDDTHHMMSSZ.json    (pretty-printed parsed report)

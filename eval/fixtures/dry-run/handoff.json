@@ -1,0 +1,172 @@
+{
+  "packId": "pack-001-dryrun",
+  "packVersion": "0.0.0-dryrun",
+  "half": "DRY-RUN",
+  "engineBuild": {
+    "commit": "synthetic-fixture-no-real-engine-run",
+    "timestamp": "2026-04-24T00:00:00Z"
+  },
+  "auditConfig": {
+    "worstK": 3,
+    "notes": "Dry-run fixture. Do not treat as a real PACK-001 audit cycle."
+  },
+  "topics": [
+    {
+      "id": "fix-01",
+      "query": "How do small teams structure observability for a TypeScript backend?",
+      "axes": {
+        "language": "en",
+        "genre": "experience-only",
+        "recency": "static",
+        "disputedness": "consensual",
+        "doc-density": "sparse"
+      },
+      "acceptance": {
+        "requiredSourceClassesAnyOf": ["experience-report", "blog", "community"],
+        "requiredSourceClassesAllOf": [],
+        "forbiddenSourcePatterns": ["s.jina.ai", "login.required"],
+        "minUsableClaims": 5,
+        "maxFalseConvergenceSignals": 2,
+        "allowAbstain": false
+      },
+      "bundle": {
+        "artifacts": [
+          { "id": "a1", "url": "https://example-eng-blog.io/observability-small-team", "title": "Observability on a 4-engineer team", "host": "example-eng-blog.io" },
+          { "id": "a2", "url": "https://devnotes.example.com/pino-to-otel", "title": "Switching from pino to OpenTelemetry", "host": "devnotes.example.com" },
+          { "id": "a3", "url": "https://news.ycombinator.com/item?id=40000001", "title": "Ask HN: lightweight observability for node", "host": "news.ycombinator.com" },
+          { "id": "a4", "url": "https://reddit.example/r/typescript/comments/abcd/observability", "title": "What are you using for TS backend tracing?", "host": "reddit.example" },
+          { "id": "a5", "url": "https://postmortem.example.org/tracing-cost", "title": "The cost of always-on tracing", "host": "postmortem.example.org" }
+        ],
+        "claims": [
+          { "id": "c1", "artifactId": "a1", "text": "Our 4-engineer team standardized on OTel SDK for Node 20 and routes spans to a hosted Grafana Cloud stack; total monthly cost landed at $180.", "sourceClass": "experience-report", "stance": "support" },
+          { "id": "c2", "artifactId": "a2", "text": "Migrating structured logging from pino to otel-js required rewriting our middleware layer but not our log-consumer pipelines.", "sourceClass": "experience-report", "stance": "support" },
+          { "id": "c3", "artifactId": "a3", "text": "HN commenters broadly agreed that sampling at 1-5% is sufficient for small teams; full sampling is wasted spend.", "sourceClass": "community", "stance": "support" },
+          { "id": "c4", "artifactId": "a4", "text": "A common Reddit pattern is to start with console.log in structured JSON, then upgrade to OTel only when incidents demand it.", "sourceClass": "community", "stance": "support" },
+          { "id": "c5", "artifactId": "a5", "text": "This blog argues that always-on tracing is premature for teams under ~10 engineers and a single-digit-service footprint.", "sourceClass": "blog", "stance": "support" },
+          { "id": "c6", "artifactId": "a5", "text": "However, the same post notes that error-path sampling (tail-based) is worth enabling from day one even at small scale.", "sourceClass": "blog", "stance": "oppose" }
+        ],
+        "contradictions": [
+          { "pair": ["c5", "c6"], "kind": "nuance", "note": "same article, pro/con stance on scope" }
+        ],
+        "runMetadata": { "runId": "dryrun-fix-01", "durationMs": 12345, "retrievalBudgetUsed": 0.42 }
+      }
+    },
+    {
+      "id": "fix-02",
+      "query": "Real-world experience with WebAssembly for server-side workloads in 2025",
+      "axes": {
+        "language": "en",
+        "genre": "experience-only",
+        "recency": "recent-6mo",
+        "disputedness": "disputed",
+        "doc-density": "sparse"
+      },
+      "acceptance": {
+        "requiredSourceClassesAnyOf": ["experience-report", "blog", "community"],
+        "requiredSourceClassesAllOf": [],
+        "forbiddenSourcePatterns": ["s.jina.ai", "login.required"],
+        "minUsableClaims": 5,
+        "maxFalseConvergenceSignals": 2,
+        "allowAbstain": false
+      },
+      "bundle": {
+        "artifacts": [
+          { "id": "a1", "url": "https://wasm-in-prod.example.net/2025-retrospective", "title": "One year of Wasm on the edge", "host": "wasm-in-prod.example.net" },
+          { "id": "a2", "url": "https://s.jina.ai/https://paywalled-analysis.example/wasm-server", "title": "Analysis: server-side Wasm adoption", "host": "s.jina.ai" },
+          { "id": "a3", "url": "https://engineering-blog.example.co/wasm-vs-containers", "title": "Wasm vs containers for sandboxing", "host": "engineering-blog.example.co" },
+          { "id": "a4", "url": "https://news.ycombinator.com/item?id=40000002", "title": "Show HN: our Wasm-based plugin host", "host": "news.ycombinator.com" },
+          { "id": "a5", "url": "https://incidents.example.io/wasm-memory-leak", "title": "Postmortem: Wasm memory growth in prod", "host": "incidents.example.io" }
+        ],
+        "claims": [
+          { "id": "c1", "artifactId": "a1", "text": "After 12 months running WasmEdge for our plugin sandbox, cold-start is consistently under 2ms but debugging is significantly harder than container-based isolation.", "sourceClass": "experience-report", "stance": "support" },
+          { "id": "c2", "artifactId": "a2", "text": "Analysis concludes that server-side Wasm is not yet viable for general-purpose workloads outside edge-specific use cases.", "sourceClass": "blog", "stance": "oppose" },
+          { "id": "c3", "artifactId": "a3", "text": "For pure sandboxing, Wasm offers a ~10x startup advantage over gVisor at the cost of language-ecosystem constraints.", "sourceClass": "blog", "stance": "support" },
+          { "id": "c4", "artifactId": "a4", "text": "HN thread showed strong support for Wasm in plugin hosts, but repeated skepticism about full-application Wasm servers.", "sourceClass": "community", "stance": "nuance" },
+          { "id": "c5", "artifactId": "a5", "text": "Postmortem documents a memory-growth incident caused by Wasm linear-memory not being returned to the host after module unload.", "sourceClass": "experience-report", "stance": "oppose" }
+        ],
+        "contradictions": [
+          { "pair": ["c1", "c5"], "kind": "direct", "note": "production stability: one positive, one negative" }
+        ],
+        "runMetadata": { "runId": "dryrun-fix-02", "durationMs": 18210, "retrievalBudgetUsed": 0.55 }
+      }
+    },
+    {
+      "id": "fix-03",
+      "query": "SQLite WAL mode concurrency limits for a small production service",
+      "axes": {
+        "language": "en",
+        "genre": "official-sparse",
+        "recency": "static",
+        "disputedness": "consensual",
+        "doc-density": "sparse"
+      },
+      "acceptance": {
+        "requiredSourceClassesAnyOf": ["community", "blog", "experience-report"],
+        "requiredSourceClassesAllOf": ["official-doc"],
+        "forbiddenSourcePatterns": ["s.jina.ai"],
+        "minUsableClaims": 4,
+        "maxFalseConvergenceSignals": 0,
+        "allowAbstain": false
+      },
+      "bundle": {
+        "artifacts": [
+          { "id": "a1", "url": "https://example-sqlite-blog.dev/wal-mode-realworld", "title": "SQLite WAL in production: what we learned", "host": "example-sqlite-blog.dev" },
+          { "id": "a2", "url": "https://news.ycombinator.com/item?id=40000003", "title": "SQLite WAL concurrency in practice", "host": "news.ycombinator.com" },
+          { "id": "a3", "url": "https://devnotes.example/sqlite-wal-postmortem", "title": "When WAL mode bit us", "host": "devnotes.example" },
+          { "id": "a4", "url": "https://reddit.example/r/sqlite/comments/efgh/wal-concurrency", "title": "WAL concurrency question", "host": "reddit.example" },
+          { "id": "a5", "url": "https://dbweekly.example.org/sqlite-wal-2024", "title": "SQLite WAL mode: the concurrency picture", "host": "dbweekly.example.org" }
+        ],
+        "claims": [
+          { "id": "c1", "artifactId": "a1", "text": "Teams running SQLite in WAL mode with 1 writer and N readers consistently report stable behavior up to a few hundred concurrent readers on commodity hardware.", "sourceClass": "experience-report", "stance": "support" },
+          { "id": "c2", "artifactId": "a2", "text": "HN consensus is that WAL mode removes the reader-blocking-writer problem but does not change the single-writer constraint.", "sourceClass": "community", "stance": "support" },
+          { "id": "c3", "artifactId": "a3", "text": "Our postmortem traced write contention to application-level retry loops that hammered the single-writer lock, not a WAL limitation.", "sourceClass": "experience-report", "stance": "support" },
+          { "id": "c4", "artifactId": "a4", "text": "Reddit thread confirms that file-locking on NFS breaks WAL mode guarantees.", "sourceClass": "community", "stance": "nuance" },
+          { "id": "c5", "artifactId": "a5", "text": "A weekly-digest blog summarizes that WAL is the default recommendation for almost all server workloads below the one-writer-saturation threshold.", "sourceClass": "blog", "stance": "support" }
+        ],
+        "contradictions": [],
+        "runMetadata": { "runId": "dryrun-fix-03", "durationMs": 9840, "retrievalBudgetUsed": 0.31 }
+      }
+    },
+    {
+      "id": "fix-04",
+      "query": "Is Go's net/http server production-ready at scale in 2025?",
+      "axes": {
+        "language": "en",
+        "genre": "experience-only",
+        "recency": "recent-6mo",
+        "disputedness": "disputed",
+        "doc-density": "sparse"
+      },
+      "acceptance": {
+        "requiredSourceClassesAnyOf": ["experience-report", "blog", "community"],
+        "requiredSourceClassesAllOf": [],
+        "forbiddenSourcePatterns": ["s.jina.ai"],
+        "minUsableClaims": 5,
+        "maxFalseConvergenceSignals": 1,
+        "allowAbstain": false
+      },
+      "bundle": {
+        "artifacts": [
+          { "id": "a1", "url": "https://reddit.example/r/golang/comments/ijkl/nethttp-scale", "title": "net/http at 10k concurrent?", "host": "reddit.example" },
+          { "id": "a2", "url": "https://news.ycombinator.com/item?id=40000004", "title": "Tuning net/http for high concurrency", "host": "news.ycombinator.com" },
+          { "id": "a3", "url": "https://gopher-blog.example.com/nethttp-tuning", "title": "Scaling net/http past the defaults", "host": "gopher-blog.example.com" },
+          { "id": "a4", "url": "https://engineering.example.net/fasthttp-rewrite", "title": "Why we rewrote from net/http to fasthttp", "host": "engineering.example.net" },
+          { "id": "a5", "url": "https://devlog.example.io/fasthttp-migration", "title": "fasthttp migration notes", "host": "devlog.example.io" },
+          { "id": "a6", "url": "https://incidents.example/nethttp-h2-issue", "title": "Postmortem: HTTP/2 stream leak", "host": "incidents.example" }
+        ],
+        "claims": [
+          { "id": "c1", "artifactId": "a1", "text": "net/http scales just fine until you hit 10k concurrent connections, then you need to tune GOMAXPROCS and connection pooling.", "sourceClass": "community", "stance": "nuance" },
+          { "id": "c2", "artifactId": "a2", "text": "net/http scales fine until around 10k concurrent connections; beyond that, tuning GOMAXPROCS and connection pooling becomes necessary.", "sourceClass": "community", "stance": "nuance" },
+          { "id": "c3", "artifactId": "a3", "text": "The standard library's net/http is fine up to roughly 10k concurrent — past that point, GOMAXPROCS tuning and pool sizing are required.", "sourceClass": "blog", "stance": "nuance" },
+          { "id": "c4", "artifactId": "a4", "text": "We rewrote our hot path from net/http to fasthttp and saw a 3x throughput increase on identical hardware.", "sourceClass": "experience-report", "stance": "oppose" },
+          { "id": "c5", "artifactId": "a5", "text": "Rewriting our hottest endpoint from net/http to fasthttp delivered roughly 3x more throughput on the same hardware.", "sourceClass": "experience-report", "stance": "oppose" },
+          { "id": "c6", "artifactId": "a6", "text": "HTTP/2 stream leak in net/http prior to Go 1.22 caused goroutine exhaustion under sustained load; fixed in 1.22.", "sourceClass": "experience-report", "stance": "nuance" }
+        ],
+        "contradictions": [
+          { "pair": ["c3", "c4"], "kind": "direct", "note": "standard library vs fasthttp" }
+        ],
+        "runMetadata": { "runId": "dryrun-fix-04", "durationMs": 21560, "retrievalBudgetUsed": 0.68 }
+      }
+    }
+  ]
+}
