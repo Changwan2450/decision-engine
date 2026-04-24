@@ -134,6 +134,24 @@ The actual topic list for the first pack lives in a separate file
 (`eval/packs/pack-001.yaml` or equivalent) and is out of scope for this
 document. The PACK file is the source of truth for what is in each half.
 
+PACK-002 and later packs MAY declare additional acceptance fields beyond
+those used by PACK-001. Such extensions are defined in the relevant pack
+spec (e.g. `docs/RETRIEVAL_ROBUSTNESS_V0_SPEC.md` §4 for PACK-002+
+retrieval-robustness fields). Extensions apply only to the declaring pack
+and onward; they MUST NOT modify the acceptance criteria of already-sealed
+packs (PACK-001 remains frozen per §6). Draft (non-sealed) packs are
+explicitly outside the 16-topic / 8+8 composition rule above and are used
+only for planning fixtures, not for generalization evidence.
+
+PACK-002+ draft acceptance fields currently include
+`required_source_classes`, `forbidden_source_patterns`,
+`min_decisive_evidence_score`, `require_counterevidence_check`,
+`require_unresolved_questions_when_weak`, and `n_plus_one_reuse_expected`.
+These fields are definitions in the PACK-002 draft only. Runtime enforcement
+is deferred to later implementation work. PACK-001 remains frozen; this note
+does not change PACK-001 acceptance, sealed/audit rules, or baseline
+measurement.
+
 ## 5. Auditor protocol (SEALED-AUDIT)
 
 SEALED-AUDIT is split across two distinct roles. This split is part of the

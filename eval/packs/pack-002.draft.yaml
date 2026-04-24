@@ -1,0 +1,127 @@
+packId: pack-002
+packVersion: 0.1.0-draft
+sealed: false
+auditMode: null
+topicCount: 5
+refs:
+  discipline: docs/EVAL_DISCIPLINE.md
+  spec: docs/RETRIEVAL_ROBUSTNESS_V0_SPEC.md
+status:
+  phase: draft
+  note: >
+    PACK-002 is a draft skeleton for Retrieval Robustness Pack v0.
+    It is not sealed, has no auditor prompt, and is not a 16-topic
+    SEALED-AUDIT pack.
+acceptance_fields:
+  required_source_classes: source classes that must be represented by usable evidence
+  forbidden_source_patterns: URL or source substrings that must not appear
+  min_decisive_evidence_score: minimum planned decisiveness threshold
+  require_counterevidence_check: whether contrary evidence or explicit abstention is required
+  require_unresolved_questions_when_weak: whether weak evidence must surface unresolved questions
+  n_plus_one_reuse_expected: whether repeat-run reuse behavior is expected
+cases:
+  - id: p2-01-source-class-blindness
+    title: Source class blindness on official evidence
+    failure_mode: source-class illusion / blindness
+    scenario: >
+      A deep technical topic requires an official source class, but broad
+      query expansion can return community or blog evidence that looks
+      relevant without proving the official requirement.
+    expected_behavior: >
+      The run should either collect usable official evidence or remain weak
+      with unresolved questions instead of treating community-only evidence
+      as sufficient.
+    acceptance:
+      required_source_classes: [official-doc]
+      forbidden_source_patterns: ["s.jina.ai"]
+      min_decisive_evidence_score: 0.5
+      require_counterevidence_check: false
+      require_unresolved_questions_when_weak: true
+      n_plus_one_reuse_expected: false
+    blocker_conditions:
+      - runtime source-class aware planning ships without this case having a measurable source-class check
+      - official-required topics pass with only aggregator or community evidence
+
+  - id: p2-02-aggregator-dominance
+    title: Aggregator-dominated evidence set
+    failure_mode: aggregator dominance
+    scenario: >
+      Search mirrors and aggregator endpoints return several apparently
+      relevant artifacts, but the evidence is not independently sourced.
+    expected_behavior: >
+      Aggregator-only evidence should not be enough for a strong decision
+      when required source classes are missing.
+    acceptance:
+      required_source_classes: [official-doc, experience-report]
+      forbidden_source_patterns: ["s.jina.ai", "r.jina.ai"]
+      min_decisive_evidence_score: 0.5
+      require_counterevidence_check: false
+      require_unresolved_questions_when_weak: true
+      n_plus_one_reuse_expected: false
+    blocker_conditions:
+      - decisiveness or source-class claims rely on aggregator-only evidence
+      - export bundle hides aggregator provenance
+
+  - id: p2-03-decisiveness-blind-spot
+    title: Relevant evidence without decisive evidence
+    failure_mode: decisiveness blind spot
+    scenario: >
+      A run finds many related claims, but none directly settles the decision
+      question. Current claim count and source priority can make this look
+      stronger than it is.
+    expected_behavior: >
+      The run should distinguish related evidence from decisive evidence and
+      avoid a confident decision when decisive evidence is absent.
+    acceptance:
+      required_source_classes: [official-doc, primary-data]
+      forbidden_source_patterns: ["s.jina.ai"]
+      min_decisive_evidence_score: 0.75
+      require_counterevidence_check: false
+      require_unresolved_questions_when_weak: true
+      n_plus_one_reuse_expected: false
+    blocker_conditions:
+      - runtime claims decisiveness without a metric
+      - high claim count compensates for no decisive evidence
+
+  - id: p2-04-false-convergence
+    title: False convergence without contrary search
+    failure_mode: weak contradiction recall / false convergence
+    scenario: >
+      Several sources repeat the same plausible conclusion, but the run has
+      not checked contrary evidence or missing source classes.
+    expected_behavior: >
+      The run should perform a counterevidence check or explicitly remain
+      unclear with unresolved questions.
+    acceptance:
+      required_source_classes: [experience-report, community]
+      forbidden_source_patterns: ["s.jina.ai"]
+      min_decisive_evidence_score: 0.5
+      require_counterevidence_check: true
+      require_unresolved_questions_when_weak: true
+      n_plus_one_reuse_expected: false
+    blocker_conditions:
+      - false convergence guard ships without a case that requires counterevidence
+      - support-only evidence produces a high-confidence decision
+
+  - id: p2-05-n-plus-one-reuse-gap
+    title: Repeat run does not reuse prior research state
+    failure_mode: N+1 reuse gap
+    scenario: >
+      The same topic is run twice. The second run should benefit from useful
+      prior sources, rejected sources, query variants, citations, and
+      unresolved questions.
+    expected_behavior: >
+      The second run should reuse useful prior state, avoid known rejected
+      sources, and expose unresolved questions from the prior run when still
+      relevant.
+    acceptance:
+      required_source_classes: [official-doc, experience-report, community]
+      forbidden_source_patterns: ["s.jina.ai"]
+      min_decisive_evidence_score: 0.5
+      require_counterevidence_check: false
+      require_unresolved_questions_when_weak: true
+      n_plus_one_reuse_expected: true
+    blocker_conditions:
+      - N+1 reuse ships without a paired-run eval case
+      - repeat runs re-fetch prior rejected sources without recording why
+      - repeat runs do not carry unresolved questions forward
