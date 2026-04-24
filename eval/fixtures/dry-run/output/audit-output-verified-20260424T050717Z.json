@@ -1,0 +1,46 @@
+{
+  "packLevelPassFail": "fail",
+  "failureCategoryHistogram": {
+    "authority-substitution": 1,
+    "retrieval-insufficient": 1,
+    "false-convergence": 1
+  },
+  "anonymizedWorstK": [
+    {
+      "failureCategory": "false-convergence",
+      "axisCoordinates": {
+        "language": "en",
+        "genre": "experience-only",
+        "recency": "recent-6mo",
+        "disputedness": "disputed",
+        "doc-density": "sparse"
+      }
+    },
+    {
+      "failureCategory": "authority-substitution",
+      "axisCoordinates": {
+        "language": "en",
+        "genre": "experience-only",
+        "recency": "recent-6mo",
+        "disputedness": "disputed",
+        "doc-density": "sparse"
+      }
+    },
+    {
+      "failureCategory": "retrieval-insufficient",
+      "axisCoordinates": {
+        "language": "en",
+        "genre": "official-sparse",
+        "recency": "static",
+        "disputedness": "consensual",
+        "doc-density": "sparse"
+      }
+    }
+  ],
+  "auditFooter": {
+    "provider": "self-audit",
+    "model": "codex",
+    "modelVersionOrDate": "codex-self-audit-2026-04-24",
+    "auditTimestamp": "2026-04-24T05:07:01Z"
+  }
+}

@@ -1,0 +1,293 @@
+packId: pack-001
+packVersion: 1.0.0
+auditMode: self-audit
+optionalExternalApiAudit: true
+topicCount: 16
+halfSplit:
+  devObserved: 8
+  sealedAudit: 8
+refs:
+  discipline: docs/EVAL_DISCIPLINE.md
+  spec: docs/PACK_001_SPEC.md
+  handoffShape: docs/PACK_001_SPEC.md#4-local-runner-handoff-format
+  promptTemplate: docs/PACK_001_SPEC.md#5-auditor-prompt-template
+acceptanceSchema:
+  requiredSourceClassesAnyOf: at-least-one-claim-from-any-listed-class
+  requiredSourceClassesAllOf: every-listed-class-must-appear
+  forbiddenSourcePatterns: substring-or-hostname-match-rules
+  minUsableClaims: distinctive-non-stub-claims-required
+  maxFalseConvergenceSignals: false-convergence-flags-tolerated
+  allowAbstain: insufficient-evidence-may-pass-when-true
+topics:
+  - id: dev-01
+    half: DEV-OBSERVED
+    query: "Zig vs Rust for systems programming without a borrow checker — is the tradeoff real?"
+    axes:
+      language: en
+      genre: experience-only
+      recency: recent-6mo
+      disputedness: disputed
+      doc-density: sparse
+    acceptance:
+      requiredSourceClassesAnyOf: [experience-report, community, blog]
+      requiredSourceClassesAllOf: []
+      forbiddenSourcePatterns: ["s.jina.ai", "login.required"]
+      minUsableClaims: 6
+      maxFalseConvergenceSignals: 2
+      allowAbstain: false
+    rationale: "Recent-6mo + experience-only + disputed — false convergence likely from repeated reddit memes."
+  - id: dev-02
+    half: DEV-OBSERVED
+    query: "3~10인 규모 한국 개발팀이 Node.js 외 JS 런타임 (Deno, Bun 등) 으로 이전한 실무 회고 — 고려 요인과 후회 지점"
+    axes:
+      language: ko
+      genre: experience-only
+      recency: recent-6mo
+      disputedness: disputed
+      doc-density: sparse
+    acceptance:
+      requiredSourceClassesAnyOf: [experience-report, blog, community]
+      requiredSourceClassesAllOf: []
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 5
+      maxFalseConvergenceSignals: 1
+      allowAbstain: true
+    rationale: "ko + experience-only retrospective, broadened from single-runtime framing so the answer does not depend on one hype cycle."
+  - id: dev-03
+    half: DEV-OBSERVED
+    query: "Service Mesh (Istio, Linkerd) latency overhead in production — measured vs claimed"
+    axes:
+      language: en
+      genre: official-sparse
+      recency: static
+      disputedness: disputed
+      doc-density: dense
+    acceptance:
+      requiredSourceClassesAnyOf: [blog, experience-report, community]
+      requiredSourceClassesAllOf: []
+      forbiddenSourcePatterns: ["s.jina.ai", "paywall"]
+      minUsableClaims: 7
+      maxFalseConvergenceSignals: 2
+      allowAbstain: false
+    rationale: "Static + disputed + dense — false balance test (vendor claims vs operator experience)."
+  - id: dev-04
+    half: DEV-OBSERVED
+    query: "FastAPI를 대규모 서비스로 운영할 때의 현실적 운영 비용과 한계"
+    axes:
+      language: mixed
+      genre: experience-only
+      recency: static
+      disputedness: consensual
+      doc-density: sparse
+    acceptance:
+      requiredSourceClassesAnyOf: [experience-report, blog, community]
+      requiredSourceClassesAllOf: []
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 5
+      maxFalseConvergenceSignals: 1
+      allowAbstain: true
+    rationale: "Mixed-language consensual — baseline for convergence calibration."
+  - id: dev-05
+    half: DEV-OBSERVED
+    query: "PostgreSQL 18 uuidv7 migration strategy for existing uuid columns"
+    axes:
+      language: en
+      genre: official-sparse
+      recency: recent-6mo
+      disputedness: consensual
+      doc-density: sparse
+    acceptance:
+      requiredSourceClassesAnyOf: [community, blog, experience-report]
+      requiredSourceClassesAllOf: [official-doc]
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 4
+      maxFalseConvergenceSignals: 0
+      allowAbstain: false
+    rationale: "Fresh migration — official PostgreSQL docs are structurally required for the schema/typing answer; corroborating class is optional."
+  - id: dev-06
+    half: DEV-OBSERVED
+    query: "React Server Components in production — what breaks and what doesn't (2025)"
+    axes:
+      language: en
+      genre: experience-only
+      recency: recent-6mo
+      disputedness: disputed
+      doc-density: sparse
+    acceptance:
+      requiredSourceClassesAnyOf: [experience-report, community, blog]
+      requiredSourceClassesAllOf: []
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 7
+      maxFalseConvergenceSignals: 3
+      allowAbstain: false
+    rationale: "Recent + disputed + hype-heavy — highest false-convergence risk in the pack."
+  - id: dev-07
+    half: DEV-OBSERVED
+    query: "Rust async runtime 선택: tokio vs smol 2025 기준 실무 권고"
+    axes:
+      language: mixed
+      genre: official-rich
+      recency: recent-6mo
+      disputedness: consensual
+      doc-density: dense
+    acceptance:
+      requiredSourceClassesAnyOf: [community, blog, experience-report]
+      requiredSourceClassesAllOf: [official-doc]
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 6
+      maxFalseConvergenceSignals: 1
+      allowAbstain: false
+    rationale: "Fresh + official-rich — tokio/smol official docs are the anchor; community practice fills in."
+  - id: dev-08
+    half: DEV-OBSERVED
+    query: "Claude Code와 Cursor의 실무 비교 — 누가 어디서 더 나은가"
+    axes:
+      language: ko
+      genre: experience-only
+      recency: recent-6mo
+      disputedness: disputed
+      doc-density: sparse
+    acceptance:
+      requiredSourceClassesAnyOf: [experience-report, blog, community]
+      requiredSourceClassesAllOf: []
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 5
+      maxFalseConvergenceSignals: 2
+      allowAbstain: true
+    rationale: "ko + very recent + hype — tests false convergence in Korean dev community. Only AI-tooling topic in the pack (SEALED half carries no AI-tooling counterpart, per axis-balance rule)."
+  - id: sealed-01
+    half: SEALED-AUDIT
+    query: "Monorepo tooling (Nx, Turborepo) for 3-person teams — worth the overhead?"
+    axes:
+      language: en
+      genre: experience-only
+      recency: static
+      disputedness: disputed
+      doc-density: sparse
+    acceptance:
+      requiredSourceClassesAnyOf: [experience-report, community, blog]
+      requiredSourceClassesAllOf: []
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 6
+      maxFalseConvergenceSignals: 2
+      allowAbstain: false
+    rationale: "Static + disputed + sparse — tests false balance on small-team tradeoffs."
+  - id: sealed-02
+    half: SEALED-AUDIT
+    query: "LangGraph를 프로덕션 agent 파이프라인에 도입한 실제 경험"
+    axes:
+      language: ko
+      genre: experience-only
+      recency: recent-6mo
+      disputedness: disputed
+      doc-density: sparse
+    acceptance:
+      requiredSourceClassesAnyOf: [experience-report, blog, community]
+      requiredSourceClassesAllOf: []
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 4
+      maxFalseConvergenceSignals: 1
+      allowAbstain: true
+    rationale: "ko + very sparse — authority substitution test."
+  - id: sealed-03
+    half: SEALED-AUDIT
+    query: "Cloudflare Workers vs AWS Lambda reliability and cold-start in 2025"
+    axes:
+      language: en
+      genre: official-sparse
+      recency: recent-6mo
+      disputedness: disputed
+      doc-density: dense
+    acceptance:
+      requiredSourceClassesAnyOf: [blog, experience-report, community, official-doc, product-doc]
+      requiredSourceClassesAllOf: []
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 7
+      maxFalseConvergenceSignals: 2
+      allowAbstain: false
+    rationale: "Fresh + disputed + dense — false balance between vendor docs and operator reports."
+  - id: sealed-04
+    half: SEALED-AUDIT
+    query: "SvelteKit으로의 전환이 React 팀에 실제로 이득인가 — 2025 기준"
+    axes:
+      language: mixed
+      genre: experience-only
+      recency: recent-6mo
+      disputedness: disputed
+      doc-density: sparse
+    acceptance:
+      requiredSourceClassesAnyOf: [experience-report, community, blog]
+      requiredSourceClassesAllOf: []
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 5
+      maxFalseConvergenceSignals: 2
+      allowAbstain: true
+    rationale: "Mixed + recent + hype-adjacent — convergence-prone."
+  - id: sealed-05
+    half: SEALED-AUDIT
+    query: "Python 3.13 free-threading (GIL-less) — practical impact for real workloads"
+    axes:
+      language: en
+      genre: official-rich
+      recency: recent-6mo
+      disputedness: consensual
+      doc-density: dense
+    acceptance:
+      requiredSourceClassesAnyOf: [blog, experience-report, community]
+      requiredSourceClassesAllOf: [official-doc]
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 6
+      maxFalseConvergenceSignals: 1
+      allowAbstain: false
+    rationale: "Fresh + official-rich — official CPython docs are the anchor for threading-model claims."
+  - id: sealed-06
+    half: SEALED-AUDIT
+    query: "Runtime validation 2025: Zod vs ArkType vs Valibot — decision criteria"
+    axes:
+      language: en
+      genre: official-sparse
+      recency: recent-6mo
+      disputedness: disputed
+      doc-density: sparse
+    acceptance:
+      requiredSourceClassesAnyOf: [experience-report, community, official-doc, blog]
+      requiredSourceClassesAllOf: []
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 6
+      maxFalseConvergenceSignals: 2
+      allowAbstain: false
+    rationale: "Fresh + disputed + sparse — false convergence risk across JS validator benchmarks."
+  - id: sealed-07
+    half: SEALED-AUDIT
+    query: "Bun 1.x를 Node.js 대체로 프로덕션에 도입한 팀의 실무 경험과 한계 (2025)"
+    axes:
+      language: ko
+      genre: experience-only
+      recency: recent-6mo
+      disputedness: disputed
+      doc-density: sparse
+    acceptance:
+      requiredSourceClassesAnyOf: [experience-report, blog, community]
+      requiredSourceClassesAllOf: []
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 5
+      maxFalseConvergenceSignals: 2
+      allowAbstain: true
+    rationale: "Replaces earlier vibe-coding draft. Same axes (ko + experience-only + recent + disputed + sparse) but outside AI-tooling meme cluster; tests a different sparse/disputed surface."
+  - id: sealed-08
+    half: SEALED-AUDIT
+    query: "Kubernetes resource requests vs limits — what they do and how to set them correctly"
+    axes:
+      language: en
+      genre: official-rich
+      recency: static
+      disputedness: consensual
+      doc-density: dense
+    acceptance:
+      requiredSourceClassesAnyOf: []
+      requiredSourceClassesAllOf: [official-doc]
+      forbiddenSourcePatterns: ["s.jina.ai"]
+      minUsableClaims: 7
+      maxFalseConvergenceSignals: 1
+      allowAbstain: false
+    rationale: "Replaces Twelve-Factor draft. Genuinely consensual — established K8s best-practice zone. K8s official docs are the anchor and the only hard requirement; unofficial corroboration is welcome but not forced. Sanity slot must not impose source-mix constraints beyond the one structurally required class. Any failure here indicates a systemic retrieval or synthesis issue, which is what the sanity slot is meant to catch."
