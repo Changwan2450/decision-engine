@@ -28,7 +28,11 @@ import {
   RESEARCH_QUALITY_CONTRACT_VERSION,
   RETENTION_ELIGIBILITY_SCHEMA
 } from "@/lib/orchestrator/research-quality-contract";
-import { planSourceCoverageRepair } from "@/lib/orchestrator/source-coverage-repair";
+import {
+  classifyRepairHost,
+  extractAllowedRepairUrlsFromDiscovery,
+  planSourceCoverageRepair
+} from "@/lib/orchestrator/source-coverage-repair";
 import {
   applyRunRetentionPolicy,
   findRunRecordById,
@@ -303,24 +307,50 @@ function buildSourceCoverageRepairPlan(
   };
 }
 
-function markSourceCoverageRepairArtifacts(
-  artifacts: SourceArtifact[],
+function markDiscoveryRepairArtifact(
+  artifact: SourceArtifact,
   repairPlan: ReturnType<typeof planSourceCoverageRepair>
+): SourceArtifact {
+  const discovery = repairPlan.discovery;
+  if (!discovery) return artifact;
+  if ((artifact.canonicalUrl ?? artifact.url) !== discovery.url) return artifact;
+
+  return {
+    ...artifact,
+    metadata: {
+      ...artifact.metadata,
+      repair_pass: discovery.repairPass,
+      repair_stage: discovery.repairStage,
+      repair_reason: discovery.repairReason,
+      repair_query: truncateTelemetryValue(discovery.query)
+    }
+  };
+}
+
+function markFollowedRepairArtifacts(
+  artifacts: SourceArtifact[],
+  discoveryArtifactId: string,
+  followedUrls: string[],
+  repairReason: "no_official_or_primary_evidence"
 ): SourceArtifact[] {
-  const repairByUrl = new Map(repairPlan.urls.map((item) => [item.url, item]));
+  const followRankByUrl = new Map(followedUrls.map((url, index) => [url, index]));
 
   return artifacts.map((artifact) => {
-    const repair = repairByUrl.get(artifact.url);
-    if (!repair) return artifact;
+    const url = artifact.canonicalUrl ?? artifact.url;
+    const followRank = followRankByUrl.get(url);
+    if (followRank === undefined) return artifact;
 
+    const hostClass = classifyRepairHost(new URL(url).hostname);
     return {
       ...artifact,
       metadata: {
         ...artifact.metadata,
-        repair_pass: repair.repairPass,
-        repair_reason: repair.repairReason,
-        repair_query: truncateTelemetryValue(repair.query),
-        repair_attempt_index: String(repair.repairAttemptIndex)
+        repair_pass: "source_coverage_v1",
+        repair_stage: "evidence",
+        repair_reason: repairReason,
+        repair_discovery_artifact_id: discoveryArtifactId,
+        repair_follow_rank: String(followRank),
+        repair_source_host_class: hostClass ?? ""
       }
     };
   });
@@ -753,26 +783,50 @@ export async function executeResearchRun(
       }
     });
 
-    if (repairPlan.shouldRun && repairPlan.urls.length > 0) {
-      const repairArtifacts = markSourceCoverageRepairArtifacts(
-        await runResearch(
-          buildSourceCoverageRepairPlan(
-            plan,
-            repairPlan.urls.map((item) => item.url)
-          ),
-          {
-            ...deps?.research,
-            nowIso: () => now,
-            onEmptyAdapterResult: (gap) => {
-              deps?.research?.onEmptyAdapterResult?.(gap);
-              emptyResults.push(gap);
-            }
+    if (repairPlan.shouldRun && repairPlan.discovery) {
+      const discoveryArtifacts = await runResearch(
+        buildSourceCoverageRepairPlan(plan, [repairPlan.discovery.url]),
+        {
+          ...deps?.research,
+          nowIso: () => now,
+          onEmptyAdapterResult: (gap) => {
+            deps?.research?.onEmptyAdapterResult?.(gap);
+            emptyResults.push(gap);
           }
-        ),
-        repairPlan
+        }
       );
+      const markedDiscoveryArtifacts = discoveryArtifacts.map((artifact) =>
+        markDiscoveryRepairArtifact(artifact, repairPlan)
+      );
+      const discoveryRepresentative =
+        markedDiscoveryArtifacts.find(isUsableArtifact) ?? markedDiscoveryArtifacts.at(-1);
+      const followedUrls = discoveryRepresentative
+        ? extractAllowedRepairUrlsFromDiscovery({
+            content: discoveryRepresentative.content,
+            snippet: discoveryRepresentative.snippet,
+            title: discoveryRepresentative.title,
+            metadata: discoveryRepresentative.metadata,
+            limit: 3
+          })
+        : [];
+      const followedArtifacts =
+        followedUrls.length > 0
+          ? markFollowedRepairArtifacts(
+              await runResearch(buildSourceCoverageRepairPlan(plan, followedUrls), {
+                ...deps?.research,
+                nowIso: () => now,
+                onEmptyAdapterResult: (gap) => {
+                  deps?.research?.onEmptyAdapterResult?.(gap);
+                  emptyResults.push(gap);
+                }
+              }),
+              discoveryRepresentative?.id ?? "repair-discovery-0",
+              followedUrls,
+              repairPlan.reason ?? "no_official_or_primary_evidence"
+            )
+          : [];
       const repairedArtifacts = attachSourceTiers(
-        dedupeGatheredArtifacts([...artifacts, ...repairArtifacts])
+        dedupeGatheredArtifacts([...artifacts, ...markedDiscoveryArtifacts, ...followedArtifacts])
       );
       synthesis = synthesizeEvidenceFromArtifacts(repairedArtifacts, {
         now,

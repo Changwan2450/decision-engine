@@ -106,6 +106,23 @@ describe("source coverage repair in executeResearchRun", () => {
           scrapling: makeAdapter("scrapling", async (plan) => {
             const url = plan.normalizedInput.urls[0] ?? "";
             repairUrls.push(url);
+            if (url.startsWith("https://s.jina.ai/?q=")) {
+              return [
+                buildArtifact({
+                  id: "repair-discovery-1",
+                  adapter: "scrapling",
+                  fetcher: "scrapling",
+                  sourceType: "web",
+                  url,
+                  title: "Discovery result page",
+                  snippet: "links to https://openai.com/research/guardrails and https://arxiv.org/abs/2501.00001",
+                  content:
+                    "Discovery result page with https://openai.com/research/guardrails and https://arxiv.org/abs/2501.00001",
+                  sourcePriority: "analysis",
+                  outcome: { status: "success" }
+                })
+              ];
+            }
             return [
               buildArtifact({
                 id: `repair-${repairUrls.length}`,
@@ -116,7 +133,7 @@ describe("source coverage repair in executeResearchRun", () => {
                 title: "Official repair source",
                 snippet: "official source coverage",
                 content: "official source coverage",
-                sourcePriority: "official",
+                sourcePriority: url.includes("openai.com") ? "official" : "primary_data",
                 outcome: { status: "success" },
                 extra: {
                   claims_json: JSON.stringify([
@@ -136,22 +153,42 @@ describe("source coverage repair in executeResearchRun", () => {
 
     const storedRun = await readRunRecord(project.project.id, run.run.id);
     const repairArtifacts = storedRun.artifacts.filter(
-      (artifact) => artifact.metadata.repair_pass === "source_coverage_v0"
+      (artifact) => artifact.metadata.repair_pass === "source_coverage_v1"
+    );
+    const discoveryArtifacts = repairArtifacts.filter(
+      (artifact) => artifact.metadata.repair_stage === "discovery"
+    );
+    const evidenceArtifacts = repairArtifacts.filter(
+      (artifact) => artifact.metadata.repair_stage === "evidence"
     );
 
     expect(storedRun.run.status).toBe("decided");
     expect(repairUrls).toHaveLength(3);
-    expect(repairUrls.every((url) => url.startsWith("https://s.jina.ai/?q="))).toBe(true);
+    expect(repairUrls[0]).toMatch(/^https:\/\/s\.jina\.ai\/\?q=/);
+    expect(repairUrls.slice(1)).toEqual([
+      "https://openai.com/research/guardrails",
+      "https://arxiv.org/abs/2501.00001"
+    ]);
     expect(storedRun.artifacts.some((artifact) => artifact.id === "community-0")).toBe(true);
-    expect(repairArtifacts).toHaveLength(3);
-    expect(repairArtifacts[0]?.metadata).toMatchObject({
-      repair_pass: "source_coverage_v0",
+    expect(discoveryArtifacts).toHaveLength(1);
+    expect(evidenceArtifacts).toHaveLength(2);
+    expect(discoveryArtifacts[0]?.sourceTier).toBe("aggregator");
+    expect(discoveryArtifacts[0]?.metadata).toMatchObject({
+      repair_pass: "source_coverage_v1",
+      repair_stage: "discovery",
       repair_reason: "no_official_or_primary_evidence",
-      repair_attempt_index: "0"
     });
-    expect(repairArtifacts[0]?.metadata.repair_query.length).toBeLessThanOrEqual(240);
+    expect(discoveryArtifacts[0]?.metadata.repair_query.length).toBeLessThanOrEqual(240);
+    expect(evidenceArtifacts.every((artifact) => artifact.metadata.repair_stage === "evidence")).toBe(
+      true
+    );
+    expect(evidenceArtifacts[0]?.metadata.repair_discovery_artifact_id).toBe("repair-discovery-1");
+    expect(evidenceArtifacts[0]?.metadata.repair_follow_rank).toBe("0");
+    expect(evidenceArtifacts[0]?.metadata.repair_source_host_class).toBe("official");
+    expect(evidenceArtifacts[1]?.metadata.repair_source_host_class).toBe("primary");
     expect(storedRun.evidenceSummary?.hasOfficialOrPrimaryEvidence).toBe(true);
-    expect(storedRun.evidenceSummary?.sourcePriorityCounts?.official).toBe(3);
+    expect(storedRun.evidenceSummary?.sourcePriorityCounts?.official).toBe(1);
+    expect(storedRun.evidenceSummary?.sourcePriorityCounts?.primary_data).toBe(1);
   });
 
   it("does not run repair when official evidence is already present", async () => {
@@ -253,12 +290,74 @@ describe("source coverage repair in executeResearchRun", () => {
 
     const storedRun = await readRunRecord(project.project.id, run.run.id);
 
-    expect(repairCalls).toBe(3);
+    expect(repairCalls).toBe(1);
     expect(storedRun.artifacts).toHaveLength(1);
-    expect(storedRun.retrievalAttemptGaps?.summary.emptyResultCount).toBe(3);
+    expect(storedRun.retrievalAttemptGaps?.summary.emptyResultCount).toBe(1);
     expect(storedRun.retrievalAttemptGaps?.emptyResults.every(
       (gap) => gap.reason === "empty_adapter_result"
     )).toBe(true);
+    expect(storedRun.evidenceSummary?.hasOfficialOrPrimaryEvidence).toBe(false);
+  });
+
+  it("does not follow discovery artifacts when no allowlisted direct URLs are found", async () => {
+    const { project, run } = await setupRun();
+    const { executeResearchRun } = await import("@/lib/orchestrator/run-research");
+    const { readRunRecord } = await import("@/lib/storage/workspace");
+    const repairUrls: string[] = [];
+
+    await executeResearchRun(project.project.id, run.run.id, {
+      now: "2026-04-25T00:00:00.000Z",
+      gather: async () => [
+        buildArtifact({
+          id: "community-0",
+          adapter: "community-search-json",
+          fetcher: "community-search-json",
+          sourceType: "community",
+          url: "https://reddit.com/r/research/comments/discovery-only",
+          title: "Community-only source",
+          snippet: "community discussion",
+          content: "community discussion",
+          sourcePriority: "community",
+          outcome: { status: "success" }
+        })
+      ],
+      research: {
+        router: () => ({
+          primary: "scrapling",
+          fallbacks: [],
+          rule: "web/public-mirror"
+        }),
+        registry: {
+          scrapling: makeAdapter("scrapling", async (plan) => {
+            const url = plan.normalizedInput.urls[0] ?? "";
+            repairUrls.push(url);
+            return [
+              buildArtifact({
+                id: "repair-discovery-only",
+                adapter: "scrapling",
+                fetcher: "scrapling",
+                sourceType: "web",
+                url,
+                title: "Discovery result page",
+                snippet: "only https://news.ycombinator.com/item?id=1 and https://reddit.com/r/test",
+                content: "only community links",
+                sourcePriority: "analysis",
+                outcome: { status: "success" }
+              })
+            ];
+          })
+        }
+      }
+    });
+
+    const storedRun = await readRunRecord(project.project.id, run.run.id);
+    const repairArtifacts = storedRun.artifacts.filter(
+      (artifact) => artifact.metadata.repair_pass === "source_coverage_v1"
+    );
+
+    expect(repairUrls).toEqual([expect.stringMatching(/^https:\/\/s\.jina\.ai\/\?q=/)]);
+    expect(repairArtifacts).toHaveLength(1);
+    expect(repairArtifacts[0]?.metadata.repair_stage).toBe("discovery");
     expect(storedRun.evidenceSummary?.hasOfficialOrPrimaryEvidence).toBe(false);
   });
 });

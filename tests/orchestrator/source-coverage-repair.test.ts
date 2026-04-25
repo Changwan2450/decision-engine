@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { planSourceCoverageRepair } from "@/lib/orchestrator/source-coverage-repair";
+import {
+  extractAllowedRepairUrlsFromDiscovery,
+  isAllowedOfficialPrimaryRepairHost,
+  planSourceCoverageRepair
+} from "@/lib/orchestrator/source-coverage-repair";
 
 describe("source coverage repair planner", () => {
   it("triggers when official or primary evidence is absent", () => {
@@ -38,11 +42,11 @@ describe("source coverage repair planner", () => {
     expect(plan).toEqual({
       shouldRun: false,
       reason: null,
-      urls: []
+      discovery: null
     });
   });
 
-  it("generates at most three official-primary oriented jina search URLs", () => {
+  it("emits one discovery query and url", () => {
     const plan = planSourceCoverageRepair({
       title: "False convergence safeguards",
       goal: "prevent source over reliance",
@@ -51,17 +55,11 @@ describe("source coverage repair planner", () => {
       }
     });
 
-    expect(plan.urls).toHaveLength(3);
-    expect(plan.urls.every((item) => item.url.startsWith("https://s.jina.ai/?q="))).toBe(true);
-    expect(plan.urls.some((item) => item.url.includes("reddit"))).toBe(false);
-    expect(plan.urls.some((item) => item.url.includes("hn.algolia"))).toBe(false);
-    expect(plan.urls[0]?.query).toBe("False convergence safeguards official documentation");
-    expect(plan.urls[1]?.query).toBe(
-      "False convergence safeguards research paper benchmark report"
-    );
-    expect(plan.urls[2]?.query).toBe(
-      "prevent source over reliance site:openai.com OR site:anthropic.com OR site:arxiv.org OR site:acm.org"
-    );
+    expect(plan.discovery).not.toBeNull();
+    expect(plan.discovery?.url.startsWith("https://s.jina.ai/?q=")).toBe(true);
+    expect(plan.discovery?.url.includes("reddit")).toBe(false);
+    expect(plan.discovery?.url.includes("hn.algolia")).toBe(false);
+    expect(plan.discovery?.query).toBe("False convergence safeguards official documentation");
   });
 
   it("uses deterministic order and includes repair metadata fields", () => {
@@ -76,10 +74,66 @@ describe("source coverage repair planner", () => {
     const second = planSourceCoverageRepair(input);
 
     expect(first).toEqual(second);
-    expect(first.urls.map((item) => item.repairAttemptIndex)).toEqual([0, 1, 2]);
-    expect(first.urls.every((item) => item.repairPass === "source_coverage_v0")).toBe(true);
-    expect(
-      first.urls.every((item) => item.repairReason === "no_official_or_primary_evidence")
-    ).toBe(true);
+    expect(first.discovery?.repairPass).toBe("source_coverage_v1");
+    expect(first.discovery?.repairStage).toBe("discovery");
+    expect(first.discovery?.repairReason).toBe("no_official_or_primary_evidence");
+  });
+
+  it("extracts allowlisted direct URLs from discovery content", () => {
+    const urls = extractAllowedRepairUrlsFromDiscovery({
+      content: [
+        "https://s.jina.ai/?q=ignore-me",
+        "https://openai.com/index/introducing-deep-research/",
+        "https://platform.openai.com/docs/guides/reasoning",
+        "https://arxiv.org/abs/2501.00001",
+        "https://news.ycombinator.com/item?id=1",
+        "https://dl.acm.org/doi/10.1145/1234567"
+      ].join("\n")
+    });
+
+    expect(urls).toEqual([
+      "https://openai.com/index/introducing-deep-research/",
+      "https://platform.openai.com/docs/guides/reasoning",
+      "https://arxiv.org/abs/2501.00001"
+    ]);
+  });
+
+  it("allows openai and anthropic direct URLs as official evidence hosts", () => {
+    expect(isAllowedOfficialPrimaryRepairHost("openai.com")).toBe(true);
+    expect(isAllowedOfficialPrimaryRepairHost("platform.openai.com")).toBe(true);
+    expect(isAllowedOfficialPrimaryRepairHost("anthropic.com")).toBe(true);
+    expect(isAllowedOfficialPrimaryRepairHost("docs.anthropic.com")).toBe(true);
+  });
+
+  it("allows arxiv and acm direct URLs as primary evidence hosts", () => {
+    expect(isAllowedOfficialPrimaryRepairHost("arxiv.org")).toBe(true);
+    expect(isAllowedOfficialPrimaryRepairHost("export.arxiv.org")).toBe(true);
+    expect(isAllowedOfficialPrimaryRepairHost("acm.org")).toBe(true);
+    expect(isAllowedOfficialPrimaryRepairHost("dl.acm.org")).toBe(true);
+  });
+
+  it("rejects jina, reddit, and hn hosts as follow targets", () => {
+    expect(isAllowedOfficialPrimaryRepairHost("s.jina.ai")).toBe(false);
+    expect(isAllowedOfficialPrimaryRepairHost("r.jina.ai")).toBe(false);
+    expect(isAllowedOfficialPrimaryRepairHost("reddit.com")).toBe(false);
+    expect(isAllowedOfficialPrimaryRepairHost("news.ycombinator.com")).toBe(false);
+  });
+
+  it("dedupes, caps at three, and preserves deterministic ordering", () => {
+    const urls = extractAllowedRepairUrlsFromDiscovery({
+      content: [
+        "https://openai.com/research",
+        "https://openai.com/research",
+        "https://anthropic.com/research",
+        "https://arxiv.org/abs/2501.00001",
+        "https://dl.acm.org/doi/10.1145/1234567"
+      ].join(" ")
+    });
+
+    expect(urls).toEqual([
+      "https://openai.com/research",
+      "https://anthropic.com/research",
+      "https://arxiv.org/abs/2501.00001"
+    ]);
   });
 });
