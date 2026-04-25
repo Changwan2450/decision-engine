@@ -179,6 +179,33 @@ run_research
 4. `decided`이면 `mcpSummary.nextToolCall`에 따라 `show_run_state(projectId, runId)`를 먼저 호출한다.
 5. 외부 모델 전달이나 상세 근거 묶음이 필요할 때만 `export_bundle(projectId, runId)`를 호출한다.
 
+### Fresh MCP Smoke Check
+
+post-commit export smoke는 오래 떠 있는 MCP process를 재사용하지 않는다. stale process는 이전 코드나
+이전 Node 버전으로 run/export를 만들어 false negative를 낼 수 있다.
+
+현재 checkout과 runtime을 먼저 확인한다.
+
+```bash
+git rev-parse --short HEAD
+node -v
+```
+
+`node -v`는 Node 22.x여야 한다. 그런 다음 새 MCP process를 시작한다.
+
+```bash
+pnpm --dir "/Users/changwan2450/Antigravity WorkSpace/research" run mcp
+```
+
+run을 만들고 `export_bundle`을 실행한 뒤에는 export provenance를 확인한다.
+
+- `bundle.json`의 `runtimeProvenance.gitHead`
+- `bundle.json`의 `runtimeProvenance.nodeVersion`
+- `bundle.md`의 `## Runtime Provenance`
+
+`runtimeProvenance.gitHead`가 현재 HEAD와 다르거나 `runtimeProvenance.nodeVersion`이 기대한 Node 22.x가 아니면,
+그 smoke 결과는 신뢰하지 말고 fresh MCP process로 다시 실행한다.
+
 ## Orchestration Boundary
 
 현재까지 강화한 것은 검색 지능 자체보다 orchestration layer다.
