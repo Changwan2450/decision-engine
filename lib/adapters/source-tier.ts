@@ -21,18 +21,35 @@ const OFFICIAL_HOSTS = new Set<string>([
   "postgresql.org",
   "www.postgresql.org",
   "opentelemetry.io",
-  "www.opentelemetry.io"
+  "www.opentelemetry.io",
+  "openai.com",
+  "anthropic.com"
 ]);
 
-const PRIMARY_HOSTS = new Set<string>([]);
+const PRIMARY_HOSTS = new Set<string>([
+  "arxiv.org",
+  "acm.org"
+]);
+
+function matchesKnownHost(host: string, knownHosts: Set<string>): boolean {
+  if (knownHosts.has(host)) return true;
+
+  for (const knownHost of knownHosts) {
+    if (host.endsWith(`.${knownHost}`)) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 export function inferSourceTier(url: string): SourceTier {
   try {
     const host = new URL(url).hostname.toLowerCase();
 
     if (INTERNAL_HOSTS.has(host)) return "internal";
-    if (OFFICIAL_HOSTS.has(host)) return "official";
-    if (PRIMARY_HOSTS.has(host)) return "primary";
+    if (matchesKnownHost(host, OFFICIAL_HOSTS)) return "official";
+    if (matchesKnownHost(host, PRIMARY_HOSTS)) return "primary";
     if (AGGREGATOR_HOSTS.has(host)) return "aggregator";
     if (COMMUNITY_HOSTS.has(host)) return "community";
     if (host.endsWith(".reddit.com")) return "community";
