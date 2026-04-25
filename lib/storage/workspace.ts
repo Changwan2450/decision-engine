@@ -8,6 +8,7 @@ import {
   classifyRunState,
   RUN_RETENTION_POLICY
 } from "@/lib/orchestrator/research-quality-contract";
+import { collectRuntimeProvenance } from "@/lib/runtime/provenance";
 import {
   digestSchema,
   inboxItemSchema,
@@ -436,6 +437,7 @@ export async function createRunRecord(
       urls: input.urls,
       now
     }),
+    runtimeProvenance: collectRuntimeProvenance(),
     watchContext: null,
     projectOrigin: null,
     normalizedInput: null,

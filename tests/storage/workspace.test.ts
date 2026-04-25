@@ -108,10 +108,55 @@ describe("workspace storage", () => {
     expect(createdRun.run.input.naturalLanguage).toBe("숏츠 시장조사 해줘");
     expect(createdRun.run.input.pastedContent).toBe("커뮤니티에서 본 사례 정리");
     expect(createdRun.run.input.urls).toEqual(["https://example.com/post"]);
+    expect(createdRun.runtimeProvenance).toMatchObject({
+      nodeVersion: process.version
+    });
+    expect(createdRun.runtimeProvenance?.processStartTime).toEqual(
+      expect.any(String)
+    );
+    expect(
+      typeof createdRun.runtimeProvenance?.entrypoint === "string" ||
+        createdRun.runtimeProvenance?.entrypoint === null
+    ).toBe(true);
 
     await expect(readRunRecord(createdProject.project.id, createdRun.run.id)).resolves.toEqual(
       runRecordSchema.parse(createdRun)
     );
+  });
+
+  it("parses legacy run records without runtime provenance as null", () => {
+    const parsed = runRecordSchema.parse({
+      run: {
+        id: "legacy-run",
+        projectId: "project-alpha",
+        title: "legacy",
+        mode: "standard",
+        status: "draft",
+        clarificationQuestions: [],
+        input: {
+          naturalLanguage: "legacy input",
+          pastedContent: "",
+          urls: []
+        },
+        createdAt: "2026-04-09T00:00:00.000Z",
+        updatedAt: "2026-04-09T00:00:00.000Z"
+      },
+      watchContext: null,
+      projectOrigin: null,
+      normalizedInput: null,
+      expansion: null,
+      kbContext: null,
+      decision: null,
+      prdSeed: null,
+      artifacts: [],
+      claims: [],
+      citations: [],
+      contradictions: [],
+      evidenceSummary: null,
+      advisory: null
+    });
+
+    expect(parsed.runtimeProvenance).toBeNull();
   });
 
   it("creates and reads watch targets under the workspace root", async () => {

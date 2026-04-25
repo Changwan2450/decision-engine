@@ -46,11 +46,18 @@ const latestRun: RunRecord = {
   citations: [],
   contradictions: [],
   evidenceSummary: null,
+  runtimeProvenance: null,
   advisory: null
 };
 
 const diagnosticRun: RunRecord = {
   ...latestRun,
+  runtimeProvenance: {
+    gitHead: "e9aa8ce",
+    nodeVersion: "v22.22.0",
+    processStartTime: "2026-04-25T06:00:00.000Z",
+    entrypoint: "/repo/lib/mcp/server.ts"
+  },
   evidenceSummary: {
     shouldRemainUnclear: false,
     reasons: [],
@@ -183,6 +190,7 @@ describe("cli bundle", () => {
     });
     expect(bundle.insights.repeatedProblems).toEqual(["차별화가 어렵다"]);
     expect(bundle.evidenceDiagnostics).toBeNull();
+    expect(bundle.runtimeProvenance).toBeNull();
     expect(bundle.decisionHistory).toHaveLength(1);
     expect(bundle.kb.promotionCandidates).toHaveLength(1);
     expect(bundle.kb.relatedRuns).toEqual(relatedRuns);
@@ -223,6 +231,7 @@ describe("cli bundle", () => {
     expect(markdown).toContain("## Latest Run");
     expect(markdown).toContain("## Project Insights");
     expect(markdown).toContain("## Evidence Diagnostics");
+    expect(markdown).toContain("## Runtime Provenance");
     expect(markdown).toContain("## Decision History");
     expect(markdown).toContain("## KB Context");
     expect(markdown).toContain("### Promotion Candidates");
@@ -282,6 +291,35 @@ describe("cli bundle", () => {
     expect(bundle.project.id).toBe("project-1");
     expect(bundle.latestRun.id).toBe("run-12");
     expect(bundle.insights.conflicts).toEqual(["contradiction-1"]);
+    expect(bundle.runtimeProvenance).toEqual({
+      gitHead: "e9aa8ce",
+      nodeVersion: "v22.22.0",
+      processStartTime: "2026-04-25T06:00:00.000Z",
+      entrypoint: "/repo/lib/mcp/server.ts"
+    });
+    expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
+  });
+
+  it("renders concise runtime provenance in markdown", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: diagnosticRun,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "claude",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    const markdown = renderCliBundleMarkdown(bundle);
+
+    expect(markdown).toContain("## Runtime Provenance");
+    expect(markdown).toContain("- Git head: e9aa8ce");
+    expect(markdown).toContain("- Node version: v22.22.0");
+    expect(markdown).toContain("- Process start time: 2026-04-25T06:00:00.000Z");
+    expect(markdown).toContain("- Entrypoint: /repo/lib/mcp/server.ts");
     expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
   });
 
@@ -327,7 +365,11 @@ describe("cli bundle", () => {
     });
 
     expect(bundle.evidenceDiagnostics).toBeNull();
+    expect(bundle.runtimeProvenance).toBeNull();
     expect(renderCliBundleMarkdown(bundle)).toContain("## Evidence Diagnostics\n- none");
+    expect(renderCliBundleMarkdown(bundle)).toContain(
+      "## Runtime Provenance\n- not available"
+    );
     expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
   });
 });

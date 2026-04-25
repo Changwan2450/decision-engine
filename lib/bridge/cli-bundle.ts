@@ -6,6 +6,8 @@ import type { RunRecord, ProjectRecord } from "@/lib/storage/schema";
 export type CliBridgeProvider = "claude" | "codex";
 export type CliBridgeMode = "prompt_only" | "cli_execute";
 
+type RuntimeProvenance = NonNullable<RunRecord["runtimeProvenance"]>;
+
 type EvidenceDiagnostics = {
   decisiveEvidenceScore?: number;
   falseConvergenceRisk?: boolean;
@@ -53,6 +55,7 @@ export type CliBridgeBundle = {
     conflicts: string[];
   };
   evidenceDiagnostics: EvidenceDiagnostics;
+  runtimeProvenance: RuntimeProvenance | null;
   decisionHistory: DecisionHistoryItem[];
   kb: {
     promotionCandidates: ProjectRecord["promotionCandidates"];
@@ -153,6 +156,7 @@ export function buildCliBundle(params: {
           sourceCoverageWarnings: evidenceSummary.sourceCoverageWarnings
         }
       : null,
+    runtimeProvenance: params.latestRun.runtimeProvenance ?? null,
     decisionHistory: params.decisionHistory,
     kb: {
       promotionCandidates: params.promotionCandidates ?? [],
@@ -190,6 +194,19 @@ function renderEvidenceDiagnostics(diagnostics: EvidenceDiagnostics): string {
     `- Official/primary evidence: ${diagnostics.hasOfficialOrPrimaryEvidence ?? "unknown"}`,
     `- Aggregator-only evidence: ${diagnostics.aggregatorOnlyEvidence ?? "unknown"}`,
     `- Warnings: ${diagnostics.sourceCoverageWarnings?.join(", ") || "none"}`
+  ].join("\n");
+}
+
+function renderRuntimeProvenance(provenance: RuntimeProvenance | null): string {
+  if (!provenance) {
+    return "- not available";
+  }
+
+  return [
+    `- Git head: ${provenance.gitHead ?? "unknown"}`,
+    `- Node version: ${provenance.nodeVersion}`,
+    `- Process start time: ${provenance.processStartTime}`,
+    `- Entrypoint: ${provenance.entrypoint ?? "unknown"}`
   ].join("\n");
 }
 
@@ -294,6 +311,9 @@ export function renderCliBundleMarkdown(bundle: CliBridgeBundle): string {
     "",
     "## Evidence Diagnostics",
     renderEvidenceDiagnostics(bundle.evidenceDiagnostics),
+    "",
+    "## Runtime Provenance",
+    renderRuntimeProvenance(bundle.runtimeProvenance),
     "",
     "## Decision History",
     history,

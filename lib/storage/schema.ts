@@ -320,8 +320,16 @@ export const projectRecordSchema = z.object({
   promotionCandidates: z.array(promotionCandidateSchema).default([])
 });
 
+export const runtimeProvenanceSchema = z.object({
+  gitHead: z.string().nullable(),
+  nodeVersion: z.string(),
+  processStartTime: z.string(),
+  entrypoint: z.string().nullable()
+});
+
 export const runRecordSchema = z.object({
   run: runSchema,
+  runtimeProvenance: runtimeProvenanceSchema.nullable().default(null),
   watchContext: watchContextSchema.nullable().default(null),
   projectOrigin: projectOriginSchema.nullable().default(null),
   normalizedInput: normalizedRunInputSchema.nullable().default(null),
@@ -353,7 +361,10 @@ export const runRecordSchema = z.object({
 });
 
 export type ProjectRecord = z.infer<typeof projectRecordSchema>;
-export type RunRecord = z.infer<typeof runRecordSchema>;
+type ParsedRunRecord = z.infer<typeof runRecordSchema>;
+export type RunRecord = Omit<ParsedRunRecord, "runtimeProvenance"> & {
+  runtimeProvenance?: ParsedRunRecord["runtimeProvenance"];
+};
 export type WatchTargetRecord = z.infer<typeof watchTargetSchema>;
 export type DigestRecord = z.infer<typeof digestSchema>;
 export type InboxItemRecord = z.infer<typeof inboxItemSchema>;
