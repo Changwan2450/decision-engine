@@ -170,6 +170,24 @@ export const evidenceSummarySchema = z.object({
   counterevidenceChecked: z.boolean().optional(),
   supportOnlyEvidence: z.boolean().optional(),
   weakEvidence: z.boolean().optional(),
+  sourcePriorityCounts: z.object({
+    official: z.number(),
+    primary_data: z.number(),
+    analysis: z.number(),
+    community: z.number()
+  }).optional(),
+  sourceTierCounts: z.object({
+    official: z.number(),
+    primary: z.number(),
+    internal: z.number(),
+    community: z.number(),
+    aggregator: z.number(),
+    unknown: z.number()
+  }).optional(),
+  sourcePriorityDiversity: z.number().optional(),
+  hasOfficialOrPrimaryEvidence: z.boolean().optional(),
+  aggregatorOnlyEvidence: z.boolean().optional(),
+  sourceCoverageWarnings: z.array(z.string()).optional(),
   claimCount: z.number().int().nonnegative(),
   contradictionCount: z.number().int().nonnegative()
 });

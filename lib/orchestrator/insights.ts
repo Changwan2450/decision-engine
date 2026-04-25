@@ -349,6 +349,83 @@ export function computeFalseConvergenceDiagnostics(
   };
 }
 
+/**
+ * V0 source coverage diagnostics. This is deterministic and intentionally
+ * diagnostic-only; these fields are not used by decision logic.
+ */
+export function computeSourceCoverageDiagnostics(citations: Citation[]): {
+  sourcePriorityCounts: {
+    official: number;
+    primary_data: number;
+    analysis: number;
+    community: number;
+  };
+  sourceTierCounts: {
+    official: number;
+    primary: number;
+    internal: number;
+    community: number;
+    aggregator: number;
+    unknown: number;
+  };
+  sourcePriorityDiversity: number;
+  hasOfficialOrPrimaryEvidence: boolean;
+  aggregatorOnlyEvidence: boolean;
+  sourceCoverageWarnings: string[];
+} {
+  const sourcePriorityCounts = {
+    official: 0,
+    primary_data: 0,
+    analysis: 0,
+    community: 0
+  };
+  const sourceTierCounts = {
+    official: 0,
+    primary: 0,
+    internal: 0,
+    community: 0,
+    aggregator: 0,
+    unknown: 0
+  };
+
+  for (const citation of citations) {
+    if (citation.priority in sourcePriorityCounts) {
+      sourcePriorityCounts[citation.priority] += 1;
+    }
+
+    const sourceTier = citation.sourceTier ?? "unknown";
+    sourceTierCounts[sourceTier] += 1;
+  }
+
+  const sourcePriorityDiversity = Object.values(sourcePriorityCounts).filter(
+    (count) => count > 0
+  ).length;
+  const hasOfficialOrPrimaryEvidence =
+    sourcePriorityCounts.official > 0 || sourcePriorityCounts.primary_data > 0;
+  const aggregatorOnlyEvidence =
+    citations.length > 0 && sourceTierCounts.aggregator === citations.length;
+  const sourceCoverageWarnings: string[] = [];
+
+  if (hasOfficialOrPrimaryEvidence === false) {
+    sourceCoverageWarnings.push("no_official_or_primary_evidence");
+  }
+  if (aggregatorOnlyEvidence) {
+    sourceCoverageWarnings.push("aggregator_only_evidence");
+  }
+  if (sourcePriorityDiversity <= 1 && citations.length > 0) {
+    sourceCoverageWarnings.push("single_priority_evidence");
+  }
+
+  return {
+    sourcePriorityCounts,
+    sourceTierCounts,
+    sourcePriorityDiversity,
+    hasOfficialOrPrimaryEvidence,
+    aggregatorOnlyEvidence,
+    sourceCoverageWarnings
+  };
+}
+
 export function synthesizeEvidenceFromArtifacts(
   artifacts: SourceArtifact[],
   options: {
@@ -509,6 +586,7 @@ export function synthesizeEvidenceFromArtifacts(
     contradictions,
     decisiveEvidenceScore
   );
+  const sourceCoverageDiagnostics = computeSourceCoverageDiagnostics(citations);
 
   const summary = evidenceSummarySchema.parse({
     shouldRemainUnclear: reasons.length > 0,
@@ -516,6 +594,7 @@ export function synthesizeEvidenceFromArtifacts(
     highestPrioritySeen,
     decisiveEvidenceScore,
     ...falseConvergenceDiagnostics,
+    ...sourceCoverageDiagnostics,
     claimCount: claims.length,
     contradictionCount: contradictions.length
   });
