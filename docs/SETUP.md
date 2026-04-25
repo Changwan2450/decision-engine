@@ -3,8 +3,8 @@
 ## 1. Node Version
 
 ```bash
-nvm install 20
-nvm use 20
+nvm install 22
+nvm use 22
 ```
 
 ## 2. Install dependencies
@@ -50,7 +50,7 @@ claude --help
 
 ## 6. Known Issues
 
-- Node version mismatch warning if not using Node 20
+- Node version mismatch warning if not using Node 22
 - macOS subprocess permission issues
 - CLI not found errors
 - this repo is currently `CLI + MCP` first, not a browser app

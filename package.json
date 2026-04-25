@@ -5,7 +5,7 @@
   "description": "Decision Engine — headless AI-first research operating core",
   "packageManager": "pnpm@10.30.3",
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "scripts": {
     "cli": "tsx --tsconfig tsconfig.json scripts/cli.ts",
