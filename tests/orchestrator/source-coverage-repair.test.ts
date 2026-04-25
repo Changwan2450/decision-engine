@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  extractAllowedUrlsFromCommunitySearchJson,
+  extractAllowedUrlsFromHnAlgoliaJson,
   extractAllowedRepairUrlsFromDiscovery,
+  extractAllowedUrlsFromRedditSearchJson,
   isAllowedOfficialPrimaryRepairHost,
   planSourceCoverageRepair
 } from "@/lib/orchestrator/source-coverage-repair";
@@ -135,5 +138,68 @@ describe("source coverage repair planner", () => {
       "https://anthropic.com/research",
       "https://arxiv.org/abs/2501.00001"
     ]);
+  });
+
+  it("parses allowlisted outbound URLs from reddit raw JSON", () => {
+    const urls = extractAllowedUrlsFromRedditSearchJson(
+      JSON.stringify({
+        data: {
+          children: [
+            { data: { url: "https://openai.com/research/guardrails" } },
+            { data: { url: "https://reddit.com/r/test" } },
+            { data: { url: "https://platform.openai.com/docs/guides/reasoning" } }
+          ]
+        }
+      })
+    );
+
+    expect(urls).toEqual([
+      "https://openai.com/research/guardrails",
+      "https://platform.openai.com/docs/guides/reasoning"
+    ]);
+  });
+
+  it("parses allowlisted outbound URLs from hn algolia raw JSON", () => {
+    const urls = extractAllowedUrlsFromHnAlgoliaJson(
+      JSON.stringify({
+        hits: [
+          { url: "https://news.ycombinator.com/item?id=1" },
+          { url: "https://arxiv.org/abs/2501.00001" },
+          { url: "https://dl.acm.org/doi/10.1145/1234567" }
+        ]
+      })
+    );
+
+    expect(urls).toEqual([
+      "https://arxiv.org/abs/2501.00001",
+      "https://dl.acm.org/doi/10.1145/1234567"
+    ]);
+  });
+
+  it("returns empty arrays for invalid community search json", () => {
+    expect(extractAllowedUrlsFromRedditSearchJson("{bad json")).toEqual([]);
+    expect(extractAllowedUrlsFromHnAlgoliaJson("{bad json")).toEqual([]);
+    expect(
+      extractAllowedUrlsFromCommunitySearchJson({
+        rawJson: "{bad json",
+        discoveryUrl: "https://hn.algolia.com/api/v1/search?query=test"
+      })
+    ).toEqual([]);
+  });
+
+  it("ignores non-allowlisted and search/community urls as final evidence", () => {
+    const urls = extractAllowedUrlsFromCommunitySearchJson({
+      rawJson: JSON.stringify({
+        hits: [
+          { url: "https://hn.algolia.com/api/v1/search?query=test" },
+          { url: "https://s.jina.ai/?q=test" },
+          { url: "https://news.ycombinator.com/item?id=1" },
+          { url: "https://example.com/post" }
+        ]
+      }),
+      discoveryUrl: "https://hn.algolia.com/api/v1/search?query=test"
+    });
+
+    expect(urls).toEqual([]);
   });
 });

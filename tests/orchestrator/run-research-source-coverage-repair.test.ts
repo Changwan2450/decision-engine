@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -47,6 +47,12 @@ async function setupRun() {
   });
 
   return { project, run };
+}
+
+async function writeRawPayload(rawRef: string, payload: unknown) {
+  const absolutePath = path.join(process.env.WORKSPACE_ROOT!, rawRef);
+  await mkdir(path.dirname(absolutePath), { recursive: true });
+  await writeFile(absolutePath, JSON.stringify(payload));
 }
 
 describe("source coverage repair in executeResearchRun", () => {
@@ -359,5 +365,112 @@ describe("source coverage repair in executeResearchRun", () => {
     expect(repairArtifacts).toHaveLength(1);
     expect(repairArtifacts[0]?.metadata.repair_stage).toBe("discovery");
     expect(storedRun.evidenceSummary?.hasOfficialOrPrimaryEvidence).toBe(false);
+  });
+
+  it("falls back to community raw payload discovery when primary discovery is blocked", async () => {
+    const { project, run } = await setupRun();
+    const { executeResearchRun } = await import("@/lib/orchestrator/run-research");
+    const { readRunRecord } = await import("@/lib/storage/workspace");
+    const rawRef =
+      `${project.project.id}/runs/${run.run.id}/raw/community-search-json/fallback.json`;
+    await writeRawPayload(rawRef, {
+      hits: [
+        { url: "https://news.ycombinator.com/item?id=1" },
+        { url: "https://openai.com/research/guardrails" },
+        { url: "https://arxiv.org/abs/2501.00001" }
+      ]
+    });
+    const repairUrls: string[] = [];
+
+    await executeResearchRun(project.project.id, run.run.id, {
+      now: "2026-04-25T00:00:00.000Z",
+      gather: async () => [
+        buildArtifact({
+          id: "community-search-0",
+          adapter: "community-search-json",
+          fetcher: "community-search-json",
+          sourceType: "community",
+          url: "https://hn.algolia.com/api/v1/search?query=false+convergence",
+          title: "HN search result item",
+          snippet: "search result",
+          content: "search result",
+          sourcePriority: "community",
+          rawRef,
+          outcome: { status: "success" }
+        })
+      ],
+      research: {
+        router: () => ({
+          primary: "scrapling",
+          fallbacks: [],
+          rule: "web/public-mirror"
+        }),
+        registry: {
+          scrapling: makeAdapter("scrapling", async (plan) => {
+            const url = plan.normalizedInput.urls[0] ?? "";
+            repairUrls.push(url);
+            if (url.startsWith("https://s.jina.ai/?q=")) {
+              return [
+                buildArtifact({
+                  id: "repair-discovery-blocked",
+                  adapter: "scrapling",
+                  fetcher: "scrapling",
+                  sourceType: "web",
+                  url,
+                  title: "s.jina.ai",
+                  snippet: "",
+                  content: "",
+                  sourcePriority: "analysis",
+                  outcome: {
+                    status: "blocked",
+                    blockReason: "login",
+                    bypassLevel: "headers",
+                    loginRequired: true
+                  }
+                })
+              ];
+            }
+            return [
+              buildArtifact({
+                id: `repair-follow-${repairUrls.length}`,
+                adapter: "scrapling",
+                fetcher: "scrapling",
+                sourceType: "web",
+                url,
+                title: "Direct repair evidence",
+                snippet: "direct evidence",
+                content: "direct evidence",
+                sourcePriority: url.includes("openai.com") ? "official" : "primary_data",
+                outcome: { status: "success" }
+              })
+            ];
+          })
+        }
+      }
+    });
+
+    const storedRun = await readRunRecord(project.project.id, run.run.id);
+    const discoveryFallbackArtifacts = storedRun.artifacts.filter(
+      (artifact) => artifact.metadata.repair_stage === "discovery_fallback"
+    );
+    const repairEvidenceArtifacts = storedRun.artifacts.filter(
+      (artifact) => artifact.metadata.repair_stage === "evidence"
+    );
+
+    expect(repairUrls).toEqual([
+      expect.stringMatching(/^https:\/\/s\.jina\.ai\/\?q=/),
+      "https://openai.com/research/guardrails",
+      "https://arxiv.org/abs/2501.00001"
+    ]);
+    expect(discoveryFallbackArtifacts).toHaveLength(1);
+    expect(discoveryFallbackArtifacts[0]?.metadata.repair_discovery_source).toBe(
+      "community_search_json"
+    );
+    expect(discoveryFallbackArtifacts[0]?.sourcePriority).toBe("community");
+    expect(repairEvidenceArtifacts).toHaveLength(2);
+    expect(repairEvidenceArtifacts.every((artifact) => artifact.metadata.repair_stage === "evidence")).toBe(
+      true
+    );
+    expect(storedRun.evidenceSummary?.hasOfficialOrPrimaryEvidence).toBe(true);
   });
 });

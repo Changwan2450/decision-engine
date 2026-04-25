@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { buildFailureArtifact } from "@/lib/adapters/contract";
 import { createAdapterRegistry, type AdapterRegistry } from "@/lib/adapters/registry";
 import { routeUrl, type AdapterChain, type AdapterName } from "@/lib/adapters/router";
@@ -30,6 +32,7 @@ import {
 } from "@/lib/orchestrator/research-quality-contract";
 import {
   classifyRepairHost,
+  extractAllowedUrlsFromCommunitySearchJson,
   extractAllowedRepairUrlsFromDiscovery,
   planSourceCoverageRepair
 } from "@/lib/orchestrator/source-coverage-repair";
@@ -354,6 +357,81 @@ function markFollowedRepairArtifacts(
       }
     };
   });
+}
+
+function markFallbackDiscoveryArtifacts(
+  artifacts: SourceArtifact[],
+  candidateCountsByArtifactId: Map<string, number>
+): SourceArtifact[] {
+  return artifacts.map((artifact) => {
+    const candidateCount = candidateCountsByArtifactId.get(artifact.id);
+    if (candidateCount === undefined) return artifact;
+
+    return {
+      ...artifact,
+      metadata: {
+        ...artifact.metadata,
+        repair_pass: "source_coverage_v1",
+        repair_stage: "discovery_fallback",
+        repair_discovery_source: "community_search_json",
+        repair_candidate_count: String(candidateCount)
+      }
+    };
+  });
+}
+
+async function readArtifactRawPayload(artifact: SourceArtifact): Promise<string | null> {
+  if (!artifact.rawRef) return null;
+
+  try {
+    const workspaceRoot = process.env.WORKSPACE_ROOT ?? path.join(process.cwd(), "workspace");
+    return await readFile(path.join(workspaceRoot, artifact.rawRef), "utf8");
+  } catch {
+    return null;
+  }
+}
+
+async function extractFallbackRepairUrlsFromCommunityArtifacts(
+  artifacts: SourceArtifact[]
+): Promise<{ urls: string[]; markedArtifacts: SourceArtifact[] }> {
+  const candidateCountsByArtifactId = new Map<string, number>();
+  const urls: string[] = [];
+  const seen = new Set<string>();
+
+  for (const artifact of artifacts) {
+    if (artifact.adapter !== "community-search-json") continue;
+    if (!artifact.rawRef) continue;
+
+    const rawJson = await readArtifactRawPayload(artifact);
+    if (!rawJson) continue;
+
+    const extracted = extractAllowedUrlsFromCommunitySearchJson({
+      rawJson,
+      discoveryUrl: artifact.url,
+      limit: 3
+    });
+
+    if (extracted.length > 0) {
+      candidateCountsByArtifactId.set(artifact.id, extracted.length);
+    }
+
+    for (const url of extracted) {
+      if (seen.has(url)) continue;
+      seen.add(url);
+      urls.push(url);
+      if (urls.length >= 3) {
+        return {
+          urls,
+          markedArtifacts: markFallbackDiscoveryArtifacts(artifacts, candidateCountsByArtifactId)
+        };
+      }
+    }
+  }
+
+  return {
+    urls,
+    markedArtifacts: markFallbackDiscoveryArtifacts(artifacts, candidateCountsByArtifactId)
+  };
 }
 
 function isRecencySensitive(plan: ResearchPlan): boolean {
@@ -800,7 +878,7 @@ export async function executeResearchRun(
       );
       const discoveryRepresentative =
         markedDiscoveryArtifacts.find(isUsableArtifact) ?? markedDiscoveryArtifacts.at(-1);
-      const followedUrls = discoveryRepresentative
+      const primaryFollowedUrls = discoveryRepresentative
         ? extractAllowedRepairUrlsFromDiscovery({
             content: discoveryRepresentative.content,
             snippet: discoveryRepresentative.snippet,
@@ -809,6 +887,28 @@ export async function executeResearchRun(
             limit: 3
           })
         : [];
+      const primaryDiscoveryBlocked =
+        discoveryRepresentative?.metadata.fetch_status === "blocked";
+      const discoveredArtifactsWithBlockFlag =
+        primaryDiscoveryBlocked && discoveryRepresentative
+          ? markedDiscoveryArtifacts.map((artifact) =>
+              artifact.id === discoveryRepresentative.id
+                ? {
+                    ...artifact,
+                    metadata: {
+                      ...artifact.metadata,
+                      repair_discovery_blocked: "true"
+                    }
+                  }
+                : artifact
+            )
+          : markedDiscoveryArtifacts;
+      const fallbackDiscovery =
+        primaryDiscoveryBlocked || primaryFollowedUrls.length === 0
+          ? await extractFallbackRepairUrlsFromCommunityArtifacts(artifacts)
+          : { urls: [] as string[], markedArtifacts: artifacts };
+      const followedUrls =
+        primaryFollowedUrls.length > 0 ? primaryFollowedUrls : fallbackDiscovery.urls;
       const followedArtifacts =
         followedUrls.length > 0
           ? markFollowedRepairArtifacts(
@@ -826,7 +926,11 @@ export async function executeResearchRun(
             )
           : [];
       const repairedArtifacts = attachSourceTiers(
-        dedupeGatheredArtifacts([...artifacts, ...markedDiscoveryArtifacts, ...followedArtifacts])
+        dedupeGatheredArtifacts([
+          ...fallbackDiscovery.markedArtifacts,
+          ...discoveredArtifactsWithBlockFlag,
+          ...followedArtifacts
+        ])
       );
       synthesis = synthesizeEvidenceFromArtifacts(repairedArtifacts, {
         now,

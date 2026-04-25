@@ -123,6 +123,21 @@ function extractCandidateUrls(value: string): string[] {
   return value.match(/https?:\/\/[^\s)>"']+/g) ?? [];
 }
 
+function dedupeAllowedUrls(urls: string[], limit = MAX_FOLLOW_URLS): string[] {
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+
+  for (const rawUrl of urls) {
+    const normalized = normalizeRepairUrl(rawUrl);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    deduped.push(normalized);
+    if (deduped.length >= limit) break;
+  }
+
+  return deduped;
+}
+
 export function extractAllowedRepairUrlsFromDiscovery(input: {
   content?: string;
   snippet?: string;
@@ -153,4 +168,74 @@ export function extractAllowedRepairUrlsFromDiscovery(input: {
   }
 
   return urls;
+}
+
+export function extractAllowedUrlsFromRedditSearchJson(
+  rawJson: string,
+  limit = MAX_FOLLOW_URLS
+): string[] {
+  try {
+    const parsed = JSON.parse(rawJson) as {
+      data?: { children?: Array<{ data?: { url?: unknown } }> };
+    };
+    const children = parsed.data?.children;
+    if (!Array.isArray(children)) return [];
+
+    return dedupeAllowedUrls(
+      children.flatMap((child) => {
+        const url = child?.data?.url;
+        return typeof url === "string" ? [url] : [];
+      }),
+      limit
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function extractAllowedUrlsFromHnAlgoliaJson(
+  rawJson: string,
+  limit = MAX_FOLLOW_URLS
+): string[] {
+  try {
+    const parsed = JSON.parse(rawJson) as {
+      hits?: Array<{ url?: unknown }>;
+    };
+    const hits = parsed.hits;
+    if (!Array.isArray(hits)) return [];
+
+    return dedupeAllowedUrls(
+      hits.flatMap((hit) => {
+        const url = hit?.url;
+        return typeof url === "string" ? [url] : [];
+      }),
+      limit
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function extractAllowedUrlsFromCommunitySearchJson(input: {
+  rawJson: string;
+  discoveryUrl: string;
+  limit?: number;
+}): string[] {
+  const host = (() => {
+    try {
+      return new URL(input.discoveryUrl).hostname.toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
+
+  if (host === "reddit.com" || host === "www.reddit.com") {
+    return extractAllowedUrlsFromRedditSearchJson(input.rawJson, input.limit);
+  }
+
+  if (host === "hn.algolia.com") {
+    return extractAllowedUrlsFromHnAlgoliaJson(input.rawJson, input.limit);
+  }
+
+  return [];
 }
