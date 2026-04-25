@@ -8,6 +8,39 @@ export type CliBridgeMode = "prompt_only" | "cli_execute";
 
 type RuntimeProvenance = NonNullable<RunRecord["runtimeProvenance"]>;
 type RetrievalAttemptGaps = NonNullable<RunRecord["retrievalAttemptGaps"]> | null;
+type RepairAttempts = {
+  version: "v0";
+  sourceCoverage: {
+    attempted: boolean;
+    reason?: string;
+    primaryDiscovery: {
+      attempted: boolean;
+      blocked?: boolean;
+      artifactIds: string[];
+      sourceTiers: string[];
+      urls: string[];
+    };
+    fallbackDiscovery: {
+      attempted: boolean;
+      candidateUrlCount?: number;
+      sourceArtifactIds: string[];
+      note?: string;
+    };
+    followedEvidence: {
+      count: number;
+      artifactIds: string[];
+      sourcePriorities: string[];
+      sourceTiers: string[];
+      urls: string[];
+    };
+    outcome:
+      | "not_attempted"
+      | "blocked_primary"
+      | "no_candidates"
+      | "followed_evidence"
+      | "no_improvement";
+  };
+};
 
 type EvidenceDiagnostics = {
   decisiveEvidenceScore?: number;
@@ -141,6 +174,7 @@ export type CliBridgeBundle = {
   evidenceDiagnostics: EvidenceDiagnostics;
   evidenceReplay: EvidenceReplay;
   retrievalAttemptGaps: RetrievalAttemptGaps;
+  repairAttempts: RepairAttempts;
   runtimeProvenance: RuntimeProvenance | null;
   decisionHistory: DecisionHistoryItem[];
   kb: {
@@ -453,6 +487,97 @@ function buildRetrievalAttemptGaps(run: RunRecord): RetrievalAttemptGaps {
   };
 }
 
+function uniqueStrings(values: Array<string | undefined>): string[] {
+  const result: string[] = [];
+  for (const value of values) {
+    if (!value) continue;
+    if (!result.includes(value)) result.push(value);
+  }
+  return result;
+}
+
+function buildRepairAttempts(
+  run: RunRecord,
+  diagnostics: EvidenceDiagnostics
+): RepairAttempts {
+  const repairArtifacts = (run.artifacts ?? []).filter(
+    (artifact) => artifact.metadata.repair_pass === "source_coverage_v1"
+  );
+  const discoveryArtifacts = repairArtifacts.filter(
+    (artifact) => artifact.metadata.repair_stage === "discovery"
+  );
+  const fallbackArtifacts = repairArtifacts.filter(
+    (artifact) => artifact.metadata.repair_stage === "discovery_fallback"
+  );
+  const evidenceArtifacts = repairArtifacts.filter(
+    (artifact) => artifact.metadata.repair_stage === "evidence"
+  );
+  const attempted = repairArtifacts.length > 0;
+  const reason = repairArtifacts.find((artifact) => artifact.metadata.repair_reason)?.metadata
+    .repair_reason;
+  const blockedPrimary = discoveryArtifacts.some(
+    (artifact) => artifact.metadata.fetch_status === "blocked"
+  );
+  const rawCandidateCounts = fallbackArtifacts
+    .map((artifact) => {
+      const value = artifact.metadata.repair_candidate_count;
+      if (typeof value === "number") return value;
+      if (typeof value === "string") {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      }
+      return undefined;
+    })
+    .filter((value): value is number => typeof value === "number");
+  const candidateUrlCount =
+    rawCandidateCounts.length > 0 ? rawCandidateCounts.reduce((sum, count) => sum + count, 0) : undefined;
+
+  let outcome: RepairAttempts["sourceCoverage"]["outcome"] = "not_attempted";
+  if (attempted) {
+    if (evidenceArtifacts.length > 0) {
+      outcome = diagnostics?.hasOfficialOrPrimaryEvidence ? "followed_evidence" : "no_improvement";
+    } else if (fallbackArtifacts.length > 0) {
+      outcome = "no_candidates";
+    } else if (blockedPrimary) {
+      outcome = "blocked_primary";
+    } else {
+      outcome = "no_candidates";
+    }
+  }
+
+  return {
+    version: "v0",
+    sourceCoverage: {
+      attempted,
+      reason,
+      primaryDiscovery: {
+        attempted: discoveryArtifacts.length > 0,
+        blocked: discoveryArtifacts.length > 0 ? blockedPrimary : undefined,
+        artifactIds: discoveryArtifacts.map((artifact) => artifact.id),
+        sourceTiers: uniqueStrings(discoveryArtifacts.map((artifact) => artifact.sourceTier ?? "unknown")),
+        urls: discoveryArtifacts.map((artifact) => truncateText(artifact.url))
+      },
+      fallbackDiscovery: {
+        attempted: fallbackArtifacts.length > 0,
+        candidateUrlCount,
+        sourceArtifactIds: fallbackArtifacts.map((artifact) => artifact.id),
+        note:
+          fallbackArtifacts.length > 0 && candidateUrlCount === undefined
+            ? "fallback candidate count unavailable from persisted repair metadata"
+            : undefined
+      },
+      followedEvidence: {
+        count: evidenceArtifacts.length,
+        artifactIds: evidenceArtifacts.map((artifact) => artifact.id),
+        sourcePriorities: uniqueStrings(evidenceArtifacts.map((artifact) => artifact.sourcePriority)),
+        sourceTiers: uniqueStrings(evidenceArtifacts.map((artifact) => artifact.sourceTier ?? "unknown")),
+        urls: evidenceArtifacts.map((artifact) => truncateText(artifact.url))
+      },
+      outcome
+    }
+  };
+}
+
 export function buildCliBundle(params: {
   project: Project;
   latestRun: RunRecord;
@@ -517,6 +642,7 @@ export function buildCliBundle(params: {
     evidenceDiagnostics,
     evidenceReplay: buildEvidenceReplay(params.latestRun, evidenceDiagnostics),
     retrievalAttemptGaps: buildRetrievalAttemptGaps(params.latestRun),
+    repairAttempts: buildRepairAttempts(params.latestRun, evidenceDiagnostics),
     runtimeProvenance: params.latestRun.runtimeProvenance ?? null,
     decisionHistory: params.decisionHistory,
     kb: {
@@ -680,6 +806,64 @@ function renderRetrievalAttemptGaps(gaps: RetrievalAttemptGaps): string {
   ].join("\n");
 }
 
+function renderRepairAttempts(repairAttempts: RepairAttempts): string {
+  const sourceCoverage = repairAttempts.sourceCoverage;
+  const primaryStatus = !sourceCoverage.primaryDiscovery.attempted
+    ? "not attempted"
+    : sourceCoverage.primaryDiscovery.blocked
+      ? "blocked"
+      : "attempted";
+  const fallbackStatus = !sourceCoverage.fallbackDiscovery.attempted
+    ? "not visible"
+    : sourceCoverage.fallbackDiscovery.candidateUrlCount === undefined
+      ? "partial"
+      : "visible";
+
+  const primaryArtifacts =
+    sourceCoverage.primaryDiscovery.artifactIds.length > 0
+      ? sourceCoverage.primaryDiscovery.artifactIds
+          .map((artifactId, index) => {
+            const url = sourceCoverage.primaryDiscovery.urls[index] ?? "unknown";
+            return `- ${artifactId} — ${url}`;
+          })
+          .join("\n")
+      : "- none";
+  const fallbackArtifacts =
+    sourceCoverage.fallbackDiscovery.sourceArtifactIds.length > 0
+      ? sourceCoverage.fallbackDiscovery.sourceArtifactIds.map((artifactId) => `- ${artifactId}`).join("\n")
+      : "- none";
+  const followedEvidence =
+    sourceCoverage.followedEvidence.artifactIds.length > 0
+      ? sourceCoverage.followedEvidence.artifactIds
+          .map((artifactId, index) => {
+            const url = sourceCoverage.followedEvidence.urls[index] ?? "unknown";
+            return `- ${artifactId} — ${url}`;
+          })
+          .join("\n")
+      : "- none";
+
+  return [
+    `- Source coverage repair attempted: ${sourceCoverage.attempted ? "yes" : "no"}`,
+    `- Reason: ${sourceCoverage.reason ?? "none"}`,
+    `- Primary discovery: ${primaryStatus}`,
+    `- Fallback discovery: ${fallbackStatus}`,
+    `- Followed evidence count: ${sourceCoverage.followedEvidence.count}`,
+    `- Outcome: ${sourceCoverage.outcome}`,
+    sourceCoverage.fallbackDiscovery.note ? `- Note: ${sourceCoverage.fallbackDiscovery.note}` : null,
+    "",
+    "### Primary Discovery",
+    primaryArtifacts,
+    "",
+    "### Fallback Discovery",
+    fallbackArtifacts,
+    "",
+    "### Followed Evidence",
+    followedEvidence
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
+}
+
 export function renderCliBundleMarkdown(bundle: CliBridgeBundle): string {
   const history =
     bundle.decisionHistory.length > 0
@@ -787,6 +971,9 @@ export function renderCliBundleMarkdown(bundle: CliBridgeBundle): string {
     "",
     "## Retrieval Attempt Gaps",
     renderRetrievalAttemptGaps(bundle.retrievalAttemptGaps),
+    "",
+    "## Repair Attempts",
+    renderRepairAttempts(bundle.repairAttempts),
     "",
     "## Runtime Provenance",
     renderRuntimeProvenance(bundle.runtimeProvenance),

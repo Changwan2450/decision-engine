@@ -310,6 +310,144 @@ const retrievalAttemptGapRun: RunRecord = {
   }
 };
 
+const repairBlockedRun: RunRecord = {
+  ...diagnosticRun,
+  artifacts: [
+    {
+      id: "artifact-repair-discovery",
+      adapter: "scrapling",
+      sourceType: "web",
+      title: "Repair Discovery",
+      url: "https://s.jina.ai/?q=source+coverage+repair",
+      snippet: "repair discovery summary",
+      content: "REPAIR_DISCOVERY_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "analysis",
+      sourceTier: "aggregator",
+      retrievedAt: "2026-04-25T07:00:00.000Z",
+      confidence: 0.1,
+      rawRef: "project/run/raw/repair-discovery.json",
+      metadata: {
+        repair_pass: "source_coverage_v1",
+        repair_stage: "discovery",
+        repair_reason: "no_official_or_primary_evidence",
+        fetch_status: "blocked",
+        block_reason: "login",
+        error: "REPAIR_DISCOVERY_ERROR_SHOULD_NOT_EXPORT"
+      }
+    }
+  ],
+  evidenceSummary: {
+    ...diagnosticRun.evidenceSummary!,
+    hasOfficialOrPrimaryEvidence: false,
+    sourceCoverageWarnings: ["no_official_or_primary_evidence"]
+  }
+};
+
+const repairNoImprovementRun: RunRecord = {
+  ...diagnosticRun,
+  artifacts: [
+    {
+      id: "artifact-repair-discovery",
+      adapter: "scrapling",
+      sourceType: "web",
+      title: "Repair Discovery",
+      url: "https://s.jina.ai/?q=source+coverage+repair",
+      snippet: "repair discovery summary",
+      content: "REPAIR_DISCOVERY_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "analysis",
+      sourceTier: "aggregator",
+      retrievedAt: "2026-04-25T07:00:00.000Z",
+      confidence: 0.1,
+      rawRef: "project/run/raw/repair-discovery.json",
+      metadata: {
+        repair_pass: "source_coverage_v1",
+        repair_stage: "discovery",
+        repair_reason: "no_official_or_primary_evidence",
+        fetch_status: "blocked",
+        block_reason: "login"
+      }
+    },
+    {
+      id: "artifact-repair-fallback",
+      adapter: "community-search-json",
+      sourceType: "community",
+      title: "Fallback Discovery",
+      url: "https://news.ycombinator.com/item?id=1",
+      snippet: "fallback discovery summary",
+      content: "FALLBACK_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "community",
+      sourceTier: "community",
+      retrievedAt: "2026-04-25T07:01:00.000Z",
+      confidence: 0.1,
+      rawRef: "project/run/raw/repair-fallback.json",
+      metadata: {
+        repair_pass: "source_coverage_v1",
+        repair_stage: "discovery_fallback",
+        repair_reason: "no_official_or_primary_evidence",
+        repair_candidate_count: "2"
+      }
+    },
+    {
+      id: "artifact-repair-evidence",
+      adapter: "scrapling",
+      sourceType: "web",
+      title: "Repair Evidence",
+      url: "https://platform.openai.com/docs/guides/research",
+      snippet: "repair evidence summary",
+      content: "REPAIR_EVIDENCE_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "official",
+      sourceTier: "official",
+      retrievedAt: "2026-04-25T07:02:00.000Z",
+      confidence: 0.6,
+      rawRef: "project/run/raw/repair-evidence.json",
+      metadata: {
+        repair_pass: "source_coverage_v1",
+        repair_stage: "evidence",
+        repair_reason: "no_official_or_primary_evidence",
+        repair_discovery_artifact_id: "artifact-repair-fallback",
+        repair_follow_rank: "0",
+        repair_source_host_class: "official",
+        error: "REPAIR_EVIDENCE_ERROR_SHOULD_NOT_EXPORT"
+      }
+    }
+  ],
+  evidenceSummary: {
+    ...diagnosticRun.evidenceSummary!,
+    hasOfficialOrPrimaryEvidence: false,
+    sourceCoverageWarnings: ["no_official_or_primary_evidence"]
+  }
+};
+
+const repairFallbackUnknownCountRun: RunRecord = {
+  ...diagnosticRun,
+  artifacts: [
+    {
+      id: "artifact-repair-fallback-unknown",
+      adapter: "community-search-json",
+      sourceType: "community",
+      title: "Fallback Discovery",
+      url: "https://news.ycombinator.com/item?id=2",
+      snippet: "fallback discovery summary",
+      content: "FALLBACK_UNKNOWN_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "community",
+      sourceTier: "community",
+      retrievedAt: "2026-04-25T07:01:00.000Z",
+      confidence: 0.1,
+      rawRef: "project/run/raw/repair-fallback-unknown.json",
+      metadata: {
+        repair_pass: "source_coverage_v1",
+        repair_stage: "discovery_fallback",
+        repair_reason: "no_official_or_primary_evidence"
+      }
+    }
+  ],
+  evidenceSummary: {
+    ...diagnosticRun.evidenceSummary!,
+    hasOfficialOrPrimaryEvidence: false,
+    sourceCoverageWarnings: ["no_official_or_primary_evidence"]
+  }
+};
+
 const insights = {
   repeatedProblems: ["차별화가 어렵다"],
   repeatedPatterns: ["짧은 루프가 유지율을 높인다"],
@@ -410,6 +548,8 @@ describe("cli bundle", () => {
     expect(bundle.insights.repeatedProblems).toEqual(["차별화가 어렵다"]);
     expect(bundle.evidenceDiagnostics).toBeNull();
     expect(bundle.runtimeProvenance).toBeNull();
+    expect(bundle.repairAttempts.sourceCoverage.attempted).toBe(false);
+    expect(bundle.repairAttempts.sourceCoverage.outcome).toBe("not_attempted");
     expect(bundle.decisionHistory).toHaveLength(1);
     expect(bundle.kb.promotionCandidates).toHaveLength(1);
     expect(bundle.kb.relatedRuns).toEqual(relatedRuns);
@@ -452,6 +592,7 @@ describe("cli bundle", () => {
     expect(markdown).toContain("## Evidence Diagnostics");
     expect(markdown).toContain("## Evidence Replay");
     expect(markdown).toContain("## Retrieval Attempt Gaps");
+    expect(markdown).toContain("## Repair Attempts");
     expect(markdown).toContain("## Runtime Provenance");
     expect(markdown).toContain("## Decision History");
     expect(markdown).toContain("## KB Context");
@@ -701,7 +842,115 @@ describe("cli bundle", () => {
     expect(renderCliBundleMarkdown(bundle)).toContain(
       "## Runtime Provenance\n- not available"
     );
+    expect(renderCliBundleMarkdown(bundle)).toContain(
+      "## Repair Attempts\n- Source coverage repair attempted: no"
+    );
     expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
+  });
+
+  it("includes repair attempts with blocked primary discovery in JSON and markdown", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: repairBlockedRun,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    expect(bundle.repairAttempts.version).toBe("v0");
+    expect(bundle.repairAttempts.sourceCoverage.attempted).toBe(true);
+    expect(bundle.repairAttempts.sourceCoverage.reason).toBe("no_official_or_primary_evidence");
+    expect(bundle.repairAttempts.sourceCoverage.primaryDiscovery).toEqual({
+      attempted: true,
+      blocked: true,
+      artifactIds: ["artifact-repair-discovery"],
+      sourceTiers: ["aggregator"],
+      urls: ["https://s.jina.ai/?q=source+coverage+repair"]
+    });
+    expect(bundle.repairAttempts.sourceCoverage.fallbackDiscovery.attempted).toBe(false);
+    expect(bundle.repairAttempts.sourceCoverage.followedEvidence.count).toBe(0);
+    expect(bundle.repairAttempts.sourceCoverage.outcome).toBe("blocked_primary");
+
+    const markdown = renderCliBundleMarkdown(bundle);
+    expect(markdown).toContain("## Repair Attempts");
+    expect(markdown).toContain("- Primary discovery: blocked");
+    expect(markdown).toContain("- Outcome: blocked_primary");
+    expect(markdown).toContain("- Followed evidence count: 0");
+  });
+
+  it("derives followed evidence and no_improvement outcome without exporting unsafe fields", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: repairNoImprovementRun,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    expect(bundle.repairAttempts.sourceCoverage.attempted).toBe(true);
+    expect(bundle.repairAttempts.sourceCoverage.fallbackDiscovery).toEqual({
+      attempted: true,
+      candidateUrlCount: 2,
+      sourceArtifactIds: ["artifact-repair-fallback"]
+    });
+    expect(bundle.repairAttempts.sourceCoverage.followedEvidence).toEqual({
+      count: 1,
+      artifactIds: ["artifact-repair-evidence"],
+      sourcePriorities: ["official"],
+      sourceTiers: ["official"],
+      urls: ["https://platform.openai.com/docs/guides/research"]
+    });
+    expect(bundle.repairAttempts.sourceCoverage.outcome).toBe("no_improvement");
+    expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
+    expect(bundle.runtimeProvenance).not.toBeNull();
+    expect(bundle.evidenceDiagnostics).not.toBeNull();
+    expect(bundle.evidenceReplay).not.toBeNull();
+    expect(bundle.retrievalAttemptGaps).toBeNull();
+
+    const markdown = renderCliBundleMarkdown(bundle);
+    expect(markdown).toContain("## Repair Attempts");
+    expect(markdown).toContain("- Fallback discovery: visible");
+    expect(markdown).toContain("- Followed evidence count: 1");
+    expect(markdown).toContain("- Outcome: no_improvement");
+    expect(markdown).toContain("artifact-repair-evidence");
+
+    const serialized = JSON.stringify(bundle);
+    const combined = `${serialized}\n${markdown}`;
+    expect(combined).not.toContain("REPAIR_DISCOVERY_FULL_CONTENT_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("FALLBACK_FULL_CONTENT_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("REPAIR_EVIDENCE_FULL_CONTENT_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("project/run/raw");
+    expect(combined).not.toContain("REPAIR_DISCOVERY_ERROR_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("REPAIR_EVIDENCE_ERROR_SHOULD_NOT_EXPORT");
+  });
+
+  it("does not invent fallback candidate counts when persisted metadata is unavailable", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: repairFallbackUnknownCountRun,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    expect(bundle.repairAttempts.sourceCoverage.fallbackDiscovery.attempted).toBe(true);
+    expect(bundle.repairAttempts.sourceCoverage.fallbackDiscovery.candidateUrlCount).toBeUndefined();
+    expect(bundle.repairAttempts.sourceCoverage.fallbackDiscovery.note).toBe(
+      "fallback candidate count unavailable from persisted repair metadata"
+    );
+    expect(bundle.repairAttempts.sourceCoverage.outcome).toBe("no_candidates");
   });
 
   it("includes sanitized retrieval attempt gaps in JSON and markdown", () => {
