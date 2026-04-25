@@ -83,6 +83,24 @@ describe("pack loader", () => {
     ).toThrow();
   });
 
+  it("rejects pack-001 when sealed is false", () => {
+    const pack = loadPackV1(pack001Path);
+
+    expect(() =>
+      PackV1Schema.parse({
+        ...pack,
+        sealed: false
+      })
+    ).toThrow();
+  });
+
+  it("accepts legacy pack-001 missing sealed and normalizes to true", () => {
+    const pack = loadPackV1(pack001Path);
+    const { sealed: _sealed, ...withoutSealed } = pack;
+
+    expect(PackV1Schema.parse(withoutSealed).sealed).toBe(true);
+  });
+
   it("rejects pack-002 draft when required_source_classes is missing", () => {
     const pack = loadPackV2Draft(pack002DraftPath);
     const [firstCase, ...rest] = pack.cases;
@@ -96,6 +114,48 @@ describe("pack loader", () => {
           {
             ...firstCase,
             acceptance
+          },
+          ...rest
+        ]
+      })
+    ).toThrow();
+  });
+
+  it("rejects pack-002 draft when min_decisive_evidence_score is below 0", () => {
+    const pack = loadPackV2Draft(pack002DraftPath);
+    const [firstCase, ...rest] = pack.cases;
+
+    expect(() =>
+      PackV2DraftSchema.parse({
+        ...pack,
+        cases: [
+          {
+            ...firstCase,
+            acceptance: {
+              ...firstCase.acceptance,
+              min_decisive_evidence_score: -0.01
+            }
+          },
+          ...rest
+        ]
+      })
+    ).toThrow();
+  });
+
+  it("rejects pack-002 draft when min_decisive_evidence_score is above 1", () => {
+    const pack = loadPackV2Draft(pack002DraftPath);
+    const [firstCase, ...rest] = pack.cases;
+
+    expect(() =>
+      PackV2DraftSchema.parse({
+        ...pack,
+        cases: [
+          {
+            ...firstCase,
+            acceptance: {
+              ...firstCase.acceptance,
+              min_decisive_evidence_score: 1.01
+            }
           },
           ...rest
         ]

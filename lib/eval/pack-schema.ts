@@ -3,6 +3,9 @@ import { z } from "zod";
 export const PackV1Schema = z.object({
   packId: z.literal("pack-001"),
   packVersion: z.string().min(1),
+  // pack-001.yaml is a frozen legacy sealed pack and does not contain an
+  // explicit sealed field; the loader normalizes missing sealed to true for
+  // PackV1 compatibility. sealed:false must still be rejected.
   sealed: z.literal(true).default(true),
   auditMode: z.string().min(1),
   optionalExternalApiAudit: z.boolean(),
