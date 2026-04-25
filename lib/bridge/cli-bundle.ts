@@ -6,6 +6,33 @@ import type { RunRecord, ProjectRecord } from "@/lib/storage/schema";
 export type CliBridgeProvider = "claude" | "codex";
 export type CliBridgeMode = "prompt_only" | "cli_execute";
 
+type EvidenceDiagnostics = {
+  decisiveEvidenceScore?: number;
+  falseConvergenceRisk?: boolean;
+  convergenceRiskReasons?: string[];
+  counterevidenceChecked?: boolean;
+  supportOnlyEvidence?: boolean;
+  weakEvidence?: boolean;
+  sourcePriorityCounts?: {
+    official: number;
+    primary_data: number;
+    analysis: number;
+    community: number;
+  };
+  sourceTierCounts?: {
+    official: number;
+    primary: number;
+    internal: number;
+    community: number;
+    aggregator: number;
+    unknown: number;
+  };
+  sourcePriorityDiversity?: number;
+  hasOfficialOrPrimaryEvidence?: boolean;
+  aggregatorOnlyEvidence?: boolean;
+  sourceCoverageWarnings?: string[];
+} | null;
+
 export type CliBridgeBundle = {
   project: {
     id: string;
@@ -25,6 +52,7 @@ export type CliBridgeBundle = {
     competitorSignals: string[];
     conflicts: string[];
   };
+  evidenceDiagnostics: EvidenceDiagnostics;
   decisionHistory: DecisionHistoryItem[];
   kb: {
     promotionCandidates: ProjectRecord["promotionCandidates"];
@@ -84,6 +112,7 @@ export function buildCliBundle(params: {
   now?: string;
 }): CliBridgeBundle {
   const generatedAt = params.now ?? new Date().toISOString();
+  const evidenceSummary = params.latestRun.evidenceSummary;
 
   if (!params.latestRun.decision) {
     throw new Error("latestRun.decision is required for cli bundle");
@@ -108,6 +137,22 @@ export function buildCliBundle(params: {
       competitorSignals: params.insights.competitorSignals,
       conflicts: params.insights.contradictionIds ?? []
     },
+    evidenceDiagnostics: evidenceSummary
+      ? {
+          decisiveEvidenceScore: evidenceSummary.decisiveEvidenceScore,
+          falseConvergenceRisk: evidenceSummary.falseConvergenceRisk,
+          convergenceRiskReasons: evidenceSummary.convergenceRiskReasons,
+          counterevidenceChecked: evidenceSummary.counterevidenceChecked,
+          supportOnlyEvidence: evidenceSummary.supportOnlyEvidence,
+          weakEvidence: evidenceSummary.weakEvidence,
+          sourcePriorityCounts: evidenceSummary.sourcePriorityCounts,
+          sourceTierCounts: evidenceSummary.sourceTierCounts,
+          sourcePriorityDiversity: evidenceSummary.sourcePriorityDiversity,
+          hasOfficialOrPrimaryEvidence: evidenceSummary.hasOfficialOrPrimaryEvidence,
+          aggregatorOnlyEvidence: evidenceSummary.aggregatorOnlyEvidence,
+          sourceCoverageWarnings: evidenceSummary.sourceCoverageWarnings
+        }
+      : null,
     decisionHistory: params.decisionHistory,
     kb: {
       promotionCandidates: params.promotionCandidates ?? [],
@@ -129,6 +174,23 @@ export function buildCliBundle(params: {
 
 function renderList(items: string[]): string {
   return items.length > 0 ? items.map((item) => `- ${item}`).join("\n") : "- none";
+}
+
+function renderEvidenceDiagnostics(diagnostics: EvidenceDiagnostics): string {
+  if (!diagnostics) {
+    return "- none";
+  }
+
+  return [
+    `- Decisiveness: ${diagnostics.decisiveEvidenceScore ?? "unknown"}`,
+    `- False convergence risk: ${diagnostics.falseConvergenceRisk ?? "unknown"}`,
+    `- Counterevidence checked: ${diagnostics.counterevidenceChecked ?? "unknown"}`,
+    `- Weak evidence: ${diagnostics.weakEvidence ?? "unknown"}`,
+    `- Source priority diversity: ${diagnostics.sourcePriorityDiversity ?? "unknown"}`,
+    `- Official/primary evidence: ${diagnostics.hasOfficialOrPrimaryEvidence ?? "unknown"}`,
+    `- Aggregator-only evidence: ${diagnostics.aggregatorOnlyEvidence ?? "unknown"}`,
+    `- Warnings: ${diagnostics.sourceCoverageWarnings?.join(", ") || "none"}`
+  ].join("\n");
 }
 
 export function renderCliBundleMarkdown(bundle: CliBridgeBundle): string {
@@ -229,6 +291,9 @@ export function renderCliBundleMarkdown(bundle: CliBridgeBundle): string {
     "",
     "### Conflicts",
     renderList(bundle.insights.conflicts),
+    "",
+    "## Evidence Diagnostics",
+    renderEvidenceDiagnostics(bundle.evidenceDiagnostics),
     "",
     "## Decision History",
     history,

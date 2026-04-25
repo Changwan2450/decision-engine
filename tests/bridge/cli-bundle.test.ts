@@ -49,6 +49,41 @@ const latestRun: RunRecord = {
   advisory: null
 };
 
+const diagnosticRun: RunRecord = {
+  ...latestRun,
+  evidenceSummary: {
+    shouldRemainUnclear: false,
+    reasons: [],
+    highestPrioritySeen: "official",
+    decisiveEvidenceScore: 0.82,
+    falseConvergenceRisk: false,
+    convergenceRiskReasons: ["support_only_evidence"],
+    counterevidenceChecked: true,
+    supportOnlyEvidence: false,
+    weakEvidence: false,
+    sourcePriorityCounts: {
+      official: 1,
+      primary_data: 1,
+      analysis: 1,
+      community: 0
+    },
+    sourceTierCounts: {
+      official: 1,
+      primary: 1,
+      internal: 0,
+      community: 0,
+      aggregator: 0,
+      unknown: 1
+    },
+    sourcePriorityDiversity: 3,
+    hasOfficialOrPrimaryEvidence: true,
+    aggregatorOnlyEvidence: false,
+    sourceCoverageWarnings: ["no_official_or_primary_evidence", "single_priority_evidence"],
+    claimCount: 3,
+    contradictionCount: 0
+  }
+};
+
 const insights = {
   repeatedProblems: ["차별화가 어렵다"],
   repeatedPatterns: ["짧은 루프가 유지율을 높인다"],
@@ -147,6 +182,7 @@ describe("cli bundle", () => {
       blockingUnknowns: ["retention curve validation"]
     });
     expect(bundle.insights.repeatedProblems).toEqual(["차별화가 어렵다"]);
+    expect(bundle.evidenceDiagnostics).toBeNull();
     expect(bundle.decisionHistory).toHaveLength(1);
     expect(bundle.kb.promotionCandidates).toHaveLength(1);
     expect(bundle.kb.relatedRuns).toEqual(relatedRuns);
@@ -186,6 +222,7 @@ describe("cli bundle", () => {
     expect(markdown).toContain("# Decision Engine Bundle");
     expect(markdown).toContain("## Latest Run");
     expect(markdown).toContain("## Project Insights");
+    expect(markdown).toContain("## Evidence Diagnostics");
     expect(markdown).toContain("## Decision History");
     expect(markdown).toContain("## KB Context");
     expect(markdown).toContain("### Promotion Candidates");
@@ -196,5 +233,101 @@ describe("cli bundle", () => {
     expect(markdown).toContain("## Instructions for External CLI");
     expect(markdown).toContain("- provider: claude");
     expect(markdown).toContain("- external_summary");
+  });
+
+  it("includes evidence diagnostics in JSON bundles when present", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: diagnosticRun,
+      insights,
+      decisionHistory,
+      relatedRuns,
+      promotionCandidates,
+      decisionHistorySummary,
+      recentContradictions,
+      projectInsightSummary,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    expect(bundle.evidenceDiagnostics).toEqual({
+      decisiveEvidenceScore: 0.82,
+      falseConvergenceRisk: false,
+      convergenceRiskReasons: ["support_only_evidence"],
+      counterevidenceChecked: true,
+      supportOnlyEvidence: false,
+      weakEvidence: false,
+      sourcePriorityCounts: {
+        official: 1,
+        primary_data: 1,
+        analysis: 1,
+        community: 0
+      },
+      sourceTierCounts: {
+        official: 1,
+        primary: 1,
+        internal: 0,
+        community: 0,
+        aggregator: 0,
+        unknown: 1
+      },
+      sourcePriorityDiversity: 3,
+      hasOfficialOrPrimaryEvidence: true,
+      aggregatorOnlyEvidence: false,
+      sourceCoverageWarnings: ["no_official_or_primary_evidence", "single_priority_evidence"]
+    });
+    expect(bundle.project.id).toBe("project-1");
+    expect(bundle.latestRun.id).toBe("run-12");
+    expect(bundle.insights.conflicts).toEqual(["contradiction-1"]);
+    expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
+  });
+
+  it("renders concise evidence diagnostics in markdown", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: diagnosticRun,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "claude",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    const markdown = renderCliBundleMarkdown(bundle);
+
+    expect(markdown).toContain("## Evidence Diagnostics");
+    expect(markdown).toContain("- Decisiveness: 0.82");
+    expect(markdown).toContain("- False convergence risk: false");
+    expect(markdown).toContain("- Counterevidence checked: true");
+    expect(markdown).toContain("- Weak evidence: false");
+    expect(markdown).toContain("- Source priority diversity: 3");
+    expect(markdown).toContain("- Official/primary evidence: true");
+    expect(markdown).toContain("- Aggregator-only evidence: false");
+    expect(markdown).toContain(
+      "- Warnings: no_official_or_primary_evidence, single_priority_evidence"
+    );
+  });
+
+  it("exports without throwing when diagnostics are absent", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    expect(bundle.evidenceDiagnostics).toBeNull();
+    expect(renderCliBundleMarkdown(bundle)).toContain("## Evidence Diagnostics\n- none");
+    expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
   });
 });
