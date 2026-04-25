@@ -407,7 +407,6 @@ async function extractFallbackRepairUrlsFromCommunityArtifacts(
 
     const extracted = extractAllowedUrlsFromCommunitySearchJson({
       rawJson,
-      discoveryUrl: artifact.url,
       limit: 3
     });
 

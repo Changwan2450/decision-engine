@@ -182,7 +182,6 @@ describe("source coverage repair planner", () => {
     expect(
       extractAllowedUrlsFromCommunitySearchJson({
         rawJson: "{bad json",
-        discoveryUrl: "https://hn.algolia.com/api/v1/search?query=test"
       })
     ).toEqual([]);
   });
@@ -197,7 +196,46 @@ describe("source coverage repair planner", () => {
           { url: "https://example.com/post" }
         ]
       }),
-      discoveryUrl: "https://hn.algolia.com/api/v1/search?query=test"
+    });
+
+    expect(urls).toEqual([]);
+  });
+
+  it("dispatches by raw json shape, not artifact url, for hn payloads", () => {
+    const urls = extractAllowedUrlsFromCommunitySearchJson({
+      rawJson: JSON.stringify({
+        hits: [
+          { url: "https://news.ycombinator.com/item?id=1" },
+          { url: "https://openai.com/research/guardrails" }
+        ]
+      })
+    });
+
+    expect(urls).toEqual(["https://openai.com/research/guardrails"]);
+  });
+
+  it("dispatches by raw json shape, not artifact url, for reddit payloads", () => {
+    const urls = extractAllowedUrlsFromCommunitySearchJson({
+      rawJson: JSON.stringify({
+        data: {
+          children: [
+            { data: { url: "https://platform.openai.com/docs/guides/reasoning" } }
+          ]
+        }
+      })
+    });
+
+    expect(urls).toEqual(["https://platform.openai.com/docs/guides/reasoning"]);
+  });
+
+  it("zero allowlisted candidates produce no follow candidates", () => {
+    const urls = extractAllowedUrlsFromCommunitySearchJson({
+      rawJson: JSON.stringify({
+        hits: [
+          { url: "https://news.ycombinator.com/item?id=1" },
+          { url: "https://example.com/post" }
+        ]
+      })
     });
 
     expect(urls).toEqual([]);

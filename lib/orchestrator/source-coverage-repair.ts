@@ -218,24 +218,24 @@ export function extractAllowedUrlsFromHnAlgoliaJson(
 
 export function extractAllowedUrlsFromCommunitySearchJson(input: {
   rawJson: string;
-  discoveryUrl: string;
   limit?: number;
 }): string[] {
-  const host = (() => {
-    try {
-      return new URL(input.discoveryUrl).hostname.toLowerCase();
-    } catch {
-      return "";
+  try {
+    const parsed = JSON.parse(input.rawJson) as {
+      data?: { children?: unknown[] };
+      hits?: unknown[];
+    };
+
+    if (Array.isArray(parsed.data?.children)) {
+      return extractAllowedUrlsFromRedditSearchJson(input.rawJson, input.limit);
     }
-  })();
 
-  if (host === "reddit.com" || host === "www.reddit.com") {
-    return extractAllowedUrlsFromRedditSearchJson(input.rawJson, input.limit);
+    if (Array.isArray(parsed.hits)) {
+      return extractAllowedUrlsFromHnAlgoliaJson(input.rawJson, input.limit);
+    }
+
+    return [];
+  } catch {
+    return [];
   }
-
-  if (host === "hn.algolia.com") {
-    return extractAllowedUrlsFromHnAlgoliaJson(input.rawJson, input.limit);
-  }
-
-  return [];
 }
