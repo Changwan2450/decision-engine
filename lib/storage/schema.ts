@@ -327,6 +327,38 @@ export const runtimeProvenanceSchema = z.object({
   entrypoint: z.string().nullable()
 });
 
+export const retrievalAttemptGapsSchema = z.object({
+  version: z.literal("v0"),
+  emptyResults: z.array(
+    z.object({
+      adapter: z.string(),
+      url: z.string().optional(),
+      rule: z.string().optional(),
+      sourceType: z.string().optional(),
+      isFallback: z.boolean(),
+      reason: z.literal("empty_adapter_result"),
+      timestamp: z.string().optional()
+    })
+  ),
+  droppedAttempts: z.array(
+    z.object({
+      reason: z.enum([
+        "expansion_dropped",
+        "dedupe_dropped",
+        "unsupported",
+        "budget_skipped"
+      ]),
+      count: z.number().optional(),
+      adapter: z.string().optional(),
+      sourceType: z.string().optional()
+    })
+  ),
+  summary: z.object({
+    emptyResultCount: z.number(),
+    droppedAttemptCount: z.number()
+  })
+});
+
 export const runRecordSchema = z.object({
   run: runSchema,
   runtimeProvenance: runtimeProvenanceSchema.nullable().default(null),
@@ -341,6 +373,9 @@ export const runRecordSchema = z.object({
   claims: z.array(claimSchema).default([]),
   citations: z.array(citationSchema).default([]),
   contradictions: z.array(contradictionSchema).default([]),
+  retrievalAttemptGaps: retrievalAttemptGapsSchema
+    .nullable()
+    .default(null),
   evidenceSummary: evidenceSummarySchema
     .nullable()
     .default(null),

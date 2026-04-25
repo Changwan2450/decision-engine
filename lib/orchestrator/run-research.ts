@@ -40,11 +40,23 @@ import {
 import type { ProjectRecord } from "@/lib/storage/schema";
 import type { Claim, Citation, Contradiction, SourceArtifactRecord, SourceTier } from "@/lib/domain/claims";
 
+type EmptyAdapterResultGap = {
+  adapter: string;
+  url?: string;
+  rule?: string;
+  sourceType?: string;
+  isFallback: boolean;
+  reason: "empty_adapter_result";
+  timestamp?: string;
+};
+
 type RunResearchDeps = {
   registry?: AdapterRegistry;
   router?: (url: string) => AdapterChain;
   budgets?: Partial<ResearchBudgetConfig>;
   nowMs?: () => number;
+  nowIso?: () => string;
+  onEmptyAdapterResult?: (gap: EmptyAdapterResultGap) => void;
 };
 
 export async function runResearch(
@@ -154,6 +166,15 @@ export async function runResearch(
       }
 
       if (attemptArtifacts.length === 0) {
+        deps?.onEmptyAdapterResult?.({
+          adapter: adapterName,
+          url: truncateTelemetryValue(url),
+          rule: chain.rule,
+          sourceType: inferSourceType(chain),
+          isFallback,
+          reason: "empty_adapter_result",
+          timestamp: (deps.nowIso ?? (() => new Date().toISOString()))()
+        });
         console.warn(
           "[run-research] empty adapter result",
           JSON.stringify({
@@ -261,6 +282,10 @@ export async function gatherForRun(
       })
     ];
   }
+}
+
+function truncateTelemetryValue(value: string, maxLength = 240): string {
+  return value.length <= maxLength ? value : value.slice(0, maxLength);
 }
 
 function isRecencySensitive(plan: ResearchPlan): boolean {
@@ -580,6 +605,7 @@ export async function executeResearchRun(
   deps?: {
     now?: string;
     gather?: (plan: ResearchPlan) => Promise<SourceArtifact[]>;
+    research?: RunResearchDeps;
   }
 ) {
   const now = deps?.now ?? new Date().toISOString();
@@ -643,7 +669,18 @@ export async function executeResearchRun(
   });
 
   try {
-    const gather = deps?.gather ?? runResearch;
+    const emptyResults: EmptyAdapterResultGap[] = [];
+    const gather =
+      deps?.gather ??
+      ((plan: ResearchPlan) =>
+        runResearch(plan, {
+          ...deps?.research,
+          nowIso: () => now,
+          onEmptyAdapterResult: (gap) => {
+            deps?.research?.onEmptyAdapterResult?.(gap);
+            emptyResults.push(gap);
+          }
+        }));
     const gatheredArtifacts = await gather(plan);
     const artifacts = attachSourceTiers([
       ...buildKnowledgeArtifacts(plan.kbContext, plan.runId),
@@ -696,6 +733,18 @@ export async function executeResearchRun(
         claims: synthesis.claims,
         citations: synthesis.citations,
         contradictions,
+        retrievalAttemptGaps:
+          emptyResults.length > 0
+            ? {
+                version: "v0",
+                emptyResults,
+                droppedAttempts: [],
+                summary: {
+                  emptyResultCount: emptyResults.length,
+                  droppedAttemptCount: 0
+                }
+              }
+            : null,
         evidenceSummary: synthesis.summary,
         decision,
         prdSeed,
