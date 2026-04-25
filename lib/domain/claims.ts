@@ -165,6 +165,11 @@ export const evidenceSummarySchema = z.object({
   ),
   highestPrioritySeen: sourcePrioritySchema.nullable(),
   decisiveEvidenceScore: z.number().min(0).max(1).optional(),
+  falseConvergenceRisk: z.boolean().optional(),
+  convergenceRiskReasons: z.array(z.string()).optional(),
+  counterevidenceChecked: z.boolean().optional(),
+  supportOnlyEvidence: z.boolean().optional(),
+  weakEvidence: z.boolean().optional(),
   claimCount: z.number().int().nonnegative(),
   contradictionCount: z.number().int().nonnegative()
 });

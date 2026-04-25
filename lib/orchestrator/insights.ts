@@ -299,6 +299,56 @@ export function computeDecisiveEvidenceScore(
   return clampScore(0.4 + tierBoost + diversityBoost - contradictionPenalty);
 }
 
+/**
+ * V0 false-convergence diagnostics. This is deterministic and intentionally
+ * diagnostic-only; these fields are not used by decision logic.
+ */
+export function computeFalseConvergenceDiagnostics(
+  citations: Citation[],
+  claims: Claim[],
+  contradictions: Contradiction[],
+  decisiveEvidenceScore: number
+): {
+  falseConvergenceRisk: boolean;
+  convergenceRiskReasons: string[];
+  counterevidenceChecked: boolean;
+  supportOnlyEvidence: boolean;
+  weakEvidence: boolean;
+} {
+  void citations;
+
+  const supportClaims = claims.filter((claim) => claim.stance === "support");
+  const opposeClaims = claims.filter((claim) => claim.stance === "oppose");
+  const counterevidenceChecked =
+    opposeClaims.length > 0 || contradictions.length > 0;
+  const supportOnlyEvidence =
+    supportClaims.length > 0 && counterevidenceChecked === false;
+  const weakEvidence = decisiveEvidenceScore < 0.75;
+  const falseConvergenceRisk = supportOnlyEvidence && weakEvidence;
+  const convergenceRiskReasons: string[] = [];
+
+  if (supportOnlyEvidence) {
+    convergenceRiskReasons.push("support_only_evidence");
+  }
+  if (supportClaims.length > 0 && counterevidenceChecked === false) {
+    convergenceRiskReasons.push("counterevidence_not_checked");
+  }
+  if (weakEvidence) {
+    convergenceRiskReasons.push("weak_evidence");
+  }
+  if (falseConvergenceRisk) {
+    convergenceRiskReasons.push("false_convergence_risk");
+  }
+
+  return {
+    falseConvergenceRisk,
+    convergenceRiskReasons,
+    counterevidenceChecked,
+    supportOnlyEvidence,
+    weakEvidence
+  };
+}
+
 export function synthesizeEvidenceFromArtifacts(
   artifacts: SourceArtifact[],
   options: {
@@ -452,11 +502,20 @@ export function synthesizeEvidenceFromArtifacts(
     reasons.push("insufficient_high_priority_support");
   }
 
+  const decisiveEvidenceScore = computeDecisiveEvidenceScore(citations, claims, contradictions);
+  const falseConvergenceDiagnostics = computeFalseConvergenceDiagnostics(
+    citations,
+    claims,
+    contradictions,
+    decisiveEvidenceScore
+  );
+
   const summary = evidenceSummarySchema.parse({
     shouldRemainUnclear: reasons.length > 0,
     reasons,
     highestPrioritySeen,
-    decisiveEvidenceScore: computeDecisiveEvidenceScore(citations, claims, contradictions),
+    decisiveEvidenceScore,
+    ...falseConvergenceDiagnostics,
     claimCount: claims.length,
     contradictionCount: contradictions.length
   });
