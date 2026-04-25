@@ -11,6 +11,7 @@
     "cli": "tsx --tsconfig tsconfig.json scripts/cli.ts",
     "mcp": "tsx --tsconfig tsconfig.json scripts/mcp.ts",
     "eval:harness": "tsx --tsconfig tsconfig.json scripts/eval-harness.ts",
+    "eval:pack": "tsx --tsconfig tsconfig.json scripts/validate-eval-pack.ts",
     "eval:report": "tsx --tsconfig tsconfig.json scripts/eval-report.ts",
     "test": "vitest run"
   },
