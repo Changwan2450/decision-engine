@@ -271,6 +271,34 @@ function daysBetween(now: string, then: string): number {
   return Math.floor((nowTime - thenTime) / (1000 * 60 * 60 * 24));
 }
 
+function clampScore(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+/**
+ * V0 indicative decisiveness score. This is deterministic and intentionally
+ * uncalibrated; it is exposed for evaluation visibility, not decision logic.
+ */
+export function computeDecisiveEvidenceScore(
+  citations: Citation[],
+  claims: Claim[],
+  contradictions: Contradiction[]
+): number {
+  const supportClaims = claims.filter((claim) => claim.stance === "support");
+  if (supportClaims.length === 0) {
+    return 0;
+  }
+
+  const priorities = new Set(citations.map((citation) => citation.priority));
+  const hasHighPriority =
+    priorities.has("official") || priorities.has("primary_data");
+  const tierBoost = hasHighPriority ? 0.4 : 0;
+  const diversityBoost = Math.min(0.3, 0.1 * Math.max(0, priorities.size - 1));
+  const contradictionPenalty = contradictions.length > 0 ? 0.2 : 0;
+
+  return clampScore(0.4 + tierBoost + diversityBoost - contradictionPenalty);
+}
+
 export function synthesizeEvidenceFromArtifacts(
   artifacts: SourceArtifact[],
   options: {
@@ -428,6 +456,7 @@ export function synthesizeEvidenceFromArtifacts(
     shouldRemainUnclear: reasons.length > 0,
     reasons,
     highestPrioritySeen,
+    decisiveEvidenceScore: computeDecisiveEvidenceScore(citations, claims, contradictions),
     claimCount: claims.length,
     contradictionCount: contradictions.length
   });
