@@ -45,6 +45,7 @@ const latestRun: RunRecord = {
   claims: [],
   citations: [],
   contradictions: [],
+  retrievalAttemptGaps: null,
   evidenceSummary: null,
   runtimeProvenance: null,
   advisory: null
@@ -93,6 +94,7 @@ const diagnosticRun: RunRecord = {
 
 const longSnippet = `${"usable evidence ".repeat(30)}SECRET_FULL_CONTENT_MARKER`;
 const longClaim = `${"claim evidence ".repeat(30)}SECRET_CLAIM_TAIL`;
+const longGapUrl = `https://example.com/search?q=${"agent-research ".repeat(30)}SECRET_GAP_TAIL`;
 
 const evidenceReplayRun: RunRecord = {
   ...diagnosticRun,
@@ -270,6 +272,44 @@ const evidenceReplayRun: RunRecord = {
   }
 };
 
+const retrievalAttemptGapRun: RunRecord = {
+  ...diagnosticRun,
+  retrievalAttemptGaps: {
+    version: "v0",
+    emptyResults: [
+      {
+        adapter: "community-search-json",
+        url: longGapUrl,
+        rule: "community/reddit-search-json",
+        sourceType: "community",
+        isFallback: false,
+        reason: "empty_adapter_result",
+        timestamp: "2026-04-25T12:00:00.000Z",
+        rawResponse: "RAW_RESPONSE_SHOULD_NOT_EXPORT",
+        stdout: "STDOUT_SHOULD_NOT_EXPORT",
+        stderr: "STDERR_SHOULD_NOT_EXPORT",
+        html: "<html>RAW_HTML_SHOULD_NOT_EXPORT</html>",
+        json: "{\"raw\":\"RAW_JSON_SHOULD_NOT_EXPORT\"}",
+        metadata: {
+          error: "METADATA_ERROR_SHOULD_NOT_EXPORT"
+        }
+      } as unknown as NonNullable<RunRecord["retrievalAttemptGaps"]>["emptyResults"][number]
+    ],
+    droppedAttempts: [
+      {
+        reason: "budget_skipped",
+        count: 2,
+        adapter: "agent-reach",
+        sourceType: "web"
+      }
+    ],
+    summary: {
+      emptyResultCount: 1,
+      droppedAttemptCount: 2
+    }
+  }
+};
+
 const insights = {
   repeatedProblems: ["차별화가 어렵다"],
   repeatedPatterns: ["짧은 루프가 유지율을 높인다"],
@@ -411,6 +451,7 @@ describe("cli bundle", () => {
     expect(markdown).toContain("## Project Insights");
     expect(markdown).toContain("## Evidence Diagnostics");
     expect(markdown).toContain("## Evidence Replay");
+    expect(markdown).toContain("## Retrieval Attempt Gaps");
     expect(markdown).toContain("## Runtime Provenance");
     expect(markdown).toContain("## Decision History");
     expect(markdown).toContain("## KB Context");
@@ -654,11 +695,100 @@ describe("cli bundle", () => {
     });
 
     expect(bundle.evidenceDiagnostics).toBeNull();
+    expect(bundle.retrievalAttemptGaps).toBeNull();
     expect(bundle.runtimeProvenance).toBeNull();
     expect(renderCliBundleMarkdown(bundle)).toContain("## Evidence Diagnostics\n- none");
     expect(renderCliBundleMarkdown(bundle)).toContain(
       "## Runtime Provenance\n- not available"
     );
     expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
+  });
+
+  it("includes sanitized retrieval attempt gaps in JSON and markdown", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: retrievalAttemptGapRun,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
+    expect(bundle.evidenceDiagnostics).not.toBeNull();
+    expect(bundle.runtimeProvenance).not.toBeNull();
+    expect(bundle.evidenceReplay.version).toBe("v0");
+    expect(bundle.retrievalAttemptGaps?.version).toBe("v0");
+    expect(bundle.retrievalAttemptGaps?.summary.emptyResultCount).toBe(1);
+    expect(bundle.retrievalAttemptGaps?.summary.droppedAttemptCount).toBe(2);
+    expect(bundle.retrievalAttemptGaps?.emptyResults[0]).toMatchObject({
+      adapter: "community-search-json",
+      reason: "empty_adapter_result",
+      isFallback: false,
+      sourceType: "community"
+    });
+    expect(bundle.retrievalAttemptGaps?.emptyResults[0]?.url.length).toBeLessThanOrEqual(240);
+    expect(bundle.retrievalAttemptGaps?.emptyResults[0]?.url).not.toContain("SECRET_GAP_TAIL");
+
+    const markdown = renderCliBundleMarkdown(bundle);
+    expect(markdown).toContain("## Retrieval Attempt Gaps");
+    expect(markdown).toContain("- Empty adapter results: 1");
+    expect(markdown).toContain("- Dropped attempts: 2");
+    expect(markdown).toContain("### Empty Results");
+    expect(markdown).toContain("adapter: community-search-json");
+    expect(markdown).toContain("reason: empty_adapter_result");
+
+    const serialized = JSON.stringify(bundle);
+    const combined = `${serialized}\n${markdown}`;
+    expect(combined).not.toContain("RAW_RESPONSE_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("STDOUT_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("STDERR_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("RAW_HTML_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("RAW_JSON_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("METADATA_ERROR_SHOULD_NOT_EXPORT");
+  });
+
+  it("exports safely when retrieval attempt gaps are missing or null", () => {
+    const runWithoutGaps = { ...diagnosticRun };
+    delete (runWithoutGaps as Partial<RunRecord>).retrievalAttemptGaps;
+
+    const missingBundle = buildCliBundle({
+      project,
+      latestRun: runWithoutGaps,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+    const nullBundle = buildCliBundle({
+      project,
+      latestRun: {
+        ...diagnosticRun,
+        retrievalAttemptGaps: null
+      },
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    expect(missingBundle.retrievalAttemptGaps).toBeNull();
+    expect(nullBundle.retrievalAttemptGaps).toBeNull();
+    expect(renderCliBundleMarkdown(missingBundle)).toContain(
+      "No retrieval attempt gaps recorded."
+    );
+    expect(renderCliBundleMarkdown(nullBundle)).toContain(
+      "No retrieval attempt gaps recorded."
+    );
+    expect(missingBundle.bridge.schemaVersion).toBe("cli-bridge-v1");
   });
 });

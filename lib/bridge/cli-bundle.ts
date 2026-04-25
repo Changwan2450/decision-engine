@@ -7,6 +7,7 @@ export type CliBridgeProvider = "claude" | "codex";
 export type CliBridgeMode = "prompt_only" | "cli_execute";
 
 type RuntimeProvenance = NonNullable<RunRecord["runtimeProvenance"]>;
+type RetrievalAttemptGaps = NonNullable<RunRecord["retrievalAttemptGaps"]> | null;
 
 type EvidenceDiagnostics = {
   decisiveEvidenceScore?: number;
@@ -139,6 +140,7 @@ export type CliBridgeBundle = {
   };
   evidenceDiagnostics: EvidenceDiagnostics;
   evidenceReplay: EvidenceReplay;
+  retrievalAttemptGaps: RetrievalAttemptGaps;
   runtimeProvenance: RuntimeProvenance | null;
   decisionHistory: DecisionHistoryItem[];
   kb: {
@@ -185,6 +187,11 @@ const EVIDENCE_REPLAY_LIMITS = {
   topCitations: 8,
   contradictions: 5,
   retrievalFailures: 8
+} as const;
+
+const RETRIEVAL_ATTEMPT_GAP_LIMITS = {
+  emptyResults: 8,
+  droppedAttempts: 8
 } as const;
 
 const sourcePriorityRank: Record<string, number> = {
@@ -417,6 +424,35 @@ function buildEvidenceReplay(
   };
 }
 
+function buildRetrievalAttemptGaps(run: RunRecord): RetrievalAttemptGaps {
+  const gaps = run.retrievalAttemptGaps ?? null;
+  if (!gaps) return null;
+
+  return {
+    version: "v0",
+    emptyResults: gaps.emptyResults
+      .slice(0, RETRIEVAL_ATTEMPT_GAP_LIMITS.emptyResults)
+      .map((result) => ({
+        adapter: result.adapter,
+        url: result.url ? truncateText(result.url) : undefined,
+        rule: result.rule ? truncateText(result.rule) : undefined,
+        sourceType: result.sourceType,
+        isFallback: result.isFallback,
+        reason: result.reason,
+        timestamp: result.timestamp
+      })),
+    droppedAttempts: gaps.droppedAttempts
+      .slice(0, RETRIEVAL_ATTEMPT_GAP_LIMITS.droppedAttempts)
+      .map((attempt) => ({
+        reason: attempt.reason,
+        count: attempt.count,
+        adapter: attempt.adapter,
+        sourceType: attempt.sourceType
+      })),
+    summary: gaps.summary
+  };
+}
+
 export function buildCliBundle(params: {
   project: Project;
   latestRun: RunRecord;
@@ -480,6 +516,7 @@ export function buildCliBundle(params: {
     },
     evidenceDiagnostics,
     evidenceReplay: buildEvidenceReplay(params.latestRun, evidenceDiagnostics),
+    retrievalAttemptGaps: buildRetrievalAttemptGaps(params.latestRun),
     runtimeProvenance: params.latestRun.runtimeProvenance ?? null,
     decisionHistory: params.decisionHistory,
     kb: {
@@ -600,6 +637,49 @@ function renderEvidenceReplay(replay: EvidenceReplay): string {
   ].join("\n");
 }
 
+function renderRetrievalAttemptGaps(gaps: RetrievalAttemptGaps): string {
+  if (!gaps) {
+    return "No retrieval attempt gaps recorded.";
+  }
+
+  const emptyResults =
+    gaps.emptyResults.length > 0
+      ? gaps.emptyResults
+          .map(
+            (result) =>
+              `- adapter: ${result.adapter}\n` +
+              `  - sourceType: ${result.sourceType ?? "unknown"}\n` +
+              `  - reason: ${result.reason}\n` +
+              `  - isFallback: ${result.isFallback}\n` +
+              `  - url/query: ${result.url ?? "unknown"}`
+          )
+          .join("\n")
+      : "- none";
+  const droppedAttempts =
+    gaps.droppedAttempts.length > 0
+      ? gaps.droppedAttempts
+          .map(
+            (attempt) =>
+              `- reason: ${attempt.reason}\n` +
+              `  - count: ${attempt.count ?? "unknown"}\n` +
+              `  - adapter: ${attempt.adapter ?? "unknown"}\n` +
+              `  - sourceType: ${attempt.sourceType ?? "unknown"}`
+          )
+          .join("\n")
+      : "- none";
+
+  return [
+    `- Empty adapter results: ${gaps.summary.emptyResultCount}`,
+    `- Dropped attempts: ${gaps.summary.droppedAttemptCount}`,
+    "",
+    "### Empty Results",
+    emptyResults,
+    "",
+    "### Dropped Attempts",
+    droppedAttempts
+  ].join("\n");
+}
+
 export function renderCliBundleMarkdown(bundle: CliBridgeBundle): string {
   const history =
     bundle.decisionHistory.length > 0
@@ -704,6 +784,9 @@ export function renderCliBundleMarkdown(bundle: CliBridgeBundle): string {
     "",
     "## Evidence Replay",
     renderEvidenceReplay(bundle.evidenceReplay),
+    "",
+    "## Retrieval Attempt Gaps",
+    renderRetrievalAttemptGaps(bundle.retrievalAttemptGaps),
     "",
     "## Runtime Provenance",
     renderRuntimeProvenance(bundle.runtimeProvenance),
