@@ -28,6 +28,7 @@ import {
   RESEARCH_QUALITY_CONTRACT_VERSION,
   RETENTION_ELIGIBILITY_SCHEMA
 } from "@/lib/orchestrator/research-quality-contract";
+import { planSourceCoverageRepair } from "@/lib/orchestrator/source-coverage-repair";
 import {
   applyRunRetentionPolicy,
   findRunRecordById,
@@ -286,6 +287,43 @@ export async function gatherForRun(
 
 function truncateTelemetryValue(value: string, maxLength = 240): string {
   return value.length <= maxLength ? value : value.slice(0, maxLength);
+}
+
+function buildSourceCoverageRepairPlan(
+  plan: ResearchPlan,
+  urls: string[]
+): ResearchPlan {
+  return {
+    ...plan,
+    sourceTargets: ["web"],
+    normalizedInput: {
+      ...plan.normalizedInput,
+      urls
+    }
+  };
+}
+
+function markSourceCoverageRepairArtifacts(
+  artifacts: SourceArtifact[],
+  repairPlan: ReturnType<typeof planSourceCoverageRepair>
+): SourceArtifact[] {
+  const repairByUrl = new Map(repairPlan.urls.map((item) => [item.url, item]));
+
+  return artifacts.map((artifact) => {
+    const repair = repairByUrl.get(artifact.url);
+    if (!repair) return artifact;
+
+    return {
+      ...artifact,
+      metadata: {
+        ...artifact.metadata,
+        repair_pass: repair.repairPass,
+        repair_reason: repair.repairReason,
+        repair_query: truncateTelemetryValue(repair.query),
+        repair_attempt_index: String(repair.repairAttemptIndex)
+      }
+    };
+  });
 }
 
 function isRecencySensitive(plan: ResearchPlan): boolean {
@@ -702,10 +740,45 @@ export async function executeResearchRun(
       };
     });
 
-    const synthesis = synthesizeEvidenceFromArtifacts(artifacts, {
+    let synthesis = synthesizeEvidenceFromArtifacts(artifacts, {
       now,
       recencySensitive: isRecencySensitive(plan)
     });
+    const repairPlan = planSourceCoverageRepair({
+      title: plan.title,
+      goal: plan.normalizedInput.goal,
+      summary: {
+        hasOfficialOrPrimaryEvidence: synthesis.summary.hasOfficialOrPrimaryEvidence,
+        sourceCoverageWarnings: synthesis.summary.sourceCoverageWarnings
+      }
+    });
+
+    if (repairPlan.shouldRun && repairPlan.urls.length > 0) {
+      const repairArtifacts = markSourceCoverageRepairArtifacts(
+        await runResearch(
+          buildSourceCoverageRepairPlan(
+            plan,
+            repairPlan.urls.map((item) => item.url)
+          ),
+          {
+            ...deps?.research,
+            nowIso: () => now,
+            onEmptyAdapterResult: (gap) => {
+              deps?.research?.onEmptyAdapterResult?.(gap);
+              emptyResults.push(gap);
+            }
+          }
+        ),
+        repairPlan
+      );
+      const repairedArtifacts = attachSourceTiers(
+        dedupeGatheredArtifacts([...artifacts, ...repairArtifacts])
+      );
+      synthesis = synthesizeEvidenceFromArtifacts(repairedArtifacts, {
+        now,
+        recencySensitive: isRecencySensitive(plan)
+      });
+    }
     const decision = buildDecision(synthesis, {
       runTitle: plan.title,
       goal: plan.normalizedInput.goal ?? plan.title
