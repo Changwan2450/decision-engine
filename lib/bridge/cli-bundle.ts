@@ -35,6 +35,89 @@ type EvidenceDiagnostics = {
   sourceCoverageWarnings?: string[];
 } | null;
 
+type EvidenceReplay = {
+  version: "v0";
+  limits: {
+    topArtifacts: 8;
+    topClaims: 8;
+    topCitations: 8;
+    contradictions: 5;
+    retrievalFailures: 8;
+  };
+  topArtifacts: Array<{
+    id: string;
+    title: string;
+    url: string;
+    adapter?: string;
+    sourceType?: string;
+    sourcePriority?: string;
+    sourceTier?: string;
+    trustHint: "high" | "medium" | "low";
+    fetchStatus?: string;
+    retrievedAt?: string;
+    publishedAt?: string;
+    snippet: string;
+  }>;
+  topClaims: Array<{
+    id: string;
+    text: string;
+    stance: string;
+    topicKey?: string;
+    artifactId?: string;
+    artifactTitle?: string;
+    sourcePriority?: string;
+    sourceTier?: string;
+    trustTier?: string;
+    citationIds: string[];
+  }>;
+  topCitations: Array<{
+    id: string;
+    artifactId?: string;
+    title?: string;
+    url?: string;
+    priority?: string;
+    sourceTier?: string;
+    trustTier?: string;
+    retrievedAt?: string;
+    publishedAt?: string;
+  }>;
+  contradictions: Array<{
+    id: string;
+    claimIds: string[];
+    status?: string;
+    resolution?: string;
+    kind?: string;
+    tierA?: string;
+    tierB?: string;
+  }>;
+  retrievalFailures: Array<{
+    artifactId: string;
+    title?: string;
+    url?: string;
+    adapter?: string;
+    sourcePriority?: string;
+    sourceTier?: string;
+    fetchStatus: "blocked" | "timeout" | "error";
+    blockReason?: string;
+    bypassLevel?: string;
+    loginRequired?: string;
+    sourceLabel?: string;
+  }>;
+  sourceQualitySummary: {
+    artifactCount: number;
+    claimCount: number;
+    citationCount: number;
+    contradictionCount: number;
+    retrievalFailureCount: number;
+    sourcePriorityCounts?: unknown;
+    sourceTierCounts?: unknown;
+    hasOfficialOrPrimaryEvidence?: boolean;
+    weakEvidence?: boolean;
+    falseConvergenceRisk?: boolean;
+  };
+  unresolvedEvidenceGaps: string[];
+};
+
 export type CliBridgeBundle = {
   project: {
     id: string;
@@ -55,6 +138,7 @@ export type CliBridgeBundle = {
     conflicts: string[];
   };
   evidenceDiagnostics: EvidenceDiagnostics;
+  evidenceReplay: EvidenceReplay;
   runtimeProvenance: RuntimeProvenance | null;
   decisionHistory: DecisionHistoryItem[];
   kb: {
@@ -95,6 +179,244 @@ export type CliBridgeBundle = {
   };
 };
 
+const EVIDENCE_REPLAY_LIMITS = {
+  topArtifacts: 8,
+  topClaims: 8,
+  topCitations: 8,
+  contradictions: 5,
+  retrievalFailures: 8
+} as const;
+
+const sourcePriorityRank: Record<string, number> = {
+  official: 0,
+  primary_data: 1,
+  analysis: 2,
+  community: 3
+};
+
+const sourceTierRank: Record<string, number> = {
+  official: 0,
+  primary: 1,
+  internal: 2,
+  community: 3,
+  aggregator: 4,
+  unknown: 5
+};
+
+const trustTierRank: Record<string, number> = {
+  high: 0,
+  medium: 1,
+  low: 2
+};
+
+const failedFetchStatuses = new Set(["blocked", "timeout", "error"]);
+
+function truncateText(value: string | undefined, maxLength = 240): string {
+  const text = (value ?? "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function rankSourcePriority(priority: string | undefined): number {
+  return sourcePriorityRank[priority ?? ""] ?? 99;
+}
+
+function rankSourceTier(tier: string | undefined): number {
+  return sourceTierRank[tier ?? "unknown"] ?? sourceTierRank.unknown;
+}
+
+function rankTrustTier(tier: string | undefined): number {
+  return trustTierRank[tier ?? "low"] ?? trustTierRank.low;
+}
+
+function inferTrustHint(params: {
+  sourcePriority?: string;
+  sourceTier?: string;
+}): "high" | "medium" | "low" {
+  if (
+    params.sourcePriority === "official" ||
+    params.sourcePriority === "primary_data" ||
+    params.sourceTier === "official" ||
+    params.sourceTier === "primary"
+  ) {
+    return "high";
+  }
+  if (params.sourcePriority === "analysis" || params.sourceTier === "internal") {
+    return "medium";
+  }
+  return "low";
+}
+
+function compareByIndex<T>(
+  left: { item: T; index: number },
+  right: { item: T; index: number },
+  compare: (left: T, right: T) => number
+): number {
+  const result = compare(left.item, right.item);
+  return result === 0 ? left.index - right.index : result;
+}
+
+function buildUnresolvedEvidenceGaps(diagnostics: EvidenceDiagnostics): string[] {
+  if (!diagnostics) return [];
+
+  const gaps: string[] = [];
+  const add = (value: string | undefined) => {
+    if (value && !gaps.includes(value)) {
+      gaps.push(value);
+    }
+  };
+
+  for (const warning of diagnostics.sourceCoverageWarnings ?? []) add(warning);
+  for (const reason of diagnostics.convergenceRiskReasons ?? []) add(reason);
+  if (diagnostics.counterevidenceChecked === false) add("counterevidence_not_checked");
+  if (diagnostics.weakEvidence === true) add("weak_evidence");
+  if (diagnostics.hasOfficialOrPrimaryEvidence === false) add("no_official_or_primary_evidence");
+
+  return gaps;
+}
+
+function buildEvidenceReplay(
+  run: RunRecord,
+  diagnostics: EvidenceDiagnostics
+): EvidenceReplay {
+  const artifacts = run.artifacts ?? [];
+  const claims = run.claims ?? [];
+  const citations = run.citations ?? [];
+  const contradictions = run.contradictions ?? [];
+  const artifactById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
+
+  const retrievalFailures = artifacts
+    .filter((artifact) => failedFetchStatuses.has(artifact.metadata.fetch_status))
+    .slice(0, EVIDENCE_REPLAY_LIMITS.retrievalFailures)
+    .map((artifact) => ({
+      artifactId: artifact.id,
+      title: truncateText(artifact.title),
+      url: artifact.url,
+      adapter: artifact.adapter,
+      sourcePriority: artifact.sourcePriority,
+      sourceTier: artifact.sourceTier ?? "unknown",
+      fetchStatus: artifact.metadata.fetch_status as "blocked" | "timeout" | "error",
+      blockReason: artifact.metadata.block_reason,
+      bypassLevel: artifact.metadata.bypass_level,
+      loginRequired: artifact.metadata.login_required,
+      sourceLabel: artifact.metadata.source_label
+    }));
+
+  return {
+    version: "v0",
+    limits: EVIDENCE_REPLAY_LIMITS,
+    topArtifacts: artifacts
+      .map((item, index) => ({ item, index }))
+      .sort((left, right) =>
+        compareByIndex(left, right, (leftArtifact, rightArtifact) => {
+          const leftFailed = failedFetchStatuses.has(leftArtifact.metadata.fetch_status) ? 1 : 0;
+          const rightFailed = failedFetchStatuses.has(rightArtifact.metadata.fetch_status) ? 1 : 0;
+          return (
+            leftFailed - rightFailed ||
+            rankSourcePriority(leftArtifact.sourcePriority) -
+              rankSourcePriority(rightArtifact.sourcePriority) ||
+            rankSourceTier(leftArtifact.sourceTier) - rankSourceTier(rightArtifact.sourceTier)
+          );
+        })
+      )
+      .slice(0, EVIDENCE_REPLAY_LIMITS.topArtifacts)
+      .map(({ item }) => ({
+        id: item.id,
+        title: truncateText(item.title),
+        url: item.url,
+        adapter: item.adapter,
+        sourceType: item.sourceType,
+        sourcePriority: item.sourcePriority,
+        sourceTier: item.sourceTier ?? "unknown",
+        trustHint: inferTrustHint({
+          sourcePriority: item.sourcePriority,
+          sourceTier: item.sourceTier
+        }),
+        fetchStatus: item.metadata.fetch_status,
+        retrievedAt: item.retrievedAt,
+        publishedAt: item.publishedAt,
+        snippet: truncateText(item.snippet)
+      })),
+    topClaims: claims
+      .map((item, index) => ({ item, index }))
+      .sort((left, right) =>
+        compareByIndex(left, right, (leftClaim, rightClaim) => {
+          const leftInternal = leftClaim.sourceTier === "internal" ? 1 : 0;
+          const rightInternal = rightClaim.sourceTier === "internal" ? 1 : 0;
+          return (
+            leftInternal - rightInternal ||
+            rankTrustTier(leftClaim.trustTier) - rankTrustTier(rightClaim.trustTier) ||
+            rankSourcePriority(leftClaim.provenance?.sourcePriority) -
+              rankSourcePriority(rightClaim.provenance?.sourcePriority)
+          );
+        })
+      )
+      .slice(0, EVIDENCE_REPLAY_LIMITS.topClaims)
+      .map(({ item }) => {
+        const artifact = artifactById.get(item.artifactId);
+        return {
+          id: item.id,
+          text: truncateText(item.text),
+          stance: item.stance,
+          topicKey: item.topicKey,
+          artifactId: item.artifactId,
+          artifactTitle: truncateText(item.provenance?.artifactTitle ?? artifact?.title),
+          sourcePriority: item.provenance?.sourcePriority ?? artifact?.sourcePriority,
+          sourceTier: item.sourceTier ?? item.provenance?.sourceTier ?? artifact?.sourceTier,
+          trustTier: item.trustTier ?? item.provenance?.trustTier,
+          citationIds: item.citationIds
+        };
+      }),
+    topCitations: citations
+      .map((item, index) => ({ item, index }))
+      .sort((left, right) =>
+        compareByIndex(
+          left,
+          right,
+          (leftCitation, rightCitation) =>
+            rankSourcePriority(leftCitation.priority) - rankSourcePriority(rightCitation.priority)
+        )
+      )
+      .slice(0, EVIDENCE_REPLAY_LIMITS.topCitations)
+      .map(({ item }) => ({
+        id: item.id,
+        artifactId: item.artifactId,
+        title: truncateText(item.title),
+        url: item.url,
+        priority: item.priority,
+        sourceTier: item.sourceTier,
+        trustTier: item.trustTier,
+        retrievedAt: item.retrievedAt,
+        publishedAt: item.publishedAt
+      })),
+    contradictions: contradictions
+      .slice(0, EVIDENCE_REPLAY_LIMITS.contradictions)
+      .map((contradiction) => ({
+        id: contradiction.id,
+        claimIds: contradiction.claimIds,
+        status: contradiction.status,
+        resolution: contradiction.resolution,
+        kind: contradiction.kind,
+        tierA: contradiction.tierA,
+        tierB: contradiction.tierB
+      })),
+    retrievalFailures,
+    sourceQualitySummary: {
+      artifactCount: artifacts.length,
+      claimCount: claims.length,
+      citationCount: citations.length,
+      contradictionCount: contradictions.length,
+      retrievalFailureCount: retrievalFailures.length,
+      sourcePriorityCounts: diagnostics?.sourcePriorityCounts,
+      sourceTierCounts: diagnostics?.sourceTierCounts,
+      hasOfficialOrPrimaryEvidence: diagnostics?.hasOfficialOrPrimaryEvidence,
+      weakEvidence: diagnostics?.weakEvidence,
+      falseConvergenceRisk: diagnostics?.falseConvergenceRisk
+    },
+    unresolvedEvidenceGaps: buildUnresolvedEvidenceGaps(diagnostics)
+  };
+}
+
 export function buildCliBundle(params: {
   project: Project;
   latestRun: RunRecord;
@@ -116,6 +438,22 @@ export function buildCliBundle(params: {
 }): CliBridgeBundle {
   const generatedAt = params.now ?? new Date().toISOString();
   const evidenceSummary = params.latestRun.evidenceSummary;
+  const evidenceDiagnostics = evidenceSummary
+    ? {
+        decisiveEvidenceScore: evidenceSummary.decisiveEvidenceScore,
+        falseConvergenceRisk: evidenceSummary.falseConvergenceRisk,
+        convergenceRiskReasons: evidenceSummary.convergenceRiskReasons,
+        counterevidenceChecked: evidenceSummary.counterevidenceChecked,
+        supportOnlyEvidence: evidenceSummary.supportOnlyEvidence,
+        weakEvidence: evidenceSummary.weakEvidence,
+        sourcePriorityCounts: evidenceSummary.sourcePriorityCounts,
+        sourceTierCounts: evidenceSummary.sourceTierCounts,
+        sourcePriorityDiversity: evidenceSummary.sourcePriorityDiversity,
+        hasOfficialOrPrimaryEvidence: evidenceSummary.hasOfficialOrPrimaryEvidence,
+        aggregatorOnlyEvidence: evidenceSummary.aggregatorOnlyEvidence,
+        sourceCoverageWarnings: evidenceSummary.sourceCoverageWarnings
+      }
+    : null;
 
   if (!params.latestRun.decision) {
     throw new Error("latestRun.decision is required for cli bundle");
@@ -140,22 +478,8 @@ export function buildCliBundle(params: {
       competitorSignals: params.insights.competitorSignals,
       conflicts: params.insights.contradictionIds ?? []
     },
-    evidenceDiagnostics: evidenceSummary
-      ? {
-          decisiveEvidenceScore: evidenceSummary.decisiveEvidenceScore,
-          falseConvergenceRisk: evidenceSummary.falseConvergenceRisk,
-          convergenceRiskReasons: evidenceSummary.convergenceRiskReasons,
-          counterevidenceChecked: evidenceSummary.counterevidenceChecked,
-          supportOnlyEvidence: evidenceSummary.supportOnlyEvidence,
-          weakEvidence: evidenceSummary.weakEvidence,
-          sourcePriorityCounts: evidenceSummary.sourcePriorityCounts,
-          sourceTierCounts: evidenceSummary.sourceTierCounts,
-          sourcePriorityDiversity: evidenceSummary.sourcePriorityDiversity,
-          hasOfficialOrPrimaryEvidence: evidenceSummary.hasOfficialOrPrimaryEvidence,
-          aggregatorOnlyEvidence: evidenceSummary.aggregatorOnlyEvidence,
-          sourceCoverageWarnings: evidenceSummary.sourceCoverageWarnings
-        }
-      : null,
+    evidenceDiagnostics,
+    evidenceReplay: buildEvidenceReplay(params.latestRun, evidenceDiagnostics),
     runtimeProvenance: params.latestRun.runtimeProvenance ?? null,
     decisionHistory: params.decisionHistory,
     kb: {
@@ -207,6 +531,72 @@ function renderRuntimeProvenance(provenance: RuntimeProvenance | null): string {
     `- Node version: ${provenance.nodeVersion}`,
     `- Process start time: ${provenance.processStartTime}`,
     `- Entrypoint: ${provenance.entrypoint ?? "unknown"}`
+  ].join("\n");
+}
+
+function renderEvidenceReplay(replay: EvidenceReplay): string {
+  const artifacts =
+    replay.topArtifacts.length > 0
+      ? replay.topArtifacts
+          .map(
+            (artifact) =>
+              `- [${artifact.sourcePriority ?? "unknown"}/${artifact.sourceTier ?? "unknown"}] ${artifact.title} — ${artifact.url}\n` +
+              `  - adapter: ${artifact.adapter ?? "unknown"}; fetch: ${artifact.fetchStatus ?? "unknown"}; trust: ${artifact.trustHint}\n` +
+              `  - snippet: ${artifact.snippet || "none"}`
+          )
+          .join("\n")
+      : "- none";
+  const claims =
+    replay.topClaims.length > 0
+      ? replay.topClaims
+          .map(
+            (claim) =>
+              `- ${claim.stance} / ${claim.trustTier ?? "unknown"} — ${claim.text}\n` +
+              `  - artifact: ${claim.artifactId ?? "unknown"}${claim.artifactTitle ? ` / ${claim.artifactTitle}` : ""}\n` +
+              `  - citations: ${claim.citationIds.join(", ") || "none"}`
+          )
+          .join("\n")
+      : "- none";
+  const citations =
+    replay.topCitations.length > 0
+      ? replay.topCitations
+          .map(
+            (citation) =>
+              `- [${citation.priority ?? "unknown"}] ${citation.title ?? citation.id}${citation.url ? ` — ${citation.url}` : ""}\n` +
+              `  - artifact: ${citation.artifactId ?? "unknown"}; tier: ${citation.sourceTier ?? "unknown"}; trust: ${citation.trustTier ?? "unknown"}`
+          )
+          .join("\n")
+      : "- none";
+  const failures =
+    replay.retrievalFailures.length > 0
+      ? replay.retrievalFailures
+          .map(
+            (failure) =>
+              `- ${failure.fetchStatus} — ${failure.title ?? failure.artifactId}${failure.url ? ` — ${failure.url}` : ""}\n` +
+              `  - adapter: ${failure.adapter ?? "unknown"}; block: ${failure.blockReason ?? "none"}; bypass: ${failure.bypassLevel ?? "unknown"}`
+          )
+          .join("\n")
+      : "- none";
+  const gaps =
+    replay.unresolvedEvidenceGaps.length > 0
+      ? replay.unresolvedEvidenceGaps.map((gap) => `- ${gap}`).join("\n")
+      : "- none";
+
+  return [
+    "### Top Artifacts",
+    artifacts,
+    "",
+    "### Top Claims",
+    claims,
+    "",
+    "### Top Citations",
+    citations,
+    "",
+    "### Retrieval Gaps / Failures",
+    failures,
+    "",
+    "### Unresolved Evidence Gaps",
+    gaps
   ].join("\n");
 }
 
@@ -311,6 +701,9 @@ export function renderCliBundleMarkdown(bundle: CliBridgeBundle): string {
     "",
     "## Evidence Diagnostics",
     renderEvidenceDiagnostics(bundle.evidenceDiagnostics),
+    "",
+    "## Evidence Replay",
+    renderEvidenceReplay(bundle.evidenceReplay),
     "",
     "## Runtime Provenance",
     renderRuntimeProvenance(bundle.runtimeProvenance),

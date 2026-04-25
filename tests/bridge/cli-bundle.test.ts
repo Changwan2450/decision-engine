@@ -91,6 +91,185 @@ const diagnosticRun: RunRecord = {
   }
 };
 
+const longSnippet = `${"usable evidence ".repeat(30)}SECRET_FULL_CONTENT_MARKER`;
+const longClaim = `${"claim evidence ".repeat(30)}SECRET_CLAIM_TAIL`;
+
+const evidenceReplayRun: RunRecord = {
+  ...diagnosticRun,
+  artifacts: [
+    {
+      id: "artifact-blocked",
+      adapter: "scrapling",
+      sourceType: "web",
+      title: "Blocked Aggregator Source",
+      url: "https://s.jina.ai/?q=blocked",
+      snippet: longSnippet,
+      content: "RAW_HTML_SHOULD_NOT_EXPORT",
+      sourcePriority: "analysis",
+      sourceTier: "aggregator",
+      retrievedAt: "2026-04-25T06:01:00.000Z",
+      confidence: 0,
+      rawRef: "project/run/raw/secret.json",
+      metadata: {
+        fetch_status: "blocked",
+        block_reason: "login",
+        bypass_level: "headers",
+        login_required: "true",
+        source_label: "web/blocked",
+        rate_limit_bucket: "scrapling/stealth",
+        error: "AUTH_ERROR_SHOULD_NOT_EXPORT"
+      }
+    },
+    {
+      id: "artifact-official",
+      adapter: "agent-reach",
+      sourceType: "web",
+      title: "Official Evidence",
+      url: "https://example.com/official",
+      snippet: "official source summary",
+      content: "OFFICIAL_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "official",
+      sourceTier: "official",
+      retrievedAt: "2026-04-25T06:02:00.000Z",
+      publishedAt: "2026-04-20T06:02:00.000Z",
+      confidence: 0.9,
+      rawRef: "project/run/raw/official.json",
+      metadata: {
+        fetch_status: "success",
+        block_reason: "unknown",
+        bypass_level: "none",
+        source_label: "web/success",
+        error: "SUCCESS_ERROR_FIELD_SHOULD_NOT_EXPORT"
+      }
+    },
+    {
+      id: "artifact-timeout",
+      adapter: "agent-reach",
+      sourceType: "web",
+      title: "Timeout Source",
+      url: "https://example.com/timeout",
+      snippet: "timeout source summary",
+      content: "TIMEOUT_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "community",
+      sourceTier: "community",
+      retrievedAt: "2026-04-25T06:03:00.000Z",
+      confidence: 0.1,
+      rawRef: "project/run/raw/timeout.json",
+      metadata: {
+        fetch_status: "timeout",
+        block_reason: "unknown",
+        bypass_level: "none",
+        source_label: "web/timeout",
+        error: "TIMEOUT_ERROR_SHOULD_NOT_EXPORT"
+      }
+    },
+    {
+      id: "artifact-error",
+      adapter: "scrapling",
+      sourceType: "web",
+      title: "Error Source",
+      url: "https://example.com/error",
+      snippet: "error source summary",
+      content: "ERROR_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "analysis",
+      sourceTier: "unknown",
+      retrievedAt: "2026-04-25T06:04:00.000Z",
+      confidence: 0.1,
+      rawRef: "project/run/raw/error.json",
+      metadata: {
+        fetch_status: "error",
+        block_reason: "unknown",
+        bypass_level: "headers",
+        source_label: "web/error",
+        error: "ERROR_FIELD_SHOULD_NOT_EXPORT"
+      }
+    }
+  ],
+  claims: [
+    {
+      id: "claim-internal",
+      artifactId: "artifact-blocked",
+      text: "internal prior claim",
+      topicKey: "evidence-layer",
+      stance: "support",
+      citationIds: ["citation-blocked"],
+      sourceTier: "internal",
+      trustTier: "high",
+      provenance: {
+        sourcePriority: "analysis",
+        sourceTier: "internal",
+        trustTier: "high",
+        citationCount: 1,
+        artifactTitle: "Blocked Aggregator Source",
+        artifactUrl: "https://s.jina.ai/?q=blocked"
+      }
+    },
+    {
+      id: "claim-official",
+      artifactId: "artifact-official",
+      text: longClaim,
+      topicKey: "evidence-layer",
+      stance: "neutral",
+      citationIds: ["citation-official"],
+      sourceTier: "official",
+      trustTier: "high",
+      observedAt: "2026-04-20T06:02:00.000Z",
+      provenance: {
+        sourcePriority: "official",
+        sourceTier: "official",
+        trustTier: "high",
+        citationCount: 1,
+        observedAt: "2026-04-20T06:02:00.000Z",
+        artifactTitle: "Official Evidence",
+        artifactUrl: "https://example.com/official"
+      }
+    }
+  ],
+  citations: [
+    {
+      id: "citation-blocked",
+      artifactId: "artifact-blocked",
+      title: "Blocked Aggregator Source",
+      url: "https://s.jina.ai/?q=blocked",
+      priority: "analysis",
+      sourceTier: "aggregator",
+      trustTier: "low",
+      retrievedAt: "2026-04-25T06:01:00.000Z"
+    },
+    {
+      id: "citation-official",
+      artifactId: "artifact-official",
+      title: "Official Evidence",
+      url: "https://example.com/official",
+      priority: "official",
+      sourceTier: "official",
+      trustTier: "high",
+      retrievedAt: "2026-04-25T06:02:00.000Z",
+      publishedAt: "2026-04-20T06:02:00.000Z"
+    }
+  ],
+  contradictions: [
+    {
+      id: "contradiction-7",
+      claimIds: ["claim-internal", "claim-official"],
+      status: "flagged",
+      resolution: "unresolved",
+      kind: "internal_vs_official",
+      tierA: "internal",
+      tierB: "official"
+    }
+  ],
+  evidenceSummary: {
+    ...diagnosticRun.evidenceSummary!,
+    falseConvergenceRisk: true,
+    convergenceRiskReasons: ["support_only_evidence"],
+    counterevidenceChecked: false,
+    weakEvidence: true,
+    hasOfficialOrPrimaryEvidence: false,
+    sourceCoverageWarnings: ["no_official_or_primary_evidence"]
+  }
+};
+
 const insights = {
   repeatedProblems: ["차별화가 어렵다"],
   repeatedPatterns: ["짧은 루프가 유지율을 높인다"],
@@ -231,6 +410,7 @@ describe("cli bundle", () => {
     expect(markdown).toContain("## Latest Run");
     expect(markdown).toContain("## Project Insights");
     expect(markdown).toContain("## Evidence Diagnostics");
+    expect(markdown).toContain("## Evidence Replay");
     expect(markdown).toContain("## Runtime Provenance");
     expect(markdown).toContain("## Decision History");
     expect(markdown).toContain("## KB Context");
@@ -298,6 +478,115 @@ describe("cli bundle", () => {
       entrypoint: "/repo/lib/mcp/server.ts"
     });
     expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
+  });
+
+  it("includes compact evidence replay without raw content or unsafe metadata", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: evidenceReplayRun,
+      insights,
+      decisionHistory,
+      relatedRuns,
+      promotionCandidates,
+      decisionHistorySummary,
+      recentContradictions,
+      projectInsightSummary,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    expect(bundle.project.id).toBe("project-1");
+    expect(bundle.latestRun.id).toBe("run-12");
+    expect(bundle.evidenceDiagnostics?.falseConvergenceRisk).toBe(true);
+    expect(bundle.runtimeProvenance?.nodeVersion).toBe("v22.22.0");
+    expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
+    expect(bundle.evidenceReplay.version).toBe("v0");
+    expect(bundle.evidenceReplay.limits).toEqual({
+      topArtifacts: 8,
+      topClaims: 8,
+      topCitations: 8,
+      contradictions: 5,
+      retrievalFailures: 8
+    });
+    expect(bundle.evidenceReplay.topArtifacts[0]?.id).toBe("artifact-official");
+    expect(bundle.evidenceReplay.topClaims[0]?.id).toBe("claim-official");
+    expect(bundle.evidenceReplay.topCitations[0]?.id).toBe("citation-official");
+    expect(bundle.evidenceReplay.contradictions).toEqual([
+      {
+        id: "contradiction-7",
+        claimIds: ["claim-internal", "claim-official"],
+        status: "flagged",
+        resolution: "unresolved",
+        kind: "internal_vs_official",
+        tierA: "internal",
+        tierB: "official"
+      }
+    ]);
+    expect(bundle.evidenceReplay.retrievalFailures.map((failure) => failure.fetchStatus)).toEqual([
+      "blocked",
+      "timeout",
+      "error"
+    ]);
+    expect(bundle.evidenceReplay.sourceQualitySummary).toMatchObject({
+      artifactCount: 4,
+      claimCount: 2,
+      citationCount: 2,
+      contradictionCount: 1,
+      retrievalFailureCount: 3,
+      hasOfficialOrPrimaryEvidence: false,
+      weakEvidence: true,
+      falseConvergenceRisk: true
+    });
+    expect(bundle.evidenceReplay.unresolvedEvidenceGaps).toEqual([
+      "no_official_or_primary_evidence",
+      "support_only_evidence",
+      "counterevidence_not_checked",
+      "weak_evidence"
+    ]);
+
+    const serialized = JSON.stringify(bundle);
+    expect(serialized).not.toContain("RAW_HTML_SHOULD_NOT_EXPORT");
+    expect(serialized).not.toContain("OFFICIAL_FULL_CONTENT_SHOULD_NOT_EXPORT");
+    expect(serialized).not.toContain("project/run/raw");
+    expect(serialized).not.toContain("AUTH_ERROR_SHOULD_NOT_EXPORT");
+    expect(serialized).not.toContain("ERROR_FIELD_SHOULD_NOT_EXPORT");
+    expect(serialized).not.toContain("SECRET_FULL_CONTENT_MARKER");
+    expect(serialized).not.toContain("SECRET_CLAIM_TAIL");
+    expect(bundle.evidenceReplay.topArtifacts[1]?.snippet.length).toBeLessThanOrEqual(240);
+    expect(bundle.evidenceReplay.topClaims[0]?.text.length).toBeLessThanOrEqual(240);
+  });
+
+  it("renders concise evidence replay in markdown", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: evidenceReplayRun,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "claude",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    const markdown = renderCliBundleMarkdown(bundle);
+
+    expect(markdown).toContain("## Evidence Replay");
+    expect(markdown).toContain("### Top Artifacts");
+    expect(markdown).toContain("Official Evidence");
+    expect(markdown).toContain("### Top Claims");
+    expect(markdown).toContain("artifact-official / Official Evidence");
+    expect(markdown).toContain("### Top Citations");
+    expect(markdown).toContain("citation-official");
+    expect(markdown).toContain("### Retrieval Gaps / Failures");
+    expect(markdown).toContain("blocked — Blocked Aggregator Source");
+    expect(markdown).toContain("### Unresolved Evidence Gaps");
+    expect(markdown).toContain("no_official_or_primary_evidence");
+    expect(markdown).not.toContain("RAW_HTML_SHOULD_NOT_EXPORT");
+    expect(markdown).not.toContain("AUTH_ERROR_SHOULD_NOT_EXPORT");
   });
 
   it("renders concise runtime provenance in markdown", () => {
