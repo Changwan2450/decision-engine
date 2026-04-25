@@ -1,0 +1,38 @@
+{
+  "fixtureId": "p2-01-fail",
+  "caseId": "p2-01-source-class-blindness",
+  "expectedOutcome": "fail",
+  "expectedFailureReason": "missing required source class: official-doc",
+  "bundle": {
+    "artifacts": [
+      {
+        "id": "a1",
+        "url": "https://reddit.example/r/x/thread",
+        "host": "reddit.example",
+        "title": "Community source",
+        "sourceClass": "community"
+      }
+    ],
+    "claims": [
+      {
+        "id": "c1",
+        "artifactId": "a1",
+        "text": "Community-only evidence looks relevant but is not official.",
+        "sourceClass": "community",
+        "stance": "support",
+        "decisiveness": 0.62
+      }
+    ],
+    "evidenceSummary": {
+      "decisiveEvidenceScore": 0.62,
+      "counterevidenceChecked": false,
+      "unresolvedQuestions": [],
+      "abstained": false,
+      "weakEvidence": false
+    },
+    "runMetadata": {
+      "runId": "fixture-p2-01-fail",
+      "isRepeatRun": false
+    }
+  }
+}

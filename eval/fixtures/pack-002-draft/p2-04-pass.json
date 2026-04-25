@@ -1,0 +1,52 @@
+{
+  "fixtureId": "p2-04-pass",
+  "caseId": "p2-04-false-convergence",
+  "expectedOutcome": "pass",
+  "bundle": {
+    "artifacts": [
+      {
+        "id": "a1",
+        "url": "https://community.example/report",
+        "host": "community.example",
+        "title": "Experience report",
+        "sourceClass": "experience-report"
+      },
+      {
+        "id": "a2",
+        "url": "https://reddit.example/r/x/thread",
+        "host": "reddit.example",
+        "title": "Community thread",
+        "sourceClass": "community"
+      }
+    ],
+    "claims": [
+      {
+        "id": "c1",
+        "artifactId": "a1",
+        "text": "Experience evidence is present but the run abstains.",
+        "sourceClass": "experience-report",
+        "stance": "support",
+        "decisiveness": 0.55
+      },
+      {
+        "id": "c2",
+        "artifactId": "a2",
+        "text": "Community evidence is present but not enough for certainty.",
+        "sourceClass": "community",
+        "stance": "support",
+        "decisiveness": 0.55
+      }
+    ],
+    "evidenceSummary": {
+      "decisiveEvidenceScore": 0.55,
+      "counterevidenceChecked": false,
+      "unresolvedQuestions": [],
+      "abstained": true,
+      "weakEvidence": false
+    },
+    "runMetadata": {
+      "runId": "fixture-p2-04-pass",
+      "isRepeatRun": false
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "fixtureId": "p2-03-fail",
+  "caseId": "p2-03-decisiveness-blind-spot",
+  "expectedOutcome": "fail",
+  "expectedFailureReason": "decisiveness below threshold",
+  "bundle": {
+    "artifacts": [
+      {
+        "id": "a1",
+        "url": "https://official.example/doc",
+        "host": "official.example",
+        "title": "Official source",
+        "sourceClass": "official-doc"
+      },
+      {
+        "id": "a2",
+        "url": "https://docs.example/data",
+        "host": "docs.example",
+        "title": "Primary data source",
+        "sourceClass": "primary-data"
+      }
+    ],
+    "claims": [
+      {
+        "id": "c1",
+        "artifactId": "a1",
+        "text": "Evidence is relevant but not decisive.",
+        "sourceClass": "official-doc",
+        "stance": "support",
+        "decisiveness": 0.45
+      },
+      {
+        "id": "c2",
+        "artifactId": "a2",
+        "text": "Primary data is related but incomplete.",
+        "sourceClass": "primary-data",
+        "stance": "support",
+        "decisiveness": 0.5
+      }
+    ],
+    "evidenceSummary": {
+      "decisiveEvidenceScore": 0.5,
+      "counterevidenceChecked": false,
+      "unresolvedQuestions": ["Which condition would make this evidence decisive?"],
+      "abstained": false,
+      "weakEvidence": true
+    },
+    "runMetadata": {
+      "runId": "fixture-p2-03-fail",
+      "isRepeatRun": false
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "fixtureId": "p2-02-pass",
+  "caseId": "p2-02-aggregator-dominance",
+  "expectedOutcome": "pass",
+  "bundle": {
+    "artifacts": [
+      {
+        "id": "a1",
+        "url": "https://official.example/doc",
+        "host": "official.example",
+        "title": "Official source",
+        "sourceClass": "official-doc"
+      },
+      {
+        "id": "a2",
+        "url": "https://community.example/post",
+        "host": "community.example",
+        "title": "Experience report",
+        "sourceClass": "experience-report"
+      }
+    ],
+    "claims": [
+      {
+        "id": "c1",
+        "artifactId": "a1",
+        "text": "Official evidence anchors the answer.",
+        "sourceClass": "official-doc",
+        "stance": "support",
+        "decisiveness": 0.7
+      },
+      {
+        "id": "c2",
+        "artifactId": "a2",
+        "text": "Operator experience corroborates the official evidence.",
+        "sourceClass": "experience-report",
+        "stance": "support",
+        "decisiveness": 0.6
+      }
+    ],
+    "evidenceSummary": {
+      "decisiveEvidenceScore": 0.7,
+      "counterevidenceChecked": false,
+      "unresolvedQuestions": [],
+      "abstained": false,
+      "weakEvidence": false
+    },
+    "runMetadata": {
+      "runId": "fixture-p2-02-pass",
+      "isRepeatRun": false
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "fixtureId": "p2-02-fail",
+  "caseId": "p2-02-aggregator-dominance",
+  "expectedOutcome": "fail",
+  "expectedFailureReason": "forbidden source pattern: s.jina.ai",
+  "bundle": {
+    "artifacts": [
+      {
+        "id": "a1",
+        "url": "https://s.jina.ai/http://official.example/doc",
+        "host": "s.jina.ai",
+        "title": "Mirrored official source",
+        "sourceClass": "official-doc"
+      },
+      {
+        "id": "a2",
+        "url": "https://community.example/post",
+        "host": "community.example",
+        "title": "Experience report",
+        "sourceClass": "experience-report"
+      }
+    ],
+    "claims": [
+      {
+        "id": "c1",
+        "artifactId": "a1",
+        "text": "Mirrored evidence should be rejected by forbidden pattern.",
+        "sourceClass": "official-doc",
+        "stance": "support",
+        "decisiveness": 0.7
+      },
+      {
+        "id": "c2",
+        "artifactId": "a2",
+        "text": "Experience report exists but does not erase mirror risk.",
+        "sourceClass": "experience-report",
+        "stance": "support",
+        "decisiveness": 0.6
+      }
+    ],
+    "evidenceSummary": {
+      "decisiveEvidenceScore": 0.7,
+      "counterevidenceChecked": false,
+      "unresolvedQuestions": [],
+      "abstained": false,
+      "weakEvidence": false
+    },
+    "runMetadata": {
+      "runId": "fixture-p2-02-fail",
+      "isRepeatRun": false
+    }
+  }
+}

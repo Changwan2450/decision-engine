@@ -1,0 +1,53 @@
+{
+  "fixtureId": "p2-04-fail",
+  "caseId": "p2-04-false-convergence",
+  "expectedOutcome": "fail",
+  "expectedFailureReason": "counterevidence required but missing",
+  "bundle": {
+    "artifacts": [
+      {
+        "id": "a1",
+        "url": "https://community.example/report",
+        "host": "community.example",
+        "title": "Experience report",
+        "sourceClass": "experience-report"
+      },
+      {
+        "id": "a2",
+        "url": "https://reddit.example/r/x/thread",
+        "host": "reddit.example",
+        "title": "Community thread",
+        "sourceClass": "community"
+      }
+    ],
+    "claims": [
+      {
+        "id": "c1",
+        "artifactId": "a1",
+        "text": "Experience evidence converges on one answer.",
+        "sourceClass": "experience-report",
+        "stance": "support",
+        "decisiveness": 0.6
+      },
+      {
+        "id": "c2",
+        "artifactId": "a2",
+        "text": "Community evidence repeats the same answer.",
+        "sourceClass": "community",
+        "stance": "support",
+        "decisiveness": 0.6
+      }
+    ],
+    "evidenceSummary": {
+      "decisiveEvidenceScore": 0.6,
+      "counterevidenceChecked": false,
+      "unresolvedQuestions": [],
+      "abstained": false,
+      "weakEvidence": false
+    },
+    "runMetadata": {
+      "runId": "fixture-p2-04-fail",
+      "isRepeatRun": false
+    }
+  }
+}

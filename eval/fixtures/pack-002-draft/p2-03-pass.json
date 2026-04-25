@@ -1,0 +1,52 @@
+{
+  "fixtureId": "p2-03-pass",
+  "caseId": "p2-03-decisiveness-blind-spot",
+  "expectedOutcome": "pass",
+  "bundle": {
+    "artifacts": [
+      {
+        "id": "a1",
+        "url": "https://official.example/doc",
+        "host": "official.example",
+        "title": "Official decision source",
+        "sourceClass": "official-doc"
+      },
+      {
+        "id": "a2",
+        "url": "https://docs.example/data",
+        "host": "docs.example",
+        "title": "Primary data source",
+        "sourceClass": "primary-data"
+      }
+    ],
+    "claims": [
+      {
+        "id": "c1",
+        "artifactId": "a1",
+        "text": "Official source directly answers the decision.",
+        "sourceClass": "official-doc",
+        "stance": "support",
+        "decisiveness": 0.82
+      },
+      {
+        "id": "c2",
+        "artifactId": "a2",
+        "text": "Primary data supports the decisive claim.",
+        "sourceClass": "primary-data",
+        "stance": "support",
+        "decisiveness": 0.8
+      }
+    ],
+    "evidenceSummary": {
+      "decisiveEvidenceScore": 0.82,
+      "counterevidenceChecked": false,
+      "unresolvedQuestions": [],
+      "abstained": false,
+      "weakEvidence": false
+    },
+    "runMetadata": {
+      "runId": "fixture-p2-03-pass",
+      "isRepeatRun": false
+    }
+  }
+}

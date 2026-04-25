@@ -1,0 +1,37 @@
+{
+  "fixtureId": "p2-01-pass",
+  "caseId": "p2-01-source-class-blindness",
+  "expectedOutcome": "pass",
+  "bundle": {
+    "artifacts": [
+      {
+        "id": "a1",
+        "url": "https://official.example/doc",
+        "host": "official.example",
+        "title": "Official source",
+        "sourceClass": "official-doc"
+      }
+    ],
+    "claims": [
+      {
+        "id": "c1",
+        "artifactId": "a1",
+        "text": "Official evidence answers the source-class requirement.",
+        "sourceClass": "official-doc",
+        "stance": "support",
+        "decisiveness": 0.72
+      }
+    ],
+    "evidenceSummary": {
+      "decisiveEvidenceScore": 0.72,
+      "counterevidenceChecked": false,
+      "unresolvedQuestions": [],
+      "abstained": false,
+      "weakEvidence": false
+    },
+    "runMetadata": {
+      "runId": "fixture-p2-01-pass",
+      "isRepeatRun": false
+    }
+  }
+}

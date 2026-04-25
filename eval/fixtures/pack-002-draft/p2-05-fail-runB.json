@@ -1,0 +1,75 @@
+{
+  "fixtureId": "p2-05-fail-runB",
+  "caseId": "p2-05-n-plus-one-reuse-gap",
+  "expectedOutcome": "fail",
+  "expectedFailureReason": "N+1 reuse failed",
+  "bundle": {
+    "artifacts": [
+      {
+        "id": "a1",
+        "url": "https://official.example/doc",
+        "host": "official.example",
+        "title": "Official source",
+        "sourceClass": "official-doc"
+      },
+      {
+        "id": "a2",
+        "url": "https://community.example/report",
+        "host": "community.example",
+        "title": "Experience source",
+        "sourceClass": "experience-report"
+      },
+      {
+        "id": "a3",
+        "url": "https://reddit.example/r/x/thread",
+        "host": "reddit.example",
+        "title": "Community source",
+        "sourceClass": "community"
+      }
+    ],
+    "claims": [
+      {
+        "id": "c1",
+        "artifactId": "a1",
+        "text": "Official source exists but reuse behavior regressed.",
+        "sourceClass": "official-doc",
+        "stance": "support",
+        "decisiveness": 0.65
+      },
+      {
+        "id": "c2",
+        "artifactId": "a2",
+        "text": "Experience source exists but unresolved questions were dropped.",
+        "sourceClass": "experience-report",
+        "stance": "support",
+        "decisiveness": 0.6
+      },
+      {
+        "id": "c3",
+        "artifactId": "a3",
+        "text": "Community source exists but rejected source was refetched.",
+        "sourceClass": "community",
+        "stance": "support",
+        "decisiveness": 0.55
+      }
+    ],
+    "evidenceSummary": {
+      "decisiveEvidenceScore": 0.65,
+      "counterevidenceChecked": false,
+      "unresolvedQuestions": ["Does the official source still apply in the next run?"],
+      "abstained": false,
+      "weakEvidence": true
+    },
+    "runMetadata": {
+      "runId": "fixture-p2-05-fail-runB",
+      "isRepeatRun": true
+    },
+    "priorRunRef": "p2-05-runA",
+    "reuse": {
+      "rejectedSourcesFromPrior": ["https://reddit.example/old-thread"],
+      "rejectedSourcesReFetched": ["https://reddit.example/old-thread"],
+      "unresolvedQuestionsCarriedForward": false,
+      "usefulPriorSourcesReused": ["https://official.example/doc"]
+    }
+  }
+}
