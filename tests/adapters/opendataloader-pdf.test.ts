@@ -86,6 +86,7 @@ describe("createOpenDataLoaderPdfAdapter() — execute()", () => {
     expect(artifact.sourceType).toBe("pdf");
     expect(artifact.url).toBe("https://arxiv.org/abs/2401.00001");
     expect(artifact.canonicalUrl).toBe("https://arxiv.org/pdf/2401.00001.pdf");
+    expect(artifact.sourcePriority).toBe("primary_data");
     expect(artifact.content).toBe("# Paper title\n\nFirst paragraph.");
     expect(artifact.rawRef).toBe("p/runs/r/raw/opendataloader-pdf/fake.pdf");
     expect(artifact.metadata.fetcher).toBe("opendataloader-pdf");
@@ -101,6 +102,66 @@ describe("createOpenDataLoaderPdfAdapter() — execute()", () => {
     expect(stored[0]?.format).toBe("pdf");
     expect(stored[1]?.format).toBe("json");
 
+    assertMetadataContract(artifact.metadata);
+    expect(sourceArtifactSchema.parse(artifact)).toBeTruthy();
+  });
+
+  it("marks official PDF hosts with official sourcePriority", async () => {
+    const adapter = createOpenDataLoaderPdfAdapter({
+      now: fixedNow,
+      download: async (url) => ({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        url,
+        contentType: "application/pdf",
+        body: Buffer.from("%PDF-fake")
+      }),
+      exec: async ({ outputDir }) => {
+        const fs = await import("node:fs/promises");
+        const path = await import("node:path");
+        await fs.mkdir(outputDir, { recursive: true });
+        await fs.writeFile(path.join(outputDir, "input.md"), "Official PDF");
+      },
+      storeRaw: async ({ format }) => `p/runs/r/raw/opendataloader-pdf/official.${format}`
+    });
+
+    const [artifact] = await adapter.execute(
+      makePlan(["https://www.anthropic.com/research/report.pdf"])
+    );
+
+    expect(artifact.sourcePriority).toBe("official");
+    expect(artifact.metadata.source_label).toBe("pdf/generic");
+    assertMetadataContract(artifact.metadata);
+    expect(sourceArtifactSchema.parse(artifact)).toBeTruthy();
+  });
+
+  it("keeps unknown PDF hosts as analysis sourcePriority", async () => {
+    const adapter = createOpenDataLoaderPdfAdapter({
+      now: fixedNow,
+      download: async (url) => ({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        url,
+        contentType: "application/pdf",
+        body: Buffer.from("%PDF-fake")
+      }),
+      exec: async ({ outputDir }) => {
+        const fs = await import("node:fs/promises");
+        const path = await import("node:path");
+        await fs.mkdir(outputDir, { recursive: true });
+        await fs.writeFile(path.join(outputDir, "input.md"), "Unknown PDF");
+      },
+      storeRaw: async ({ format }) => `p/runs/r/raw/opendataloader-pdf/unknown.${format}`
+    });
+
+    const [artifact] = await adapter.execute(
+      makePlan(["https://example.com/report.pdf"])
+    );
+
+    expect(artifact.sourcePriority).toBe("analysis");
+    expect(artifact.metadata.source_label).toBe("pdf/generic");
     assertMetadataContract(artifact.metadata);
     expect(sourceArtifactSchema.parse(artifact)).toBeTruthy();
   });

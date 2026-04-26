@@ -10,6 +10,7 @@ import {
   deriveTitleFromUrl,
   type FetchOutcome
 } from "@/lib/adapters/contract";
+import { inferSourceTier } from "@/lib/adapters/source-tier";
 import { canonicalize, hostnameOf } from "@/lib/adapters/url";
 import type { ResearchAdapter, ResearchPlan, SourceArtifact } from "@/lib/adapters/types";
 import { storeRawPayload } from "@/lib/normalize/raw-store";
@@ -111,6 +112,8 @@ export function createOpenDataLoaderPdfAdapter(deps?: {
             bypassLevel: "none",
             loginRequired: false
           };
+          const canonicalUrl = canonicalize(downloaded.url) || undefined;
+          const priorityUrl = canonicalUrl ?? originalUrl;
 
           artifacts.push(
             buildArtifact({
@@ -119,13 +122,14 @@ export function createOpenDataLoaderPdfAdapter(deps?: {
               fetcher: FETCHER_NAME,
               sourceType: "pdf",
               url: originalUrl,
-              canonicalUrl: canonicalize(downloaded.url) || undefined,
+              canonicalUrl,
               title: deriveTitleFromUrl(downloaded.url),
               snippet,
               content: markdown,
               retrievedAt,
               rawRef,
               outcome,
+              sourcePriority: resolveSourcePriority(priorityUrl),
               sourceLabel: isArxivHost(hostnameOf(originalUrl))
                 ? "pdf/arxiv"
                 : "pdf/generic",
@@ -240,6 +244,19 @@ function resolvePdfUrl(url: string): string {
 
 function isArxivHost(host: string | null): boolean {
   return host === "arxiv.org" || host === "www.arxiv.org";
+}
+
+function resolveSourcePriority(url: string): SourceArtifact["sourcePriority"] {
+  switch (inferSourceTier(url)) {
+    case "official":
+      return "official";
+    case "primary":
+      return "primary_data";
+    case "community":
+      return "community";
+    default:
+      return "analysis";
+  }
 }
 
 function outcomeFromStatus(status: number): FetchOutcome {
