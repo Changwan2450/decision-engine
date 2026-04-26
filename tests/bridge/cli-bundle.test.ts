@@ -330,6 +330,9 @@ const repairBlockedRun: RunRecord = {
         repair_pass: "source_coverage_v1",
         repair_stage: "discovery",
         repair_reason: "no_official_or_primary_evidence",
+        repair_discovery_source: "domain_targeted_search",
+        repair_candidate_count: "17",
+        repair_allowed_url_count: "5",
         fetch_status: "blocked",
         block_reason: "login",
         error: "REPAIR_DISCOVERY_ERROR_SHOULD_NOT_EXPORT"
@@ -363,6 +366,9 @@ const repairNoImprovementRun: RunRecord = {
         repair_pass: "source_coverage_v1",
         repair_stage: "discovery",
         repair_reason: "no_official_or_primary_evidence",
+        repair_discovery_source: "domain_targeted_search",
+        repair_candidate_count: "17",
+        repair_allowed_url_count: "5",
         fetch_status: "blocked",
         block_reason: "login"
       }
@@ -404,6 +410,7 @@ const repairNoImprovementRun: RunRecord = {
         repair_pass: "source_coverage_v1",
         repair_stage: "evidence",
         repair_reason: "no_official_or_primary_evidence",
+        repair_discovery_source: "domain_targeted_search",
         repair_discovery_artifact_id: "artifact-repair-fallback",
         repair_follow_rank: "0",
         repair_source_host_class: "official",
@@ -901,6 +908,9 @@ describe("cli bundle", () => {
     expect(bundle.repairAttempts.version).toBe("v0");
     expect(bundle.repairAttempts.sourceCoverage.attempted).toBe(true);
     expect(bundle.repairAttempts.sourceCoverage.reason).toBe("no_official_or_primary_evidence");
+    expect(bundle.repairAttempts.sourceCoverage.discoverySource).toBe("domain_targeted_search");
+    expect(bundle.repairAttempts.sourceCoverage.candidateCount).toBe(17);
+    expect(bundle.repairAttempts.sourceCoverage.allowedUrlCount).toBe(5);
     expect(bundle.repairAttempts.sourceCoverage.primaryDiscovery).toEqual({
       attempted: true,
       blocked: true,
@@ -914,6 +924,9 @@ describe("cli bundle", () => {
 
     const markdown = renderCliBundleMarkdown(bundle);
     expect(markdown).toContain("## Repair Attempts");
+    expect(markdown).toContain("- Discovery source: domain_targeted_search");
+    expect(markdown).toContain("- Discovery candidates: 17");
+    expect(markdown).toContain("- Discovery allowed URLs: 5");
     expect(markdown).toContain("- Primary discovery: blocked");
     expect(markdown).toContain("- Outcome: blocked_primary");
     expect(markdown).toContain("- Followed evidence count: 0");
@@ -933,6 +946,9 @@ describe("cli bundle", () => {
     });
 
     expect(bundle.repairAttempts.sourceCoverage.attempted).toBe(true);
+    expect(bundle.repairAttempts.sourceCoverage.discoverySource).toBe("domain_targeted_search");
+    expect(bundle.repairAttempts.sourceCoverage.candidateCount).toBe(17);
+    expect(bundle.repairAttempts.sourceCoverage.allowedUrlCount).toBe(5);
     expect(bundle.repairAttempts.sourceCoverage.fallbackDiscovery).toEqual({
       attempted: true,
       candidateUrlCount: 2,
@@ -943,7 +959,18 @@ describe("cli bundle", () => {
       artifactIds: ["artifact-repair-evidence"],
       sourcePriorities: ["official"],
       sourceTiers: ["official"],
-      urls: ["https://platform.openai.com/docs/guides/research"]
+      urls: ["https://platform.openai.com/docs/guides/research"],
+      artifacts: [
+        {
+          artifactId: "artifact-repair-evidence",
+          url: "https://platform.openai.com/docs/guides/research",
+          sourcePriority: "official",
+          sourceTier: "official",
+          repairStage: "evidence",
+          repairSourceHostClass: "official",
+          repairFollowRank: "0"
+        }
+      ]
     });
     expect(bundle.repairAttempts.sourceCoverage.outcome).toBe("no_improvement");
     expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
@@ -954,11 +981,15 @@ describe("cli bundle", () => {
 
     const markdown = renderCliBundleMarkdown(bundle);
     expect(markdown).toContain("## Repair Attempts");
+    expect(markdown).toContain("- Discovery source: domain_targeted_search");
+    expect(markdown).toContain("- Discovery candidates: 17");
+    expect(markdown).toContain("- Discovery allowed URLs: 5");
     expect(markdown).toContain("- Fallback discovery: visible");
     expect(markdown).toContain("- Fallback candidate count: 2");
     expect(markdown).toContain("- Followed evidence count: 1");
     expect(markdown).toContain("- Outcome: no_improvement");
     expect(markdown).toContain("artifact-repair-evidence");
+    expect(markdown).toContain("hostClass: official; stage: evidence; followRank: 0");
 
     const serialized = JSON.stringify(bundle);
     const combined = `${serialized}\n${markdown}`;

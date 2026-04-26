@@ -13,6 +13,9 @@ type RepairAttempts = {
   sourceCoverage: {
     attempted: boolean;
     reason?: string;
+    discoverySource?: string;
+    candidateCount?: number;
+    allowedUrlCount?: number;
     primaryDiscovery: {
       attempted: boolean;
       blocked?: boolean;
@@ -34,6 +37,15 @@ type RepairAttempts = {
       sourcePriorities: string[];
       sourceTiers: string[];
       urls: string[];
+      artifacts: Array<{
+        artifactId: string;
+        url: string;
+        sourcePriority?: string;
+        sourceTier?: string;
+        repairStage?: string;
+        repairSourceHostClass?: string;
+        repairFollowRank?: string;
+      }>;
     };
     outcome:
       | "not_attempted"
@@ -498,6 +510,15 @@ function uniqueStrings(values: Array<string | undefined>): string[] {
   return result;
 }
 
+function parseMetadataInt(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
 function buildRepairAttempts(
   run: RunRecord,
   diagnostics: EvidenceDiagnostics
@@ -517,6 +538,9 @@ function buildRepairAttempts(
   const attempted = repairArtifacts.length > 0;
   const reason = repairArtifacts.find((artifact) => artifact.metadata.repair_reason)?.metadata
     .repair_reason;
+  const discoverySource = discoveryArtifacts.find(
+    (artifact) => typeof artifact.metadata.repair_discovery_source === "string"
+  )?.metadata.repair_discovery_source;
   const blockedPrimary = discoveryArtifacts.some(
     (artifact) => artifact.metadata.fetch_status === "blocked"
   );
@@ -524,48 +548,22 @@ function buildRepairAttempts(
     (artifact) => artifact.metadata.repair_fallback_attempted === "true"
   );
   const rawCandidateCounts = fallbackArtifacts
-    .map((artifact) => {
-      const value = artifact.metadata.repair_candidate_count;
-      if (typeof value === "number") return value;
-      if (typeof value === "string") {
-        const parsed = Number.parseInt(value, 10);
-        return Number.isFinite(parsed) ? parsed : undefined;
-      }
-      return undefined;
-    })
+    .map((artifact) => parseMetadataInt(artifact.metadata.repair_candidate_count))
     .filter((value): value is number => typeof value === "number");
   const fallbackCandidateCountFromPrimary = discoveryArtifacts
-    .map((artifact) => {
-      const value = artifact.metadata.repair_fallback_candidate_count;
-      if (typeof value === "number") return value;
-      if (typeof value === "string") {
-        const parsed = Number.parseInt(value, 10);
-        return Number.isFinite(parsed) ? parsed : undefined;
-      }
-      return undefined;
-    })
+    .map((artifact) => parseMetadataInt(artifact.metadata.repair_fallback_candidate_count))
     .find((value): value is number => typeof value === "number");
   const fallbackAllowedUrlCountFromPrimary = discoveryArtifacts
-    .map((artifact) => {
-      const value = artifact.metadata.repair_fallback_allowed_url_count;
-      if (typeof value === "number") return value;
-      if (typeof value === "string") {
-        const parsed = Number.parseInt(value, 10);
-        return Number.isFinite(parsed) ? parsed : undefined;
-      }
-      return undefined;
-    })
+    .map((artifact) => parseMetadataInt(artifact.metadata.repair_fallback_allowed_url_count))
     .find((value): value is number => typeof value === "number");
   const fallbackRawSourcesCheckedFromPrimary = discoveryArtifacts
-    .map((artifact) => {
-      const value = artifact.metadata.repair_fallback_raw_sources_checked;
-      if (typeof value === "number") return value;
-      if (typeof value === "string") {
-        const parsed = Number.parseInt(value, 10);
-        return Number.isFinite(parsed) ? parsed : undefined;
-      }
-      return undefined;
-    })
+    .map((artifact) => parseMetadataInt(artifact.metadata.repair_fallback_raw_sources_checked))
+    .find((value): value is number => typeof value === "number");
+  const candidateCount = discoveryArtifacts
+    .map((artifact) => parseMetadataInt(artifact.metadata.repair_candidate_count))
+    .find((value): value is number => typeof value === "number");
+  const allowedUrlCount = discoveryArtifacts
+    .map((artifact) => parseMetadataInt(artifact.metadata.repair_allowed_url_count))
     .find((value): value is number => typeof value === "number");
   const candidateUrlCount = rawCandidateCounts.length > 0
     ? rawCandidateCounts.reduce((sum, count) => sum + count, 0)
@@ -595,6 +593,9 @@ function buildRepairAttempts(
     sourceCoverage: {
       attempted,
       reason,
+      discoverySource,
+      candidateCount,
+      allowedUrlCount,
       primaryDiscovery: {
         attempted: discoveryArtifacts.length > 0,
         blocked: discoveryArtifacts.length > 0 ? blockedPrimary : undefined,
@@ -618,7 +619,16 @@ function buildRepairAttempts(
         artifactIds: evidenceArtifacts.map((artifact) => artifact.id),
         sourcePriorities: uniqueStrings(evidenceArtifacts.map((artifact) => artifact.sourcePriority)),
         sourceTiers: uniqueStrings(evidenceArtifacts.map((artifact) => artifact.sourceTier ?? "unknown")),
-        urls: evidenceArtifacts.map((artifact) => truncateText(artifact.url))
+        urls: evidenceArtifacts.map((artifact) => truncateText(artifact.url)),
+        artifacts: evidenceArtifacts.map((artifact) => ({
+          artifactId: artifact.id,
+          url: truncateText(artifact.url),
+          sourcePriority: artifact.sourcePriority,
+          sourceTier: artifact.sourceTier ?? "unknown",
+          repairStage: artifact.metadata.repair_stage,
+          repairSourceHostClass: artifact.metadata.repair_source_host_class,
+          repairFollowRank: artifact.metadata.repair_follow_rank
+        }))
       },
       outcome
     }
@@ -880,11 +890,13 @@ function renderRepairAttempts(repairAttempts: RepairAttempts): string {
       ? sourceCoverage.fallbackDiscovery.sourceArtifactIds.map((artifactId) => `- ${artifactId}`).join("\n")
       : "- none";
   const followedEvidence =
-    sourceCoverage.followedEvidence.artifactIds.length > 0
-      ? sourceCoverage.followedEvidence.artifactIds
-          .map((artifactId, index) => {
-            const url = sourceCoverage.followedEvidence.urls[index] ?? "unknown";
-            return `- ${artifactId} — ${url}`;
+    sourceCoverage.followedEvidence.artifacts.length > 0
+      ? sourceCoverage.followedEvidence.artifacts
+          .map((artifact) => {
+            return (
+              `- ${artifact.artifactId} — ${artifact.url}\n` +
+              `  - priority: ${artifact.sourcePriority ?? "unknown"}; tier: ${artifact.sourceTier ?? "unknown"}; hostClass: ${artifact.repairSourceHostClass ?? "unknown"}; stage: ${artifact.repairStage ?? "unknown"}; followRank: ${artifact.repairFollowRank ?? "unknown"}`
+            );
           })
           .join("\n")
       : "- none";
@@ -892,8 +904,15 @@ function renderRepairAttempts(repairAttempts: RepairAttempts): string {
   return [
     `- Source coverage repair attempted: ${sourceCoverage.attempted ? "yes" : "no"}`,
     `- Reason: ${sourceCoverage.reason ?? "none"}`,
+    `- Discovery source: ${sourceCoverage.discoverySource ?? "none"}`,
     `- Primary discovery: ${primaryStatus}`,
     `- Fallback discovery: ${fallbackStatus}`,
+    sourceCoverage.candidateCount !== undefined
+      ? `- Discovery candidates: ${sourceCoverage.candidateCount}`
+      : null,
+    sourceCoverage.allowedUrlCount !== undefined
+      ? `- Discovery allowed URLs: ${sourceCoverage.allowedUrlCount}`
+      : null,
     sourceCoverage.fallbackDiscovery.candidateUrlCount !== undefined
       ? `- Fallback candidate count: ${sourceCoverage.fallbackDiscovery.candidateUrlCount}`
       : null,
