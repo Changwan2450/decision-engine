@@ -1008,6 +1008,8 @@ describe("cli bundle", () => {
     expect(bundle.repairAttempts.sourceCoverage.fallbackDiscovery).toEqual({
       attempted: true,
       candidateUrlCount: 0,
+      allowedUrlCount: 0,
+      rawSourcesChecked: 3,
       sourceArtifactIds: ["artifact-repair-discovery-zero"]
     });
     expect(bundle.repairAttempts.sourceCoverage.outcome).toBe("no_candidates");
@@ -1016,6 +1018,8 @@ describe("cli bundle", () => {
     expect(markdown).toContain("## Repair Attempts");
     expect(markdown).toContain("- Fallback discovery: visible");
     expect(markdown).toContain("- Fallback candidate count: 0");
+    expect(markdown).toContain("- Fallback allowed URL count: 0");
+    expect(markdown).toContain("- Fallback raw sources checked: 3");
     expect(markdown).toContain("- Outcome: no_candidates");
   });
 

@@ -23,6 +23,8 @@ type RepairAttempts = {
     fallbackDiscovery: {
       attempted: boolean;
       candidateUrlCount?: number;
+      allowedUrlCount?: number;
+      rawSourcesChecked?: number;
       sourceArtifactIds: string[];
       note?: string;
     };
@@ -543,6 +545,28 @@ function buildRepairAttempts(
       return undefined;
     })
     .find((value): value is number => typeof value === "number");
+  const fallbackAllowedUrlCountFromPrimary = discoveryArtifacts
+    .map((artifact) => {
+      const value = artifact.metadata.repair_fallback_allowed_url_count;
+      if (typeof value === "number") return value;
+      if (typeof value === "string") {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      }
+      return undefined;
+    })
+    .find((value): value is number => typeof value === "number");
+  const fallbackRawSourcesCheckedFromPrimary = discoveryArtifacts
+    .map((artifact) => {
+      const value = artifact.metadata.repair_fallback_raw_sources_checked;
+      if (typeof value === "number") return value;
+      if (typeof value === "string") {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      }
+      return undefined;
+    })
+    .find((value): value is number => typeof value === "number");
   const candidateUrlCount = rawCandidateCounts.length > 0
     ? rawCandidateCounts.reduce((sum, count) => sum + count, 0)
     : fallbackCandidateCountFromPrimary;
@@ -581,6 +605,8 @@ function buildRepairAttempts(
       fallbackDiscovery: {
         attempted: fallbackAttempted,
         candidateUrlCount,
+        allowedUrlCount: fallbackAllowedUrlCountFromPrimary,
+        rawSourcesChecked: fallbackRawSourcesCheckedFromPrimary,
         sourceArtifactIds: fallbackSourceArtifactIds,
         note:
           fallbackAttempted && candidateUrlCount === undefined
@@ -870,6 +896,12 @@ function renderRepairAttempts(repairAttempts: RepairAttempts): string {
     `- Fallback discovery: ${fallbackStatus}`,
     sourceCoverage.fallbackDiscovery.candidateUrlCount !== undefined
       ? `- Fallback candidate count: ${sourceCoverage.fallbackDiscovery.candidateUrlCount}`
+      : null,
+    sourceCoverage.fallbackDiscovery.allowedUrlCount !== undefined
+      ? `- Fallback allowed URL count: ${sourceCoverage.fallbackDiscovery.allowedUrlCount}`
+      : null,
+    sourceCoverage.fallbackDiscovery.rawSourcesChecked !== undefined
+      ? `- Fallback raw sources checked: ${sourceCoverage.fallbackDiscovery.rawSourcesChecked}`
       : null,
     `- Followed evidence count: ${sourceCoverage.followedEvidence.count}`,
     `- Outcome: ${sourceCoverage.outcome}`,
