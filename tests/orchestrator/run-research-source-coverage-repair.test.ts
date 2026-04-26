@@ -364,6 +364,11 @@ describe("source coverage repair in executeResearchRun", () => {
     expect(repairUrls).toEqual([expect.stringMatching(/^https:\/\/s\.jina\.ai\/\?q=/)]);
     expect(repairArtifacts).toHaveLength(1);
     expect(repairArtifacts[0]?.metadata.repair_stage).toBe("discovery");
+    expect(repairArtifacts[0]?.metadata.repair_fallback_attempted).toBe("true");
+    expect(repairArtifacts[0]?.metadata.repair_fallback_source).toBe("community_search_json");
+    expect(repairArtifacts[0]?.metadata.repair_fallback_candidate_count).toBe("0");
+    expect(repairArtifacts[0]?.metadata.repair_fallback_allowed_url_count).toBe("0");
+    expect(repairArtifacts[0]?.metadata.repair_fallback_raw_sources_checked).toBe("0");
     expect(storedRun.evidenceSummary?.hasOfficialOrPrimaryEvidence).toBe(false);
   });
 
@@ -467,6 +472,14 @@ describe("source coverage repair in executeResearchRun", () => {
       "community_search_json"
     );
     expect(discoveryFallbackArtifacts[0]?.sourcePriority).toBe("community");
+    const primaryDiscoveryArtifact = storedRun.artifacts.find(
+      (artifact) => artifact.metadata.repair_stage === "discovery"
+    );
+    expect(primaryDiscoveryArtifact?.metadata.repair_fallback_attempted).toBe("true");
+    expect(primaryDiscoveryArtifact?.metadata.repair_fallback_source).toBe("community_search_json");
+    expect(primaryDiscoveryArtifact?.metadata.repair_fallback_candidate_count).toBe("2");
+    expect(primaryDiscoveryArtifact?.metadata.repair_fallback_allowed_url_count).toBe("2");
+    expect(primaryDiscoveryArtifact?.metadata.repair_fallback_raw_sources_checked).toBe("1");
     expect(repairEvidenceArtifacts).toHaveLength(2);
     expect(repairEvidenceArtifacts.every((artifact) => artifact.metadata.repair_stage === "evidence")).toBe(
       true

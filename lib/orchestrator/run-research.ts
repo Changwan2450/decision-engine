@@ -312,7 +312,14 @@ function buildSourceCoverageRepairPlan(
 
 function markDiscoveryRepairArtifact(
   artifact: SourceArtifact,
-  repairPlan: ReturnType<typeof planSourceCoverageRepair>
+  repairPlan: ReturnType<typeof planSourceCoverageRepair>,
+  fallbackSummary?: {
+    attempted: boolean;
+    source: "community_search_json";
+    candidateCount: number;
+    allowedUrlCount: number;
+    rawSourcesChecked: number;
+  }
 ): SourceArtifact {
   const discovery = repairPlan.discovery;
   if (!discovery) return artifact;
@@ -325,7 +332,16 @@ function markDiscoveryRepairArtifact(
       repair_pass: discovery.repairPass,
       repair_stage: discovery.repairStage,
       repair_reason: discovery.repairReason,
-      repair_query: truncateTelemetryValue(discovery.query)
+      repair_query: truncateTelemetryValue(discovery.query),
+      ...(fallbackSummary?.attempted
+        ? {
+            repair_fallback_attempted: "true",
+            repair_fallback_source: fallbackSummary.source,
+            repair_fallback_candidate_count: String(fallbackSummary.candidateCount),
+            repair_fallback_allowed_url_count: String(fallbackSummary.allowedUrlCount),
+            repair_fallback_raw_sources_checked: String(fallbackSummary.rawSourcesChecked)
+          }
+        : {})
     }
   };
 }
@@ -393,10 +409,18 @@ async function readArtifactRawPayload(artifact: SourceArtifact): Promise<string 
 
 async function extractFallbackRepairUrlsFromCommunityArtifacts(
   artifacts: SourceArtifact[]
-): Promise<{ urls: string[]; markedArtifacts: SourceArtifact[] }> {
+): Promise<{
+  urls: string[];
+  markedArtifacts: SourceArtifact[];
+  rawSourcesChecked: number;
+  candidateCount: number;
+  allowedUrlCount: number;
+}> {
   const candidateCountsByArtifactId = new Map<string, number>();
   const urls: string[] = [];
   const seen = new Set<string>();
+  let rawSourcesChecked = 0;
+  let candidateCount = 0;
 
   for (const artifact of artifacts) {
     if (artifact.adapter !== "community-search-json") continue;
@@ -404,11 +428,13 @@ async function extractFallbackRepairUrlsFromCommunityArtifacts(
 
     const rawJson = await readArtifactRawPayload(artifact);
     if (!rawJson) continue;
+    rawSourcesChecked += 1;
 
     const extracted = extractAllowedUrlsFromCommunitySearchJson({
       rawJson,
       limit: 3
     });
+    candidateCount += extracted.length;
 
     if (extracted.length > 0) {
       candidateCountsByArtifactId.set(artifact.id, extracted.length);
@@ -421,7 +447,10 @@ async function extractFallbackRepairUrlsFromCommunityArtifacts(
       if (urls.length >= 3) {
         return {
           urls,
-          markedArtifacts: markFallbackDiscoveryArtifacts(artifacts, candidateCountsByArtifactId)
+          markedArtifacts: markFallbackDiscoveryArtifacts(artifacts, candidateCountsByArtifactId),
+          rawSourcesChecked,
+          candidateCount,
+          allowedUrlCount: urls.length
         };
       }
     }
@@ -429,7 +458,10 @@ async function extractFallbackRepairUrlsFromCommunityArtifacts(
 
   return {
     urls,
-    markedArtifacts: markFallbackDiscoveryArtifacts(artifacts, candidateCountsByArtifactId)
+    markedArtifacts: markFallbackDiscoveryArtifacts(artifacts, candidateCountsByArtifactId),
+    rawSourcesChecked,
+    candidateCount,
+    allowedUrlCount: urls.length
   };
 }
 
@@ -872,11 +904,8 @@ export async function executeResearchRun(
           }
         }
       );
-      const markedDiscoveryArtifacts = discoveryArtifacts.map((artifact) =>
-        markDiscoveryRepairArtifact(artifact, repairPlan)
-      );
       const discoveryRepresentative =
-        markedDiscoveryArtifacts.find(isUsableArtifact) ?? markedDiscoveryArtifacts.at(-1);
+        discoveryArtifacts.find(isUsableArtifact) ?? discoveryArtifacts.at(-1);
       const primaryFollowedUrls = discoveryRepresentative
         ? extractAllowedRepairUrlsFromDiscovery({
             content: discoveryRepresentative.content,
@@ -890,7 +919,7 @@ export async function executeResearchRun(
         discoveryRepresentative?.metadata.fetch_status === "blocked";
       const discoveredArtifactsWithBlockFlag =
         primaryDiscoveryBlocked && discoveryRepresentative
-          ? markedDiscoveryArtifacts.map((artifact) =>
+          ? discoveryArtifacts.map((artifact) =>
               artifact.id === discoveryRepresentative.id
                 ? {
                     ...artifact,
@@ -901,11 +930,26 @@ export async function executeResearchRun(
                   }
                 : artifact
             )
-          : markedDiscoveryArtifacts;
+          : discoveryArtifacts;
       const fallbackDiscovery =
         primaryDiscoveryBlocked || primaryFollowedUrls.length === 0
           ? await extractFallbackRepairUrlsFromCommunityArtifacts(artifacts)
-          : { urls: [] as string[], markedArtifacts: artifacts };
+          : {
+              urls: [] as string[],
+              markedArtifacts: artifacts,
+              rawSourcesChecked: 0,
+              candidateCount: 0,
+              allowedUrlCount: 0
+            };
+      const markedDiscoveryArtifacts = discoveredArtifactsWithBlockFlag.map((artifact) =>
+        markDiscoveryRepairArtifact(artifact, repairPlan, {
+          attempted: primaryDiscoveryBlocked || primaryFollowedUrls.length === 0,
+          source: "community_search_json",
+          candidateCount: fallbackDiscovery.candidateCount,
+          allowedUrlCount: fallbackDiscovery.allowedUrlCount,
+          rawSourcesChecked: fallbackDiscovery.rawSourcesChecked
+        })
+      );
       const followedUrls =
         primaryFollowedUrls.length > 0 ? primaryFollowedUrls : fallbackDiscovery.urls;
       const followedArtifacts =
@@ -927,7 +971,7 @@ export async function executeResearchRun(
       const repairedArtifacts = attachSourceTiers(
         dedupeGatheredArtifacts([
           ...fallbackDiscovery.markedArtifacts,
-          ...discoveredArtifactsWithBlockFlag,
+          ...markedDiscoveryArtifacts,
           ...followedArtifacts
         ])
       );

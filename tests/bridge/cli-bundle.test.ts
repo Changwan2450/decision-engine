@@ -448,6 +448,43 @@ const repairFallbackUnknownCountRun: RunRecord = {
   }
 };
 
+const repairNoCandidatesRun: RunRecord = {
+  ...diagnosticRun,
+  artifacts: [
+    {
+      id: "artifact-repair-discovery-zero",
+      adapter: "scrapling",
+      sourceType: "web",
+      title: "Repair Discovery",
+      url: "https://s.jina.ai/?q=source+coverage+repair+official+documentation",
+      snippet: "repair discovery summary",
+      content: "REPAIR_DISCOVERY_ZERO_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "analysis",
+      sourceTier: "aggregator",
+      retrievedAt: "2026-04-25T07:00:00.000Z",
+      confidence: 0.1,
+      rawRef: "project/run/raw/repair-discovery-zero.json",
+      metadata: {
+        repair_pass: "source_coverage_v1",
+        repair_stage: "discovery",
+        repair_reason: "no_official_or_primary_evidence",
+        fetch_status: "blocked",
+        block_reason: "login",
+        repair_fallback_attempted: "true",
+        repair_fallback_source: "community_search_json",
+        repair_fallback_candidate_count: "0",
+        repair_fallback_allowed_url_count: "0",
+        repair_fallback_raw_sources_checked: "3"
+      }
+    }
+  ],
+  evidenceSummary: {
+    ...diagnosticRun.evidenceSummary!,
+    hasOfficialOrPrimaryEvidence: false,
+    sourceCoverageWarnings: ["no_official_or_primary_evidence"]
+  }
+};
+
 const insights = {
   repeatedProblems: ["차별화가 어렵다"],
   repeatedPatterns: ["짧은 루프가 유지율을 높인다"],
@@ -918,6 +955,7 @@ describe("cli bundle", () => {
     const markdown = renderCliBundleMarkdown(bundle);
     expect(markdown).toContain("## Repair Attempts");
     expect(markdown).toContain("- Fallback discovery: visible");
+    expect(markdown).toContain("- Fallback candidate count: 2");
     expect(markdown).toContain("- Followed evidence count: 1");
     expect(markdown).toContain("- Outcome: no_improvement");
     expect(markdown).toContain("artifact-repair-evidence");
@@ -951,6 +989,34 @@ describe("cli bundle", () => {
       "fallback candidate count unavailable from persisted repair metadata"
     );
     expect(bundle.repairAttempts.sourceCoverage.outcome).toBe("no_candidates");
+  });
+
+  it("derives no_candidates from fallback marker on primary discovery when zero candidates were found", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: repairNoCandidatesRun,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    expect(bundle.repairAttempts.sourceCoverage.primaryDiscovery.blocked).toBe(true);
+    expect(bundle.repairAttempts.sourceCoverage.fallbackDiscovery).toEqual({
+      attempted: true,
+      candidateUrlCount: 0,
+      sourceArtifactIds: ["artifact-repair-discovery-zero"]
+    });
+    expect(bundle.repairAttempts.sourceCoverage.outcome).toBe("no_candidates");
+
+    const markdown = renderCliBundleMarkdown(bundle);
+    expect(markdown).toContain("## Repair Attempts");
+    expect(markdown).toContain("- Fallback discovery: visible");
+    expect(markdown).toContain("- Fallback candidate count: 0");
+    expect(markdown).toContain("- Outcome: no_candidates");
   });
 
   it("includes sanitized retrieval attempt gaps in JSON and markdown", () => {

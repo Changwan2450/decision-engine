@@ -518,6 +518,9 @@ function buildRepairAttempts(
   const blockedPrimary = discoveryArtifacts.some(
     (artifact) => artifact.metadata.fetch_status === "blocked"
   );
+  const fallbackAttemptedFromPrimary = discoveryArtifacts.some(
+    (artifact) => artifact.metadata.repair_fallback_attempted === "true"
+  );
   const rawCandidateCounts = fallbackArtifacts
     .map((artifact) => {
       const value = artifact.metadata.repair_candidate_count;
@@ -529,14 +532,32 @@ function buildRepairAttempts(
       return undefined;
     })
     .filter((value): value is number => typeof value === "number");
-  const candidateUrlCount =
-    rawCandidateCounts.length > 0 ? rawCandidateCounts.reduce((sum, count) => sum + count, 0) : undefined;
+  const fallbackCandidateCountFromPrimary = discoveryArtifacts
+    .map((artifact) => {
+      const value = artifact.metadata.repair_fallback_candidate_count;
+      if (typeof value === "number") return value;
+      if (typeof value === "string") {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      }
+      return undefined;
+    })
+    .find((value): value is number => typeof value === "number");
+  const candidateUrlCount = rawCandidateCounts.length > 0
+    ? rawCandidateCounts.reduce((sum, count) => sum + count, 0)
+    : fallbackCandidateCountFromPrimary;
+  const fallbackSourceArtifactIds = fallbackArtifacts.length > 0
+    ? fallbackArtifacts.map((artifact) => artifact.id)
+    : discoveryArtifacts
+        .filter((artifact) => artifact.metadata.repair_fallback_attempted === "true")
+        .map((artifact) => artifact.id);
+  const fallbackAttempted = fallbackArtifacts.length > 0 || fallbackAttemptedFromPrimary;
 
   let outcome: RepairAttempts["sourceCoverage"]["outcome"] = "not_attempted";
   if (attempted) {
     if (evidenceArtifacts.length > 0) {
       outcome = diagnostics?.hasOfficialOrPrimaryEvidence ? "followed_evidence" : "no_improvement";
-    } else if (fallbackArtifacts.length > 0) {
+    } else if (fallbackAttempted) {
       outcome = "no_candidates";
     } else if (blockedPrimary) {
       outcome = "blocked_primary";
@@ -558,11 +579,11 @@ function buildRepairAttempts(
         urls: discoveryArtifacts.map((artifact) => truncateText(artifact.url))
       },
       fallbackDiscovery: {
-        attempted: fallbackArtifacts.length > 0,
+        attempted: fallbackAttempted,
         candidateUrlCount,
-        sourceArtifactIds: fallbackArtifacts.map((artifact) => artifact.id),
+        sourceArtifactIds: fallbackSourceArtifactIds,
         note:
-          fallbackArtifacts.length > 0 && candidateUrlCount === undefined
+          fallbackAttempted && candidateUrlCount === undefined
             ? "fallback candidate count unavailable from persisted repair metadata"
             : undefined
       },
@@ -847,6 +868,9 @@ function renderRepairAttempts(repairAttempts: RepairAttempts): string {
     `- Reason: ${sourceCoverage.reason ?? "none"}`,
     `- Primary discovery: ${primaryStatus}`,
     `- Fallback discovery: ${fallbackStatus}`,
+    sourceCoverage.fallbackDiscovery.candidateUrlCount !== undefined
+      ? `- Fallback candidate count: ${sourceCoverage.fallbackDiscovery.candidateUrlCount}`
+      : null,
     `- Followed evidence count: ${sourceCoverage.followedEvidence.count}`,
     `- Outcome: ${sourceCoverage.outcome}`,
     sourceCoverage.fallbackDiscovery.note ? `- Note: ${sourceCoverage.fallbackDiscovery.note}` : null,
