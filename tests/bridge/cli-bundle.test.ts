@@ -394,6 +394,31 @@ const repairNoImprovementRun: RunRecord = {
       }
     },
     {
+      id: "artifact-repair-timeout",
+      adapter: "opendataloader-pdf",
+      sourceType: "pdf",
+      title: "Timed Out Repair Evidence",
+      url: "https://arxiv.org/pdf/2407.17436",
+      snippet: "",
+      content: "REPAIR_TIMEOUT_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "analysis",
+      sourceTier: "primary",
+      retrievedAt: "2026-04-25T07:01:30.000Z",
+      confidence: 0,
+      rawRef: "project/run/raw/repair-timeout.pdf",
+      metadata: {
+        repair_pass: "source_coverage_v1",
+        repair_stage: "evidence",
+        repair_reason: "no_official_or_primary_evidence",
+        repair_discovery_source: "domain_targeted_search",
+        repair_discovery_artifact_id: "artifact-repair-discovery",
+        repair_follow_rank: "0",
+        repair_source_host_class: "primary",
+        fetch_status: "timeout",
+        error: "REPAIR_TIMEOUT_ERROR_SHOULD_NOT_EXPORT"
+      }
+    },
+    {
       id: "artifact-repair-evidence",
       adapter: "scrapling",
       sourceType: "web",
@@ -412,8 +437,9 @@ const repairNoImprovementRun: RunRecord = {
         repair_reason: "no_official_or_primary_evidence",
         repair_discovery_source: "domain_targeted_search",
         repair_discovery_artifact_id: "artifact-repair-fallback",
-        repair_follow_rank: "0",
+        repair_follow_rank: "1",
         repair_source_host_class: "official",
+        fetch_status: "success",
         error: "REPAIR_EVIDENCE_ERROR_SHOULD_NOT_EXPORT"
       }
     }
@@ -489,6 +515,65 @@ const repairNoCandidatesRun: RunRecord = {
     ...diagnosticRun.evidenceSummary!,
     hasOfficialOrPrimaryEvidence: false,
     sourceCoverageWarnings: ["no_official_or_primary_evidence"]
+  }
+};
+
+const repairFailedFollowOnlyRun: RunRecord = {
+  ...diagnosticRun,
+  artifacts: [
+    {
+      id: "artifact-repair-discovery",
+      adapter: "scrapling",
+      sourceType: "web",
+      title: "Repair Discovery",
+      url: "https://s.jina.ai/?q=source+coverage+repair",
+      snippet: "repair discovery summary",
+      content: "REPAIR_DISCOVERY_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "analysis",
+      sourceTier: "aggregator",
+      retrievedAt: "2026-04-25T07:00:00.000Z",
+      confidence: 0.1,
+      rawRef: "project/run/raw/repair-discovery.json",
+      metadata: {
+        repair_pass: "source_coverage_v1",
+        repair_stage: "discovery",
+        repair_reason: "no_official_or_primary_evidence",
+        repair_discovery_source: "domain_targeted_search",
+        repair_candidate_count: "17",
+        repair_allowed_url_count: "5",
+        fetch_status: "success"
+      }
+    },
+    {
+      id: "artifact-repair-timeout-only",
+      adapter: "opendataloader-pdf",
+      sourceType: "pdf",
+      title: "Timed Out Repair Evidence",
+      url: "https://arxiv.org/pdf/2407.17436",
+      snippet: "",
+      content: "REPAIR_TIMEOUT_ONLY_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "analysis",
+      sourceTier: "primary",
+      retrievedAt: "2026-04-25T07:01:30.000Z",
+      confidence: 0,
+      rawRef: "project/run/raw/repair-timeout-only.pdf",
+      metadata: {
+        repair_pass: "source_coverage_v1",
+        repair_stage: "evidence",
+        repair_reason: "no_official_or_primary_evidence",
+        repair_discovery_source: "domain_targeted_search",
+        repair_discovery_artifact_id: "artifact-repair-discovery",
+        repair_follow_rank: "0",
+        repair_source_host_class: "primary",
+        fetch_status: "timeout",
+        error: "REPAIR_TIMEOUT_ONLY_ERROR_SHOULD_NOT_EXPORT"
+      }
+    }
+  ],
+  evidenceSummary: {
+    ...diagnosticRun.evidenceSummary!,
+    hasOfficialOrPrimaryEvidence: true,
+    sourceCoverageWarnings: []
   }
 };
 
@@ -968,6 +1053,21 @@ describe("cli bundle", () => {
           sourceTier: "official",
           repairStage: "evidence",
           repairSourceHostClass: "official",
+          repairFollowRank: "1"
+        }
+      ]
+    });
+    expect(bundle.repairAttempts.sourceCoverage.failedFollowAttempts).toEqual({
+      count: 1,
+      artifacts: [
+        {
+          artifactId: "artifact-repair-timeout",
+          url: "https://arxiv.org/pdf/2407.17436",
+          fetchStatus: "timeout",
+          sourcePriority: "analysis",
+          sourceTier: "primary",
+          repairStage: "evidence",
+          repairSourceHostClass: "primary",
           repairFollowRank: "0"
         }
       ]
@@ -987,18 +1087,71 @@ describe("cli bundle", () => {
     expect(markdown).toContain("- Fallback discovery: visible");
     expect(markdown).toContain("- Fallback candidate count: 2");
     expect(markdown).toContain("- Followed evidence count: 1");
+    expect(markdown).toContain("- Failed follow attempts: 1");
     expect(markdown).toContain("- Outcome: no_improvement");
     expect(markdown).toContain("artifact-repair-evidence");
-    expect(markdown).toContain("hostClass: official; stage: evidence; followRank: 0");
+    expect(markdown).toContain("hostClass: official; stage: evidence; followRank: 1");
+    expect(markdown).toContain("### Failed Follow Attempts");
+    expect(markdown).toContain("artifact-repair-timeout");
+    expect(markdown).toContain("fetchStatus: timeout; priority: analysis; tier: primary; hostClass: primary; followRank: 0");
 
     const serialized = JSON.stringify(bundle);
     const combined = `${serialized}\n${markdown}`;
     expect(combined).not.toContain("REPAIR_DISCOVERY_FULL_CONTENT_SHOULD_NOT_EXPORT");
     expect(combined).not.toContain("FALLBACK_FULL_CONTENT_SHOULD_NOT_EXPORT");
     expect(combined).not.toContain("REPAIR_EVIDENCE_FULL_CONTENT_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("REPAIR_TIMEOUT_FULL_CONTENT_SHOULD_NOT_EXPORT");
     expect(combined).not.toContain("project/run/raw");
     expect(combined).not.toContain("REPAIR_DISCOVERY_ERROR_SHOULD_NOT_EXPORT");
     expect(combined).not.toContain("REPAIR_EVIDENCE_ERROR_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("REPAIR_TIMEOUT_ERROR_SHOULD_NOT_EXPORT");
+  });
+
+  it("does not treat failed follow attempts alone as followed evidence", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: repairFailedFollowOnlyRun,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    expect(bundle.repairAttempts.sourceCoverage.followedEvidence).toEqual({
+      count: 0,
+      artifactIds: [],
+      sourcePriorities: [],
+      sourceTiers: [],
+      urls: [],
+      artifacts: []
+    });
+    expect(bundle.repairAttempts.sourceCoverage.failedFollowAttempts.count).toBe(1);
+    expect(bundle.repairAttempts.sourceCoverage.failedFollowAttempts.artifacts[0]).toEqual({
+      artifactId: "artifact-repair-timeout-only",
+      url: "https://arxiv.org/pdf/2407.17436",
+      fetchStatus: "timeout",
+      sourcePriority: "analysis",
+      sourceTier: "primary",
+      repairStage: "evidence",
+      repairSourceHostClass: "primary",
+      repairFollowRank: "0"
+    });
+    expect(bundle.repairAttempts.sourceCoverage.outcome).toBe("no_candidates");
+
+    const markdown = renderCliBundleMarkdown(bundle);
+    expect(markdown).toContain("- Followed evidence count: 0");
+    expect(markdown).toContain("- Failed follow attempts: 1");
+    expect(markdown).toContain("- Outcome: no_candidates");
+    expect(markdown).toContain("artifact-repair-timeout-only");
+
+    const serialized = JSON.stringify(bundle);
+    const combined = `${serialized}\n${markdown}`;
+    expect(combined).not.toContain("REPAIR_TIMEOUT_ONLY_FULL_CONTENT_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("REPAIR_TIMEOUT_ONLY_ERROR_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("project/run/raw");
   });
 
   it("does not invent fallback candidate counts when persisted metadata is unavailable", () => {

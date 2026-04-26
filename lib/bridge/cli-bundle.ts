@@ -47,6 +47,19 @@ type RepairAttempts = {
         repairFollowRank?: string;
       }>;
     };
+    failedFollowAttempts: {
+      count: number;
+      artifacts: Array<{
+        artifactId: string;
+        url: string;
+        fetchStatus?: string;
+        sourcePriority?: string;
+        sourceTier?: string;
+        repairStage?: string;
+        repairSourceHostClass?: string;
+        repairFollowRank?: string;
+      }>;
+    };
     outcome:
       | "not_attempted"
       | "blocked_primary"
@@ -519,6 +532,38 @@ function parseMetadataInt(value: unknown): number | undefined {
   return undefined;
 }
 
+function isUsableFollowArtifact(artifact: RunRecord["artifacts"][number]): boolean {
+  const fetchStatus = artifact.metadata.fetch_status;
+  return fetchStatus === undefined || fetchStatus === "success" || fetchStatus === "ok" || fetchStatus === "partial";
+}
+
+function toUsableFollowArtifact(artifact: RunRecord["artifacts"][number]): {
+  artifactId: string;
+  url: string;
+  sourcePriority?: string;
+  sourceTier?: string;
+  repairStage?: string;
+  repairSourceHostClass?: string;
+  repairFollowRank?: string;
+} {
+  return {
+    artifactId: artifact.id,
+    url: truncateText(artifact.url),
+    sourcePriority: artifact.sourcePriority,
+    sourceTier: artifact.sourceTier ?? "unknown",
+    repairStage: artifact.metadata.repair_stage,
+    repairSourceHostClass: artifact.metadata.repair_source_host_class,
+    repairFollowRank: artifact.metadata.repair_follow_rank
+  };
+}
+
+function toFailedFollowAttempt(artifact: RunRecord["artifacts"][number]) {
+  return {
+    ...toUsableFollowArtifact(artifact),
+    fetchStatus: artifact.metadata.fetch_status
+  };
+}
+
 function buildRepairAttempts(
   run: RunRecord,
   diagnostics: EvidenceDiagnostics
@@ -535,6 +580,8 @@ function buildRepairAttempts(
   const evidenceArtifacts = repairArtifacts.filter(
     (artifact) => artifact.metadata.repair_stage === "evidence"
   );
+  const usableEvidenceArtifacts = evidenceArtifacts.filter(isUsableFollowArtifact);
+  const failedFollowArtifacts = evidenceArtifacts.filter((artifact) => !isUsableFollowArtifact(artifact));
   const attempted = repairArtifacts.length > 0;
   const reason = repairArtifacts.find((artifact) => artifact.metadata.repair_reason)?.metadata
     .repair_reason;
@@ -577,7 +624,7 @@ function buildRepairAttempts(
 
   let outcome: RepairAttempts["sourceCoverage"]["outcome"] = "not_attempted";
   if (attempted) {
-    if (evidenceArtifacts.length > 0) {
+    if (usableEvidenceArtifacts.length > 0) {
       outcome = diagnostics?.hasOfficialOrPrimaryEvidence ? "followed_evidence" : "no_improvement";
     } else if (fallbackAttempted) {
       outcome = "no_candidates";
@@ -615,20 +662,16 @@ function buildRepairAttempts(
             : undefined
       },
       followedEvidence: {
-        count: evidenceArtifacts.length,
-        artifactIds: evidenceArtifacts.map((artifact) => artifact.id),
-        sourcePriorities: uniqueStrings(evidenceArtifacts.map((artifact) => artifact.sourcePriority)),
-        sourceTiers: uniqueStrings(evidenceArtifacts.map((artifact) => artifact.sourceTier ?? "unknown")),
-        urls: evidenceArtifacts.map((artifact) => truncateText(artifact.url)),
-        artifacts: evidenceArtifacts.map((artifact) => ({
-          artifactId: artifact.id,
-          url: truncateText(artifact.url),
-          sourcePriority: artifact.sourcePriority,
-          sourceTier: artifact.sourceTier ?? "unknown",
-          repairStage: artifact.metadata.repair_stage,
-          repairSourceHostClass: artifact.metadata.repair_source_host_class,
-          repairFollowRank: artifact.metadata.repair_follow_rank
-        }))
+        count: usableEvidenceArtifacts.length,
+        artifactIds: usableEvidenceArtifacts.map((artifact) => artifact.id),
+        sourcePriorities: uniqueStrings(usableEvidenceArtifacts.map((artifact) => artifact.sourcePriority)),
+        sourceTiers: uniqueStrings(usableEvidenceArtifacts.map((artifact) => artifact.sourceTier ?? "unknown")),
+        urls: usableEvidenceArtifacts.map((artifact) => truncateText(artifact.url)),
+        artifacts: usableEvidenceArtifacts.map(toUsableFollowArtifact)
+      },
+      failedFollowAttempts: {
+        count: failedFollowArtifacts.length,
+        artifacts: failedFollowArtifacts.map(toFailedFollowAttempt)
       },
       outcome
     }
@@ -900,6 +943,17 @@ function renderRepairAttempts(repairAttempts: RepairAttempts): string {
           })
           .join("\n")
       : "- none";
+  const failedFollowAttempts =
+    sourceCoverage.failedFollowAttempts.artifacts.length > 0
+      ? sourceCoverage.failedFollowAttempts.artifacts
+          .map((artifact) => {
+            return (
+              `- ${artifact.artifactId} — ${artifact.url}\n` +
+              `  - fetchStatus: ${artifact.fetchStatus ?? "unknown"}; priority: ${artifact.sourcePriority ?? "unknown"}; tier: ${artifact.sourceTier ?? "unknown"}; hostClass: ${artifact.repairSourceHostClass ?? "unknown"}; followRank: ${artifact.repairFollowRank ?? "unknown"}`
+            );
+          })
+          .join("\n")
+      : "- none";
 
   return [
     `- Source coverage repair attempted: ${sourceCoverage.attempted ? "yes" : "no"}`,
@@ -923,6 +977,7 @@ function renderRepairAttempts(repairAttempts: RepairAttempts): string {
       ? `- Fallback raw sources checked: ${sourceCoverage.fallbackDiscovery.rawSourcesChecked}`
       : null,
     `- Followed evidence count: ${sourceCoverage.followedEvidence.count}`,
+    `- Failed follow attempts: ${sourceCoverage.failedFollowAttempts.count}`,
     `- Outcome: ${sourceCoverage.outcome}`,
     sourceCoverage.fallbackDiscovery.note ? `- Note: ${sourceCoverage.fallbackDiscovery.note}` : null,
     "",
@@ -933,7 +988,10 @@ function renderRepairAttempts(repairAttempts: RepairAttempts): string {
     fallbackArtifacts,
     "",
     "### Followed Evidence",
-    followedEvidence
+    followedEvidence,
+    "",
+    "### Failed Follow Attempts",
+    failedFollowAttempts
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");
