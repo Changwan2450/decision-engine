@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  extractAllowedRepairUrlsFromCandidates,
   extractAllowedUrlsFromCommunitySearchJson,
   extractAllowedUrlsFromHnAlgoliaJson,
   extractAllowedRepairUrlsFromDiscovery,
@@ -59,7 +60,8 @@ describe("source coverage repair planner", () => {
     });
 
     expect(plan.discovery).not.toBeNull();
-    expect(plan.discovery?.url.startsWith("https://s.jina.ai/?q=")).toBe(true);
+    expect(plan.discovery?.source).toBe("domain_targeted_search");
+    expect(plan.discovery?.url.startsWith("https://html.duckduckgo.com/html/?")).toBe(true);
     expect(plan.discovery?.url.includes("reddit")).toBe(false);
     expect(plan.discovery?.url.includes("hn.algolia")).toBe(false);
     expect(plan.discovery?.query).toBe("False convergence safeguards official documentation");
@@ -132,6 +134,22 @@ describe("source coverage repair planner", () => {
         "https://dl.acm.org/doi/10.1145/1234567"
       ].join(" ")
     });
+
+    expect(urls).toEqual([
+      "https://openai.com/research",
+      "https://anthropic.com/research",
+      "https://arxiv.org/abs/2501.00001"
+    ]);
+  });
+
+  it("dedupes and caps direct discovery candidates at three", () => {
+    const urls = extractAllowedRepairUrlsFromCandidates([
+      { url: "https://openai.com/research" },
+      { url: "https://openai.com/research" },
+      { url: "https://anthropic.com/research" },
+      { url: "https://arxiv.org/abs/2501.00001" },
+      { url: "https://dl.acm.org/doi/10.1145/1234567" }
+    ]);
 
     expect(urls).toEqual([
       "https://openai.com/research",

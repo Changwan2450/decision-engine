@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildArtifact } from "@/lib/adapters/contract";
+import type { DomainTargetedDiscoveryResult } from "@/lib/adapters/domain-targeted-search";
 import type { ResearchAdapter, ResearchPlan, SourceArtifact } from "@/lib/adapters/types";
 import { setQmdClientForTests, setQmdRunnerForTests } from "@/lib/orchestrator/kb-context";
 
@@ -17,6 +18,19 @@ function makeAdapter(
     name,
     supports: () => true,
     execute: exec
+  };
+}
+
+function makeDomainDiscoveryResult(
+  candidates: DomainTargetedDiscoveryResult["candidates"]
+): DomainTargetedDiscoveryResult {
+  return {
+    query: "False convergence safeguards official documentation",
+    source: "domain-targeted-search",
+    candidates,
+    rawResultCount: candidates.length,
+    allowedResultCount: candidates.length,
+    errors: []
   };
 }
 
@@ -103,6 +117,29 @@ describe("source coverage repair in executeResearchRun", () => {
         })
       ],
       research: {
+        domainTargetedDiscover: async () =>
+          makeDomainDiscoveryResult([
+            {
+              url: "https://openai.com/research/guardrails",
+              title: "OpenAI Guardrails",
+              hostClass: "official"
+            },
+            {
+              url: "https://anthropic.com/research/evals",
+              title: "Anthropic Evals",
+              hostClass: "official"
+            },
+            {
+              url: "https://arxiv.org/abs/2501.00001",
+              title: "arXiv Paper",
+              hostClass: "primary"
+            },
+            {
+              url: "https://dl.acm.org/doi/10.1145/1234567",
+              title: "ACM Paper",
+              hostClass: "primary"
+            }
+          ]),
         router: () => ({
           primary: "scrapling",
           fallbacks: [],
@@ -112,23 +149,6 @@ describe("source coverage repair in executeResearchRun", () => {
           scrapling: makeAdapter("scrapling", async (plan) => {
             const url = plan.normalizedInput.urls[0] ?? "";
             repairUrls.push(url);
-            if (url.startsWith("https://s.jina.ai/?q=")) {
-              return [
-                buildArtifact({
-                  id: "repair-discovery-1",
-                  adapter: "scrapling",
-                  fetcher: "scrapling",
-                  sourceType: "web",
-                  url,
-                  title: "Discovery result page",
-                  snippet: "links to https://openai.com/research/guardrails and https://arxiv.org/abs/2501.00001",
-                  content:
-                    "Discovery result page with https://openai.com/research/guardrails and https://arxiv.org/abs/2501.00001",
-                  sourcePriority: "analysis",
-                  outcome: { status: "success" }
-                })
-              ];
-            }
             return [
               buildArtifact({
                 id: `repair-${repairUrls.length}`,
@@ -139,7 +159,10 @@ describe("source coverage repair in executeResearchRun", () => {
                 title: "Official repair source",
                 snippet: "official source coverage",
                 content: "official source coverage",
-                sourcePriority: url.includes("openai.com") ? "official" : "primary_data",
+                sourcePriority:
+                  url.includes("openai.com") || url.includes("anthropic.com")
+                    ? "official"
+                    : "primary_data",
                 outcome: { status: "success" },
                 extra: {
                   claims_json: JSON.stringify([
@@ -169,31 +192,32 @@ describe("source coverage repair in executeResearchRun", () => {
     );
 
     expect(storedRun.run.status).toBe("decided");
-    expect(repairUrls).toHaveLength(3);
-    expect(repairUrls[0]).toMatch(/^https:\/\/s\.jina\.ai\/\?q=/);
-    expect(repairUrls.slice(1)).toEqual([
+    expect(repairUrls).toEqual([
       "https://openai.com/research/guardrails",
+      "https://anthropic.com/research/evals",
       "https://arxiv.org/abs/2501.00001"
     ]);
     expect(storedRun.artifacts.some((artifact) => artifact.id === "community-0")).toBe(true);
     expect(discoveryArtifacts).toHaveLength(1);
-    expect(evidenceArtifacts).toHaveLength(2);
-    expect(discoveryArtifacts[0]?.sourceTier).toBe("aggregator");
+    expect(evidenceArtifacts).toHaveLength(3);
+    expect(discoveryArtifacts[0]?.sourceTier).toBe("unknown");
     expect(discoveryArtifacts[0]?.metadata).toMatchObject({
       repair_pass: "source_coverage_v1",
       repair_stage: "discovery",
       repair_reason: "no_official_or_primary_evidence",
+      repair_discovery_source: "domain_targeted_search"
     });
     expect(discoveryArtifacts[0]?.metadata.repair_query.length).toBeLessThanOrEqual(240);
     expect(evidenceArtifacts.every((artifact) => artifact.metadata.repair_stage === "evidence")).toBe(
       true
     );
-    expect(evidenceArtifacts[0]?.metadata.repair_discovery_artifact_id).toBe("repair-discovery-1");
+    expect(evidenceArtifacts[0]?.metadata.repair_discovery_source).toBe("domain_targeted_search");
     expect(evidenceArtifacts[0]?.metadata.repair_follow_rank).toBe("0");
     expect(evidenceArtifacts[0]?.metadata.repair_source_host_class).toBe("official");
-    expect(evidenceArtifacts[1]?.metadata.repair_source_host_class).toBe("primary");
+    expect(evidenceArtifacts[1]?.metadata.repair_source_host_class).toBe("official");
+    expect(evidenceArtifacts[2]?.metadata.repair_source_host_class).toBe("primary");
     expect(storedRun.evidenceSummary?.hasOfficialOrPrimaryEvidence).toBe(true);
-    expect(storedRun.evidenceSummary?.sourcePriorityCounts?.official).toBe(1);
+    expect(storedRun.evidenceSummary?.sourcePriorityCounts?.official).toBe(2);
     expect(storedRun.evidenceSummary?.sourcePriorityCounts?.primary_data).toBe(1);
   });
 
@@ -228,6 +252,7 @@ describe("source coverage repair in executeResearchRun", () => {
         })
       ],
       research: {
+        domainTargetedDiscover: async () => makeDomainDiscoveryResult([]),
         router: () => ({
           primary: "scrapling",
           fallbacks: [],
@@ -280,6 +305,7 @@ describe("source coverage repair in executeResearchRun", () => {
         })
       ],
       research: {
+        domainTargetedDiscover: async () => makeDomainDiscoveryResult([]),
         router: () => ({
           primary: "scrapling",
           fallbacks: [],
@@ -297,11 +323,14 @@ describe("source coverage repair in executeResearchRun", () => {
     const storedRun = await readRunRecord(project.project.id, run.run.id);
 
     expect(repairCalls).toBe(1);
-    expect(storedRun.artifacts).toHaveLength(1);
+    expect(storedRun.artifacts).toHaveLength(2);
     expect(storedRun.retrievalAttemptGaps?.summary.emptyResultCount).toBe(1);
     expect(storedRun.retrievalAttemptGaps?.emptyResults.every(
       (gap) => gap.reason === "empty_adapter_result"
     )).toBe(true);
+    expect(
+      storedRun.artifacts.some((artifact) => artifact.metadata.repair_stage === "discovery")
+    ).toBe(true);
     expect(storedRun.evidenceSummary?.hasOfficialOrPrimaryEvidence).toBe(false);
   });
 
@@ -328,6 +357,7 @@ describe("source coverage repair in executeResearchRun", () => {
         })
       ],
       research: {
+        domainTargetedDiscover: async () => makeDomainDiscoveryResult([]),
         router: () => ({
           primary: "scrapling",
           fallbacks: [],
@@ -364,6 +394,9 @@ describe("source coverage repair in executeResearchRun", () => {
     expect(repairUrls).toEqual([expect.stringMatching(/^https:\/\/s\.jina\.ai\/\?q=/)]);
     expect(repairArtifacts).toHaveLength(1);
     expect(repairArtifacts[0]?.metadata.repair_stage).toBe("discovery");
+    expect(repairArtifacts[0]?.metadata.repair_discovery_source).toBe("domain_targeted_search");
+    expect(repairArtifacts[0]?.metadata.repair_candidate_count).toBe("0");
+    expect(repairArtifacts[0]?.metadata.repair_allowed_url_count).toBe("0");
     expect(repairArtifacts[0]?.metadata.repair_fallback_attempted).toBe("true");
     expect(repairArtifacts[0]?.metadata.repair_fallback_source).toBe("community_search_json");
     expect(repairArtifacts[0]?.metadata.repair_fallback_candidate_count).toBe("0");
@@ -405,6 +438,7 @@ describe("source coverage repair in executeResearchRun", () => {
         })
       ],
       research: {
+        domainTargetedDiscover: async () => makeDomainDiscoveryResult([]),
         router: () => ({
           primary: "scrapling",
           fallbacks: [],
@@ -475,6 +509,11 @@ describe("source coverage repair in executeResearchRun", () => {
     const primaryDiscoveryArtifact = storedRun.artifacts.find(
       (artifact) => artifact.metadata.repair_stage === "discovery"
     );
+    expect(primaryDiscoveryArtifact?.metadata.repair_discovery_source).toBe(
+      "domain_targeted_search"
+    );
+    expect(primaryDiscoveryArtifact?.metadata.repair_candidate_count).toBe("0");
+    expect(primaryDiscoveryArtifact?.metadata.repair_allowed_url_count).toBe("0");
     expect(primaryDiscoveryArtifact?.metadata.repair_fallback_attempted).toBe("true");
     expect(primaryDiscoveryArtifact?.metadata.repair_fallback_source).toBe("community_search_json");
     expect(primaryDiscoveryArtifact?.metadata.repair_fallback_candidate_count).toBe("2");

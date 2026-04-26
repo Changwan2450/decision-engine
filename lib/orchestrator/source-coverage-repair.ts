@@ -1,3 +1,8 @@
+import {
+  buildDomainTargetedSearchUrl,
+  type DomainTargetedDiscoveryCandidate
+} from "@/lib/adapters/domain-targeted-search";
+
 export type SourceCoverageRepairTrigger = {
   hasOfficialOrPrimaryEvidence?: boolean;
   sourceCoverageWarnings?: string[];
@@ -7,6 +12,7 @@ export type SourceCoverageRepairPlan = {
   shouldRun: boolean;
   reason: "no_official_or_primary_evidence" | null;
   discovery: {
+    source: "domain_targeted_search";
     url: string;
     query: string;
     repairPass: "source_coverage_v1";
@@ -19,16 +25,10 @@ const REPAIR_PASS = "source_coverage_v1" as const;
 const REPAIR_STAGE_DISCOVERY = "discovery" as const;
 const REPAIR_REASON = "no_official_or_primary_evidence" as const;
 const MAX_FOLLOW_URLS = 3;
-const DISCOVERY_HOST = "s.jina.ai";
+const DISCOVERY_HOSTS = new Set(["s.jina.ai", "r.jina.ai"]);
 const OFFICIAL_REPAIR_HOSTS = ["openai.com", "anthropic.com"] as const;
 const PRIMARY_REPAIR_HOSTS = ["arxiv.org", "acm.org"] as const;
 const ALL_REPAIR_HOSTS = [...OFFICIAL_REPAIR_HOSTS, ...PRIMARY_REPAIR_HOSTS] as const;
-
-function buildJinaSearchUrl(query: string): string {
-  const params = new URLSearchParams();
-  params.set("q", query);
-  return `https://s.jina.ai/?${params.toString()}`;
-}
 
 function uniqueQueries(values: string[]): string[] {
   const seen = new Set<string>();
@@ -76,7 +76,8 @@ export function planSourceCoverageRepair(input: {
     shouldRun: true,
     reason: REPAIR_REASON,
     discovery: {
-      url: buildJinaSearchUrl(query),
+      source: "domain_targeted_search",
+      url: buildDomainTargetedSearchUrl(query),
       query,
       repairPass: REPAIR_PASS,
       repairStage: REPAIR_STAGE_DISCOVERY,
@@ -92,7 +93,7 @@ function hostMatches(host: string, knownHost: string): boolean {
 export function isAllowedOfficialPrimaryRepairHost(host: string): boolean {
   const normalized = host.trim().toLowerCase();
   if (!normalized) return false;
-  if (normalized === DISCOVERY_HOST || normalized === "r.jina.ai") return false;
+  if (DISCOVERY_HOSTS.has(normalized)) return false;
   return ALL_REPAIR_HOSTS.some((knownHost) => hostMatches(normalized, knownHost));
 }
 
@@ -238,4 +239,14 @@ export function extractAllowedUrlsFromCommunitySearchJson(input: {
   } catch {
     return [];
   }
+}
+
+export function extractAllowedRepairUrlsFromCandidates(
+  candidates: Array<Pick<DomainTargetedDiscoveryCandidate, "url">>,
+  limit = MAX_FOLLOW_URLS
+): string[] {
+  return dedupeAllowedUrls(
+    candidates.map((candidate) => candidate.url),
+    limit
+  );
 }

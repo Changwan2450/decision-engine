@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { buildFailureArtifact } from "@/lib/adapters/contract";
+import { buildArtifact, buildFailureArtifact } from "@/lib/adapters/contract";
+import {
+  discoverDomainTargetedCandidates,
+  type DomainTargetedDiscoveryResult
+} from "@/lib/adapters/domain-targeted-search";
 import { createAdapterRegistry, type AdapterRegistry } from "@/lib/adapters/registry";
 import { routeUrl, type AdapterChain, type AdapterName } from "@/lib/adapters/router";
 import { inferSourceTier } from "@/lib/adapters/source-tier";
@@ -32,6 +36,7 @@ import {
 } from "@/lib/orchestrator/research-quality-contract";
 import {
   classifyRepairHost,
+  extractAllowedRepairUrlsFromCandidates,
   extractAllowedUrlsFromCommunitySearchJson,
   extractAllowedRepairUrlsFromDiscovery,
   planSourceCoverageRepair
@@ -64,6 +69,7 @@ type RunResearchDeps = {
   budgets?: Partial<ResearchBudgetConfig>;
   nowMs?: () => number;
   nowIso?: () => string;
+  domainTargetedDiscover?: (query: string) => Promise<DomainTargetedDiscoveryResult>;
   onEmptyAdapterResult?: (gap: EmptyAdapterResultGap) => void;
 };
 
@@ -313,6 +319,11 @@ function buildSourceCoverageRepairPlan(
 function markDiscoveryRepairArtifact(
   artifact: SourceArtifact,
   repairPlan: ReturnType<typeof planSourceCoverageRepair>,
+  discoverySummary?: {
+    source: string;
+    candidateCount: number;
+    allowedUrlCount: number;
+  },
   fallbackSummary?: {
     attempted: boolean;
     source: "community_search_json";
@@ -332,6 +343,13 @@ function markDiscoveryRepairArtifact(
       repair_pass: discovery.repairPass,
       repair_stage: discovery.repairStage,
       repair_reason: discovery.repairReason,
+      ...(discoverySummary
+        ? {
+            repair_discovery_source: discoverySummary.source,
+            repair_candidate_count: String(discoverySummary.candidateCount),
+            repair_allowed_url_count: String(discoverySummary.allowedUrlCount)
+          }
+        : {}),
       repair_query: truncateTelemetryValue(discovery.query),
       ...(fallbackSummary?.attempted
         ? {
@@ -350,7 +368,8 @@ function markFollowedRepairArtifacts(
   artifacts: SourceArtifact[],
   discoveryArtifactId: string,
   followedUrls: string[],
-  repairReason: "no_official_or_primary_evidence"
+  repairReason: "no_official_or_primary_evidence",
+  discoverySource: string
 ): SourceArtifact[] {
   const followRankByUrl = new Map(followedUrls.map((url, index) => [url, index]));
 
@@ -367,6 +386,7 @@ function markFollowedRepairArtifacts(
         repair_pass: "source_coverage_v1",
         repair_stage: "evidence",
         repair_reason: repairReason,
+        repair_discovery_source: discoverySource,
         repair_discovery_artifact_id: discoveryArtifactId,
         repair_follow_rank: String(followRank),
         repair_source_host_class: hostClass ?? ""
@@ -463,6 +483,38 @@ async function extractFallbackRepairUrlsFromCommunityArtifacts(
     candidateCount,
     allowedUrlCount: urls.length
   };
+}
+
+function buildDomainDiscoveryArtifact(input: {
+  query: string;
+  searchUrl: string;
+  result: DomainTargetedDiscoveryResult;
+  retrievedAt: string;
+}): SourceArtifact {
+  const lines = input.result.candidates.map((candidate) =>
+    [candidate.title?.trim(), candidate.url, candidate.snippet?.trim()]
+      .filter(Boolean)
+      .join(" — ")
+  );
+
+  return buildArtifact({
+    id: "domain-targeted-search-discovery-0",
+    adapter: "domain-targeted-search",
+    fetcher: "domain-targeted-search",
+    sourceType: "web",
+    url: input.searchUrl,
+    title: "Domain targeted search results",
+    snippet: lines.slice(0, 3).join("\n"),
+    content: lines.join("\n"),
+    sourcePriority: "analysis",
+    retrievedAt: input.retrievedAt,
+    outcome: { status: input.result.errors.length > 0 ? "partial" : "success" },
+    sourceLabel: "web/discovery",
+    extra: {
+      repair_query: truncateTelemetryValue(input.query),
+      search_error_count: String(input.result.errors.length)
+    }
+  });
 }
 
 function isRecencySensitive(plan: ResearchPlan): boolean {
@@ -893,30 +945,55 @@ export async function executeResearchRun(
     });
 
     if (repairPlan.shouldRun && repairPlan.discovery) {
-      const discoveryArtifacts = await runResearch(
-        buildSourceCoverageRepairPlan(plan, [repairPlan.discovery.url]),
-        {
-          ...deps?.research,
-          nowIso: () => now,
-          onEmptyAdapterResult: (gap) => {
-            deps?.research?.onEmptyAdapterResult?.(gap);
-            emptyResults.push(gap);
-          }
-        }
+      const domainDiscovery = await (deps?.research?.domainTargetedDiscover ??
+        discoverDomainTargetedCandidates)(repairPlan.discovery.query);
+      const domainFollowedUrls = extractAllowedRepairUrlsFromCandidates(
+        domainDiscovery.candidates,
+        3
       );
-      const discoveryRepresentative =
-        discoveryArtifacts.find(isUsableArtifact) ?? discoveryArtifacts.at(-1);
-      const primaryFollowedUrls = discoveryRepresentative
-        ? extractAllowedRepairUrlsFromDiscovery({
-            content: discoveryRepresentative.content,
-            snippet: discoveryRepresentative.snippet,
-            title: discoveryRepresentative.title,
-            metadata: discoveryRepresentative.metadata,
-            limit: 3
-          })
-        : [];
-      const primaryDiscoveryBlocked =
-        discoveryRepresentative?.metadata.fetch_status === "blocked";
+      const domainDiscoveryArtifact = buildDomainDiscoveryArtifact({
+        query: repairPlan.discovery.query,
+        searchUrl: repairPlan.discovery.url,
+        result: domainDiscovery,
+        retrievedAt: now
+      });
+      let discoveryArtifacts: SourceArtifact[] = [domainDiscoveryArtifact];
+      let discoveryRepresentative: SourceArtifact | undefined = domainDiscoveryArtifact;
+      let primaryFollowedUrls = domainFollowedUrls;
+      let primaryDiscoveryBlocked = false;
+
+      if (primaryFollowedUrls.length === 0) {
+        const fallbackDiscoveryArtifacts = await runResearch(
+          buildSourceCoverageRepairPlan(plan, [
+            `https://s.jina.ai/?q=${encodeURIComponent(repairPlan.discovery.query)}`
+          ]),
+          {
+            ...deps?.research,
+            nowIso: () => now,
+            onEmptyAdapterResult: (gap) => {
+              deps?.research?.onEmptyAdapterResult?.(gap);
+              emptyResults.push(gap);
+            }
+          }
+        );
+        discoveryArtifacts = [...discoveryArtifacts, ...fallbackDiscoveryArtifacts];
+        const fallbackRepresentative =
+          fallbackDiscoveryArtifacts.find(isUsableArtifact) ?? fallbackDiscoveryArtifacts.at(-1);
+        const fallbackFollowedUrls = fallbackRepresentative
+          ? extractAllowedRepairUrlsFromDiscovery({
+              content: fallbackRepresentative.content,
+              snippet: fallbackRepresentative.snippet,
+              title: fallbackRepresentative.title,
+              metadata: fallbackRepresentative.metadata,
+              limit: 3
+            })
+          : [];
+        if (fallbackRepresentative) {
+          discoveryRepresentative = fallbackRepresentative;
+        }
+        primaryFollowedUrls = fallbackFollowedUrls;
+        primaryDiscoveryBlocked = fallbackRepresentative?.metadata.fetch_status === "blocked";
+      }
       const discoveredArtifactsWithBlockFlag =
         primaryDiscoveryBlocked && discoveryRepresentative
           ? discoveryArtifacts.map((artifact) =>
@@ -942,16 +1019,33 @@ export async function executeResearchRun(
               allowedUrlCount: 0
             };
       const markedDiscoveryArtifacts = discoveredArtifactsWithBlockFlag.map((artifact) =>
-        markDiscoveryRepairArtifact(artifact, repairPlan, {
-          attempted: primaryDiscoveryBlocked || primaryFollowedUrls.length === 0,
-          source: "community_search_json",
-          candidateCount: fallbackDiscovery.candidateCount,
-          allowedUrlCount: fallbackDiscovery.allowedUrlCount,
-          rawSourcesChecked: fallbackDiscovery.rawSourcesChecked
-        })
+        markDiscoveryRepairArtifact(
+          artifact,
+          repairPlan,
+          artifact.id === domainDiscoveryArtifact.id
+            ? {
+                source: "domain_targeted_search",
+                candidateCount: domainDiscovery.rawResultCount,
+                allowedUrlCount: domainDiscovery.allowedResultCount
+              }
+            : undefined,
+          {
+            attempted: primaryDiscoveryBlocked || primaryFollowedUrls.length === 0,
+            source: "community_search_json",
+            candidateCount: fallbackDiscovery.candidateCount,
+            allowedUrlCount: fallbackDiscovery.allowedUrlCount,
+            rawSourcesChecked: fallbackDiscovery.rawSourcesChecked
+          }
+        )
       );
       const followedUrls =
         primaryFollowedUrls.length > 0 ? primaryFollowedUrls : fallbackDiscovery.urls;
+      const followedDiscoverySource =
+        domainFollowedUrls.length > 0
+          ? "domain_targeted_search"
+          : primaryFollowedUrls.length > 0
+            ? "jina_search"
+            : "community_search_json";
       const followedArtifacts =
         followedUrls.length > 0
           ? markFollowedRepairArtifacts(
@@ -965,7 +1059,8 @@ export async function executeResearchRun(
               }),
               discoveryRepresentative?.id ?? "repair-discovery-0",
               followedUrls,
-              repairPlan.reason ?? "no_official_or_primary_evidence"
+              repairPlan.reason ?? "no_official_or_primary_evidence",
+              followedDiscoverySource
             )
           : [];
       const repairedArtifacts = attachSourceTiers(
