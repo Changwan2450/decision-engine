@@ -805,6 +805,18 @@ describe("cli bundle", () => {
       discoveryErrors: [],
       outcome: "not_attempted"
     });
+    expect(bundle.operatorBrief).toMatchObject({
+      version: "v0",
+      decisionSummary: "go (medium): 고우선 근거가 충분하다.",
+      confidenceStatus: "inconclusive",
+      repairSummary: {
+        sourceCoverageOutcome: "not_attempted",
+        counterevidenceOutcome: "not_attempted",
+        sourceCoverageFollowedCount: 0,
+        counterevidenceFollowedCount: 0,
+        failedFollowAttemptCount: 0
+      }
+    });
     expect(bundle.decisionHistory).toHaveLength(1);
     expect(bundle.kb.promotionCandidates).toHaveLength(1);
     expect(bundle.kb.relatedRuns).toEqual(relatedRuns);
@@ -843,6 +855,9 @@ describe("cli bundle", () => {
 
     expect(markdown).toContain("# Decision Engine Bundle");
     expect(markdown).toContain("## Latest Run");
+    expect(markdown).toContain("## Operator Brief");
+    expect(markdown).toContain("### Evidence Status");
+    expect(markdown).toContain("### Repair Outcomes");
     expect(markdown).toContain("## Project Insights");
     expect(markdown).toContain("## Evidence Diagnostics");
     expect(markdown).toContain("## Evidence Replay");
@@ -995,6 +1010,66 @@ describe("cli bundle", () => {
     expect(serialized).not.toContain("SECRET_CLAIM_TAIL");
     expect(bundle.evidenceReplay.topArtifacts[1]?.snippet.length).toBeLessThanOrEqual(240);
     expect(bundle.evidenceReplay.topClaims[0]?.text.length).toBeLessThanOrEqual(240);
+  });
+
+  it("includes operator brief in JSON and markdown without unsafe fields", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: evidenceReplayRun,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    expect(bundle.operatorBrief.version).toBe("v0");
+    expect(bundle.operatorBrief.confidenceStatus).toBe("not_ready");
+    expect(bundle.operatorBrief.evidenceStatus).toMatchObject({
+      decision: "go",
+      confidence: "medium",
+      falseConvergenceRisk: true,
+      hasOfficialOrPrimaryEvidence: false,
+      counterevidenceChecked: false,
+      weakEvidence: true
+    });
+    expect(bundle.operatorBrief.strongestEvidence).toContainEqual(
+      expect.objectContaining({
+        artifactId: "artifact-official",
+        sourcePriority: "official",
+        sourceTier: "official"
+      })
+    );
+    expect(bundle.operatorBrief.strongestEvidence).not.toContainEqual(
+      expect.objectContaining({ artifactId: "artifact-blocked" })
+    );
+    expect(bundle.operatorBrief.strongestEvidence).not.toContainEqual(
+      expect.objectContaining({ artifactId: "artifact-timeout" })
+    );
+    expect(bundle.operatorBrief.unresolvedGaps).toContain("counterevidence_not_checked");
+    expect(bundle.operatorBrief.operatorNextActions).toContain(
+      "Collect or repair official/primary evidence before using this result."
+    );
+    expect(bundle.operatorBrief.doNotOverclaim).toContain(
+      "Do not claim the conclusion is settled while falseConvergenceRisk is true."
+    );
+
+    const markdown = renderCliBundleMarkdown(bundle);
+    expect(markdown).toContain("## Operator Brief");
+    expect(markdown).toContain("- Decision summary: go (medium): 고우선 근거가 충분하다.");
+    expect(markdown).toContain("### Strongest Evidence");
+    expect(markdown).toContain("Official Evidence");
+    expect(markdown).toContain("### Do Not Overclaim");
+
+    const serialized = JSON.stringify(bundle);
+    const combined = `${serialized}\n${markdown}`;
+    expect(combined).not.toContain("RAW_HTML_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("OFFICIAL_FULL_CONTENT_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("project/run/raw");
+    expect(combined).not.toContain("AUTH_ERROR_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("ERROR_FIELD_SHOULD_NOT_EXPORT");
   });
 
   it("renders concise evidence replay in markdown", () => {

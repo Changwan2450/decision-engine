@@ -2,6 +2,7 @@ import type { DecisionHistoryItem } from "@/lib/orchestrator/decision-history";
 import type { ProjectInsightPatch } from "@/lib/orchestrator/insights";
 import type { Project } from "@/lib/domain/projects";
 import type { RunRecord, ProjectRecord } from "@/lib/storage/schema";
+import { buildOperatorBrief, type OperatorBrief } from "@/lib/bridge/operator-brief";
 
 export type CliBridgeProvider = "claude" | "codex";
 export type CliBridgeMode = "prompt_only" | "cli_execute";
@@ -252,6 +253,7 @@ export type CliBridgeBundle = {
   evidenceReplay: EvidenceReplay;
   retrievalAttemptGaps: RetrievalAttemptGaps;
   repairAttempts: RepairAttempts;
+  operatorBrief: OperatorBrief;
   runtimeProvenance: RuntimeProvenance | null;
   decisionHistory: DecisionHistoryItem[];
   kb: {
@@ -885,19 +887,31 @@ export function buildCliBundle(params: {
     throw new Error("latestRun.decision is required for cli bundle");
   }
 
+  const latestRun = {
+    id: params.latestRun.run.id,
+    decision: params.latestRun.decision.value,
+    confidence: params.latestRun.decision.confidence,
+    why: params.latestRun.decision.why,
+    blockingUnknowns: params.latestRun.decision.blockingUnknowns
+  };
+  const evidenceReplay = buildEvidenceReplay(params.latestRun, evidenceDiagnostics);
+  const retrievalAttemptGaps = buildRetrievalAttemptGaps(params.latestRun);
+  const repairAttempts = buildRepairAttempts(params.latestRun, evidenceDiagnostics);
+  const operatorBrief = buildOperatorBrief({
+    latestRun,
+    evidenceDiagnostics,
+    evidenceReplay,
+    retrievalAttemptGaps,
+    repairAttempts
+  });
+
   return {
     project: {
       id: params.project.id,
       name: params.project.name,
       description: params.project.description
     },
-    latestRun: {
-      id: params.latestRun.run.id,
-      decision: params.latestRun.decision.value,
-      confidence: params.latestRun.decision.confidence,
-      why: params.latestRun.decision.why,
-      blockingUnknowns: params.latestRun.decision.blockingUnknowns
-    },
+    latestRun,
     insights: {
       repeatedProblems: params.insights.repeatedProblems,
       solutionPatterns: params.insights.repeatedPatterns,
@@ -905,9 +919,10 @@ export function buildCliBundle(params: {
       conflicts: params.insights.contradictionIds ?? []
     },
     evidenceDiagnostics,
-    evidenceReplay: buildEvidenceReplay(params.latestRun, evidenceDiagnostics),
-    retrievalAttemptGaps: buildRetrievalAttemptGaps(params.latestRun),
-    repairAttempts: buildRepairAttempts(params.latestRun, evidenceDiagnostics),
+    evidenceReplay,
+    retrievalAttemptGaps,
+    repairAttempts,
+    operatorBrief,
     runtimeProvenance: params.latestRun.runtimeProvenance ?? null,
     decisionHistory: params.decisionHistory,
     kb: {
@@ -959,6 +974,57 @@ function renderRuntimeProvenance(provenance: RuntimeProvenance | null): string {
     `- Node version: ${provenance.nodeVersion}`,
     `- Process start time: ${provenance.processStartTime}`,
     `- Entrypoint: ${provenance.entrypoint ?? "unknown"}`
+  ].join("\n");
+}
+
+function renderOperatorBrief(brief: OperatorBrief): string {
+  const evidenceStatus = [
+    `- Decision: ${brief.evidenceStatus.decision} (${brief.evidenceStatus.confidence})`,
+    `- Confidence status: ${brief.confidenceStatus}`,
+    `- Decisiveness: ${brief.evidenceStatus.decisiveEvidenceScore ?? "unknown"}`,
+    `- False convergence risk: ${brief.evidenceStatus.falseConvergenceRisk ?? "unknown"}`,
+    `- Official/primary evidence: ${brief.evidenceStatus.hasOfficialOrPrimaryEvidence ?? "unknown"}`,
+    `- Counterevidence checked: ${brief.evidenceStatus.counterevidenceChecked ?? "unknown"}`,
+    `- Weak evidence: ${brief.evidenceStatus.weakEvidence ?? "unknown"}`
+  ].join("\n");
+  const strongestEvidence =
+    brief.strongestEvidence.length > 0
+      ? brief.strongestEvidence
+          .map(
+            (item) =>
+              `- [${item.sourcePriority ?? "unknown"}/${item.sourceTier ?? "unknown"}] ${item.title ?? item.artifactId}${item.url ? ` — ${item.url}` : ""}\n` +
+              `  - artifact: ${item.artifactId}; trust: ${item.trustTier ?? "unknown"}`
+          )
+          .join("\n")
+      : "- none";
+
+  return [
+    `- Headline: ${brief.headline}`,
+    `- Status: ${brief.confidenceStatus}`,
+    `- Decision summary: ${brief.decisionSummary}`,
+    "",
+    "### Evidence Status",
+    evidenceStatus,
+    "",
+    "### Repair Outcomes",
+    `- Source coverage: ${brief.repairSummary.sourceCoverageOutcome} (${brief.repairSummary.sourceCoverageFollowedCount} followed)`,
+    `- Counterevidence: ${brief.repairSummary.counterevidenceOutcome} (${brief.repairSummary.counterevidenceFollowedCount} followed)`,
+    `- Failed follow attempts: ${brief.repairSummary.failedFollowAttemptCount}`,
+    "",
+    "### Strongest Evidence",
+    strongestEvidence,
+    "",
+    "### Unresolved Gaps",
+    renderList(brief.unresolvedGaps),
+    "",
+    "### Next Actions",
+    renderList(brief.operatorNextActions),
+    "",
+    "### AI Handoff",
+    renderList(brief.aiHandoffInstructions),
+    "",
+    "### Do Not Overclaim",
+    renderList(brief.doNotOverclaim)
   ].join("\n");
 }
 
@@ -1305,6 +1371,9 @@ export function renderCliBundleMarkdown(bundle: CliBridgeBundle): string {
     `- confidence: ${bundle.latestRun.confidence}`,
     `- why: ${bundle.latestRun.why}`,
     `- blocking unknowns: ${bundle.latestRun.blockingUnknowns.join(", ") || "none"}`,
+    "",
+    "## Operator Brief",
+    renderOperatorBrief(bundle.operatorBrief),
     "",
     "## Project Insights",
     "### Repeated Problems",
