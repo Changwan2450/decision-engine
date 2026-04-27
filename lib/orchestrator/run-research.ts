@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { buildArtifact, buildFailureArtifact } from "@/lib/adapters/contract";
 import {
+  buildDomainTargetedSearchUrl,
   discoverDomainTargetedCandidates,
   type DomainTargetedDiscoveryResult
 } from "@/lib/adapters/domain-targeted-search";
@@ -19,6 +20,7 @@ import {
 } from "@/lib/export/obsidian";
 import { buildClarificationQuestions, shouldClarifyRun } from "@/lib/orchestrator/clarify";
 import { classifyContradictionKind } from "@/lib/orchestrator/contradiction-kind";
+import { planCounterevidenceRepair } from "@/lib/orchestrator/counterevidence-repair";
 import { buildDecision } from "@/lib/orchestrator/decision";
 import { buildDecisionHistory } from "@/lib/orchestrator/decision-history";
 import {
@@ -424,6 +426,152 @@ function markFallbackDiscoveryArtifacts(
         repair_stage: "discovery_fallback",
         repair_discovery_source: "community_search_json",
         repair_candidate_count: String(candidateCount)
+      }
+    };
+  });
+}
+
+function inferCounterevidenceKind(query: string):
+  | "limitation"
+  | "risk"
+  | "failure_case"
+  | "methodological_caveat"
+  | "benchmark_disagreement"
+  | "unknown" {
+  const normalized = query.toLowerCase();
+  if (/benchmark|disagreement/.test(normalized)) return "benchmark_disagreement";
+  if (/methodolog|evaluation limitation/.test(normalized)) return "methodological_caveat";
+  if (/limitation|known issue/.test(normalized)) return "limitation";
+  if (/risk/.test(normalized)) return "risk";
+  if (/failure/.test(normalized)) return "failure_case";
+  return "unknown";
+}
+
+function normalizeCounterevidenceCandidateUrl(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl);
+    if (!/^https?:$/.test(parsed.protocol)) return null;
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === "html.duckduckgo.com" ||
+      host === "duckduckgo.com" ||
+      host === "s.jina.ai" ||
+      host === "r.jina.ai" ||
+      host === "reddit.com" ||
+      host.endsWith(".reddit.com") ||
+      host === "news.ycombinator.com" ||
+      host === "hn.algolia.com"
+    ) {
+      return null;
+    }
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function extractCounterevidenceFollowUrls(input: {
+  candidates: DomainTargetedDiscoveryResult["candidates"];
+  maxCandidates: number;
+  maxFollowUrls: number;
+  seenUrls: Set<string>;
+}): { urls: string[]; allowedUrlCount: number; candidateCount: number } {
+  const limitedCandidates = input.candidates.slice(0, input.maxCandidates);
+  const allowedUrls: string[] = [];
+
+  for (const candidate of limitedCandidates) {
+    const normalized = normalizeCounterevidenceCandidateUrl(candidate.url);
+    if (!normalized || input.seenUrls.has(normalized)) continue;
+    allowedUrls.push(normalized);
+  }
+
+  return {
+    urls: allowedUrls.slice(0, input.maxFollowUrls),
+    allowedUrlCount: allowedUrls.length,
+    candidateCount: limitedCandidates.length
+  };
+}
+
+function buildCounterevidenceDiscoveryArtifact(input: {
+  index: number;
+  query: string;
+  result: DomainTargetedDiscoveryResult;
+  reason: string;
+  candidateCount: number;
+  allowedUrlCount: number;
+  retrievedAt: string;
+}): SourceArtifact {
+  const lines = input.result.candidates
+    .slice(0, input.candidateCount)
+    .map((candidate) =>
+      [candidate.title?.trim(), candidate.url, candidate.snippet?.trim()]
+        .filter(Boolean)
+        .join(" — ")
+    );
+
+  return buildArtifact({
+    id: `counterevidence-discovery-${input.index}`,
+    adapter: "domain-targeted-search",
+    fetcher: "domain-targeted-search",
+    sourceType: "web",
+    url: buildDomainTargetedSearchUrl(input.query),
+    title: "Counterevidence repair discovery",
+    snippet: lines.slice(0, 3).join("\n"),
+    content: lines.join("\n"),
+    sourcePriority: "analysis",
+    retrievedAt: input.retrievedAt,
+    outcome: { status: input.result.errors.length > 0 ? "partial" : "success" },
+    sourceLabel: "web/discovery",
+    extra: {
+      repair_pass: "counterevidence_v0",
+      repair_stage: "discovery",
+      repair_reason: input.reason,
+      repair_query: truncateTelemetryValue(input.query),
+      repair_candidate_count: String(input.candidateCount),
+      repair_allowed_url_count: String(input.allowedUrlCount),
+      repair_discovery_error_count: String(input.result.errors.length),
+      ...(input.result.errors.length > 0
+        ? {
+            repair_discovery_errors: input.result.errors
+              .map((error) => truncateTelemetryValue(error))
+              .join(",")
+          }
+        : {}),
+      repair_counterevidence_kind: inferCounterevidenceKind(input.query)
+    }
+  });
+}
+
+function markCounterevidenceArtifacts(
+  artifacts: SourceArtifact[],
+  followEntries: Array<{ url: string; query: string; rank: number; reason: string }>
+): SourceArtifact[] {
+  const entryByUrl = new Map(followEntries.map((entry) => [entry.url, entry]));
+
+  return artifacts.map((artifact) => {
+    const url = artifact.canonicalUrl ?? artifact.url;
+    const entry = entryByUrl.get(url);
+    if (!entry) return artifact;
+
+    let hostClass = "analysis";
+    try {
+      hostClass = classifyRepairHost(new URL(url).hostname) ?? "analysis";
+    } catch {
+      hostClass = "analysis";
+    }
+
+    return {
+      ...artifact,
+      metadata: {
+        ...artifact.metadata,
+        repair_pass: "counterevidence_v0",
+        repair_stage: "evidence",
+        repair_reason: entry.reason,
+        repair_query: truncateTelemetryValue(entry.query),
+        repair_follow_rank: String(entry.rank),
+        repair_counterevidence_kind: inferCounterevidenceKind(entry.query),
+        repair_source_host_class: hostClass
       }
     };
   });
@@ -948,6 +1096,7 @@ export async function executeResearchRun(
       now,
       recencySensitive: isRecencySensitive(plan)
     });
+    let counterevidenceVisibilityArtifacts: SourceArtifact[] = [];
     const repairPlan = planSourceCoverageRepair({
       title: plan.title,
       goal: plan.normalizedInput.goal,
@@ -1090,6 +1239,111 @@ export async function executeResearchRun(
         recencySensitive: isRecencySensitive(plan)
       });
     }
+
+    const counterevidencePlan = planCounterevidenceRepair({
+      title: plan.title,
+      goal: plan.normalizedInput.goal,
+      evidenceSummary: synthesis.summary,
+      claims: synthesis.claims,
+      contradictions: synthesis.contradictions
+    });
+
+    if (counterevidencePlan.shouldAttempt) {
+      const reason = counterevidencePlan.reasons[0] ?? "counterevidence_not_checked";
+      const discoveryArtifacts: SourceArtifact[] = [];
+      const followEntries: Array<{ url: string; query: string; rank: number; reason: string }> = [];
+      const seenUrls = new Set(
+        synthesis.artifacts
+          .map((artifact) => normalizeCounterevidenceCandidateUrl(artifact.canonicalUrl ?? artifact.url))
+          .filter((url): url is string => Boolean(url))
+      );
+      let remainingCandidateBudget = counterevidencePlan.maxCandidates;
+
+      for (const [index, query] of counterevidencePlan.queries.entries()) {
+        if (remainingCandidateBudget <= 0 || followEntries.length >= counterevidencePlan.maxFollowUrls) {
+          break;
+        }
+
+        const domainDiscovery = await (deps?.research?.domainTargetedDiscover ??
+          discoverDomainTargetedCandidates)(query);
+        const remainingFollowBudget = counterevidencePlan.maxFollowUrls - followEntries.length;
+        const selected = extractCounterevidenceFollowUrls({
+          candidates: domainDiscovery.candidates,
+          maxCandidates: remainingCandidateBudget,
+          maxFollowUrls: remainingFollowBudget,
+          seenUrls
+        });
+
+        discoveryArtifacts.push(
+          buildCounterevidenceDiscoveryArtifact({
+            index,
+            query,
+            result: domainDiscovery,
+            reason,
+            candidateCount: selected.candidateCount,
+            allowedUrlCount: selected.allowedUrlCount,
+            retrievedAt: now
+          })
+        );
+        remainingCandidateBudget -= selected.candidateCount;
+
+        for (const url of selected.urls) {
+          seenUrls.add(url);
+          followEntries.push({
+            url,
+            query,
+            rank: followEntries.length,
+            reason
+          });
+        }
+      }
+
+      const followedArtifacts =
+        followEntries.length > 0
+          ? markCounterevidenceArtifacts(
+              await runResearch(
+                buildSourceCoverageRepairPlan(
+                  plan,
+                  followEntries.map((entry) => entry.url)
+                ),
+                {
+                  ...deps?.research,
+                  nowIso: () => now,
+                  onEmptyAdapterResult: (gap) => {
+                    deps?.research?.onEmptyAdapterResult?.(gap);
+                    emptyResults.push(gap);
+                  }
+                }
+              ),
+              followEntries
+            )
+          : [];
+      const markedFollowedArtifacts = attachSourceTiers(followedArtifacts);
+      const usableCounterevidenceArtifacts = markedFollowedArtifacts.filter(isUsableArtifact);
+      const nonUsableCounterevidenceArtifacts = markedFollowedArtifacts.filter(
+        (artifact) => !isUsableArtifact(artifact)
+      );
+
+      counterevidenceVisibilityArtifacts = attachSourceTiers([
+        ...discoveryArtifacts,
+        ...nonUsableCounterevidenceArtifacts
+      ]);
+
+      if (usableCounterevidenceArtifacts.length > 0) {
+        synthesis = synthesizeEvidenceFromArtifacts(
+          attachSourceTiers(
+            dedupeGatheredArtifacts([
+              ...synthesis.artifacts,
+              ...usableCounterevidenceArtifacts
+            ])
+          ),
+          {
+            now,
+            recencySensitive: isRecencySensitive(plan)
+          }
+        );
+      }
+    }
     const decision = buildDecision(synthesis, {
       runTitle: plan.title,
       goal: plan.normalizedInput.goal ?? plan.title
@@ -1099,7 +1353,12 @@ export async function executeResearchRun(
       target: plan.normalizedInput.target,
       comparisonAxis: plan.normalizedInput.comparisonAxis
     });
-    const synthesizedArtifacts = attachSourceTiers(synthesis.artifacts);
+    const synthesizedArtifacts = attachSourceTiers(
+      dedupeGatheredArtifacts([
+        ...synthesis.artifacts,
+        ...counterevidenceVisibilityArtifacts
+      ])
+    );
     const contradictions = attachContradictionKinds(
       synthesis.contradictions,
       synthesis.claims,
