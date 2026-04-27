@@ -333,6 +333,8 @@ const repairBlockedRun: RunRecord = {
         repair_discovery_source: "domain_targeted_search",
         repair_candidate_count: "17",
         repair_allowed_url_count: "5",
+        repair_raw_result_count: "17",
+        repair_discovery_error_count: "0",
         fetch_status: "blocked",
         block_reason: "login",
         error: "REPAIR_DISCOVERY_ERROR_SHOULD_NOT_EXPORT"
@@ -369,6 +371,9 @@ const repairNoImprovementRun: RunRecord = {
         repair_discovery_source: "domain_targeted_search",
         repair_candidate_count: "17",
         repair_allowed_url_count: "5",
+        repair_raw_result_count: "17",
+        repair_discovery_error_count: "2",
+        repair_discovery_errors: "http_status_202,search_results_unavailable",
         fetch_status: "blocked",
         block_reason: "login"
       }
@@ -541,6 +546,8 @@ const repairFailedFollowOnlyRun: RunRecord = {
         repair_discovery_source: "domain_targeted_search",
         repair_candidate_count: "17",
         repair_allowed_url_count: "5",
+        repair_raw_result_count: "17",
+        repair_discovery_error_count: "0",
         fetch_status: "success"
       }
     },
@@ -996,6 +1003,9 @@ describe("cli bundle", () => {
     expect(bundle.repairAttempts.sourceCoverage.discoverySource).toBe("domain_targeted_search");
     expect(bundle.repairAttempts.sourceCoverage.candidateCount).toBe(17);
     expect(bundle.repairAttempts.sourceCoverage.allowedUrlCount).toBe(5);
+    expect(bundle.repairAttempts.sourceCoverage.rawResultCount).toBe(17);
+    expect(bundle.repairAttempts.sourceCoverage.discoveryErrorCount).toBe(0);
+    expect(bundle.repairAttempts.sourceCoverage.discoveryErrors).toEqual([]);
     expect(bundle.repairAttempts.sourceCoverage.primaryDiscovery).toEqual({
       attempted: true,
       blocked: true,
@@ -1012,6 +1022,8 @@ describe("cli bundle", () => {
     expect(markdown).toContain("- Discovery source: domain_targeted_search");
     expect(markdown).toContain("- Discovery candidates: 17");
     expect(markdown).toContain("- Discovery allowed URLs: 5");
+    expect(markdown).toContain("- Discovery raw results: 17");
+    expect(markdown).toContain("- Discovery error count: 0");
     expect(markdown).toContain("- Primary discovery: blocked");
     expect(markdown).toContain("- Outcome: blocked_primary");
     expect(markdown).toContain("- Followed evidence count: 0");
@@ -1034,6 +1046,12 @@ describe("cli bundle", () => {
     expect(bundle.repairAttempts.sourceCoverage.discoverySource).toBe("domain_targeted_search");
     expect(bundle.repairAttempts.sourceCoverage.candidateCount).toBe(17);
     expect(bundle.repairAttempts.sourceCoverage.allowedUrlCount).toBe(5);
+    expect(bundle.repairAttempts.sourceCoverage.rawResultCount).toBe(17);
+    expect(bundle.repairAttempts.sourceCoverage.discoveryErrorCount).toBe(2);
+    expect(bundle.repairAttempts.sourceCoverage.discoveryErrors).toEqual([
+      "http_status_202",
+      "search_results_unavailable"
+    ]);
     expect(bundle.repairAttempts.sourceCoverage.fallbackDiscovery).toEqual({
       attempted: true,
       candidateUrlCount: 2,
@@ -1084,6 +1102,9 @@ describe("cli bundle", () => {
     expect(markdown).toContain("- Discovery source: domain_targeted_search");
     expect(markdown).toContain("- Discovery candidates: 17");
     expect(markdown).toContain("- Discovery allowed URLs: 5");
+    expect(markdown).toContain("- Discovery raw results: 17");
+    expect(markdown).toContain("- Discovery error count: 2");
+    expect(markdown).toContain("- Discovery errors: http_status_202, search_results_unavailable");
     expect(markdown).toContain("- Fallback discovery: visible");
     expect(markdown).toContain("- Fallback candidate count: 2");
     expect(markdown).toContain("- Followed evidence count: 1");

@@ -116,6 +116,29 @@ describe("parseDomainTargetedSearchHtml()", () => {
     expect(result.allowedResultCount).toBe(0);
     expect(result.errors).toEqual(["no_result_links_found"]);
   });
+
+  it("detects an interstitial page without exporting raw html", () => {
+    const result = parseDomainTargetedSearchHtml(
+      "query",
+      `
+        <html>
+          <head><title> DuckDuckGo </title></head>
+          <body>
+            <center id="lite_wrapper">
+              <a href="/html/">DuckDuckGo</a>
+              <a href="https://duckduckgo.com/">here</a>
+            </center>
+          </body>
+        </html>
+      `
+    );
+
+    expect(result.candidates).toEqual([]);
+    expect(result.rawResultCount).toBe(1);
+    expect(result.allowedResultCount).toBe(0);
+    expect(result.errors).toContain("search_results_unavailable");
+    expect("html" in (result as unknown as Record<string, unknown>)).toBe(false);
+  });
 });
 
 describe("discoverDomainTargetedCandidates()", () => {
@@ -149,5 +172,22 @@ describe("discoverDomainTargetedCandidates()", () => {
 
     expect(result.candidates).toEqual([]);
     expect(result.errors).toEqual(["fetch_failed"]);
+  });
+
+  it("adds sanitized HTTP diagnostics for 202 interstitial responses", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 202,
+      text: async () =>
+        `<html><head><title> DuckDuckGo </title></head><body><center id="lite_wrapper"><a href="/html/">DuckDuckGo</a></center></body></html>`
+    }));
+
+    const result = await discoverDomainTargetedCandidates("query", { fetchImpl });
+
+    expect(result.candidates).toEqual([]);
+    expect(result.allowedResultCount).toBe(0);
+    expect(result.errors).toContain("http_status_202");
+    expect(result.errors).toContain("search_results_unavailable");
+    expect("html" in (result as unknown as Record<string, unknown>)).toBe(false);
   });
 });

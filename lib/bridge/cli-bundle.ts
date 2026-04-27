@@ -16,6 +16,9 @@ type RepairAttempts = {
     discoverySource?: string;
     candidateCount?: number;
     allowedUrlCount?: number;
+    rawResultCount?: number;
+    discoveryErrorCount?: number;
+    discoveryErrors: string[];
     primaryDiscovery: {
       attempted: boolean;
       blocked?: boolean;
@@ -532,6 +535,14 @@ function parseMetadataInt(value: unknown): number | undefined {
   return undefined;
 }
 
+function parseMetadataList(value: unknown): string[] {
+  if (typeof value !== "string" || value.trim().length === 0) return [];
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function isUsableFollowArtifact(artifact: RunRecord["artifacts"][number]): boolean {
   const fetchStatus = artifact.metadata.fetch_status;
   return fetchStatus === undefined || fetchStatus === "success" || fetchStatus === "ok" || fetchStatus === "partial";
@@ -612,6 +623,15 @@ function buildRepairAttempts(
   const allowedUrlCount = discoveryArtifacts
     .map((artifact) => parseMetadataInt(artifact.metadata.repair_allowed_url_count))
     .find((value): value is number => typeof value === "number");
+  const rawResultCount = discoveryArtifacts
+    .map((artifact) => parseMetadataInt(artifact.metadata.repair_raw_result_count))
+    .find((value): value is number => typeof value === "number");
+  const discoveryErrorCount = discoveryArtifacts
+    .map((artifact) => parseMetadataInt(artifact.metadata.repair_discovery_error_count))
+    .find((value): value is number => typeof value === "number");
+  const discoveryErrors = uniqueStrings(
+    discoveryArtifacts.flatMap((artifact) => parseMetadataList(artifact.metadata.repair_discovery_errors))
+  );
   const candidateUrlCount = rawCandidateCounts.length > 0
     ? rawCandidateCounts.reduce((sum, count) => sum + count, 0)
     : fallbackCandidateCountFromPrimary;
@@ -643,6 +663,9 @@ function buildRepairAttempts(
       discoverySource,
       candidateCount,
       allowedUrlCount,
+      rawResultCount,
+      discoveryErrorCount,
+      discoveryErrors,
       primaryDiscovery: {
         attempted: discoveryArtifacts.length > 0,
         blocked: discoveryArtifacts.length > 0 ? blockedPrimary : undefined,
@@ -966,6 +989,15 @@ function renderRepairAttempts(repairAttempts: RepairAttempts): string {
       : null,
     sourceCoverage.allowedUrlCount !== undefined
       ? `- Discovery allowed URLs: ${sourceCoverage.allowedUrlCount}`
+      : null,
+    sourceCoverage.rawResultCount !== undefined
+      ? `- Discovery raw results: ${sourceCoverage.rawResultCount}`
+      : null,
+    sourceCoverage.discoveryErrorCount !== undefined
+      ? `- Discovery error count: ${sourceCoverage.discoveryErrorCount}`
+      : null,
+    sourceCoverage.discoveryErrors.length > 0
+      ? `- Discovery errors: ${sourceCoverage.discoveryErrors.join(", ")}`
       : null,
     sourceCoverage.fallbackDiscovery.candidateUrlCount !== undefined
       ? `- Fallback candidate count: ${sourceCoverage.fallbackDiscovery.candidateUrlCount}`

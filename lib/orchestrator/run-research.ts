@@ -323,6 +323,8 @@ function markDiscoveryRepairArtifact(
     source: string;
     candidateCount: number;
     allowedUrlCount: number;
+    rawResultCount?: number;
+    errors?: string[];
   },
   fallbackSummary?: {
     attempted: boolean;
@@ -347,7 +349,18 @@ function markDiscoveryRepairArtifact(
         ? {
             repair_discovery_source: discoverySummary.source,
             repair_candidate_count: String(discoverySummary.candidateCount),
-            repair_allowed_url_count: String(discoverySummary.allowedUrlCount)
+            repair_allowed_url_count: String(discoverySummary.allowedUrlCount),
+            ...(discoverySummary.rawResultCount !== undefined
+              ? { repair_raw_result_count: String(discoverySummary.rawResultCount) }
+              : {}),
+            repair_discovery_error_count: String(discoverySummary.errors?.length ?? 0),
+            ...(discoverySummary.errors && discoverySummary.errors.length > 0
+              ? {
+                  repair_discovery_errors: discoverySummary.errors
+                    .map((error) => truncateTelemetryValue(error))
+                    .join(",")
+                }
+              : {})
           }
         : {}),
       repair_query: truncateTelemetryValue(discovery.query),
@@ -1026,7 +1039,9 @@ export async function executeResearchRun(
             ? {
                 source: "domain_targeted_search",
                 candidateCount: domainDiscovery.rawResultCount,
-                allowedUrlCount: domainDiscovery.allowedResultCount
+                allowedUrlCount: domainDiscovery.allowedResultCount,
+                rawResultCount: domainDiscovery.rawResultCount,
+                errors: domainDiscovery.errors
               }
             : undefined,
           {

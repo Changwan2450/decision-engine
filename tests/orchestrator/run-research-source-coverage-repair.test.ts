@@ -22,7 +22,8 @@ function makeAdapter(
 }
 
 function makeDomainDiscoveryResult(
-  candidates: DomainTargetedDiscoveryResult["candidates"]
+  candidates: DomainTargetedDiscoveryResult["candidates"],
+  errors: string[] = []
 ): DomainTargetedDiscoveryResult {
   return {
     query: "False convergence safeguards official documentation",
@@ -30,7 +31,7 @@ function makeDomainDiscoveryResult(
     candidates,
     rawResultCount: candidates.length,
     allowedResultCount: candidates.length,
-    errors: []
+    errors
   };
 }
 
@@ -205,7 +206,9 @@ describe("source coverage repair in executeResearchRun", () => {
       repair_pass: "source_coverage_v1",
       repair_stage: "discovery",
       repair_reason: "no_official_or_primary_evidence",
-      repair_discovery_source: "domain_targeted_search"
+      repair_discovery_source: "domain_targeted_search",
+      repair_raw_result_count: "4",
+      repair_discovery_error_count: "0"
     });
     expect(discoveryArtifacts[0]?.metadata.repair_query.length).toBeLessThanOrEqual(240);
     expect(evidenceArtifacts.every((artifact) => artifact.metadata.repair_stage === "evidence")).toBe(
@@ -252,7 +255,8 @@ describe("source coverage repair in executeResearchRun", () => {
         })
       ],
       research: {
-        domainTargetedDiscover: async () => makeDomainDiscoveryResult([]),
+        domainTargetedDiscover: async () =>
+          makeDomainDiscoveryResult([], ["http_status_202", "search_results_unavailable"]),
         router: () => ({
           primary: "scrapling",
           fallbacks: [],
@@ -305,7 +309,8 @@ describe("source coverage repair in executeResearchRun", () => {
         })
       ],
       research: {
-        domainTargetedDiscover: async () => makeDomainDiscoveryResult([]),
+        domainTargetedDiscover: async () =>
+          makeDomainDiscoveryResult([], ["http_status_202", "search_results_unavailable"]),
         router: () => ({
           primary: "scrapling",
           fallbacks: [],
@@ -357,7 +362,8 @@ describe("source coverage repair in executeResearchRun", () => {
         })
       ],
       research: {
-        domainTargetedDiscover: async () => makeDomainDiscoveryResult([]),
+        domainTargetedDiscover: async () =>
+          makeDomainDiscoveryResult([], ["http_status_202", "search_results_unavailable"]),
         router: () => ({
           primary: "scrapling",
           fallbacks: [],
@@ -438,7 +444,8 @@ describe("source coverage repair in executeResearchRun", () => {
         })
       ],
       research: {
-        domainTargetedDiscover: async () => makeDomainDiscoveryResult([]),
+        domainTargetedDiscover: async () =>
+          makeDomainDiscoveryResult([], ["http_status_202", "search_results_unavailable"]),
         router: () => ({
           primary: "scrapling",
           fallbacks: [],
@@ -514,6 +521,11 @@ describe("source coverage repair in executeResearchRun", () => {
     );
     expect(primaryDiscoveryArtifact?.metadata.repair_candidate_count).toBe("0");
     expect(primaryDiscoveryArtifact?.metadata.repair_allowed_url_count).toBe("0");
+    expect(primaryDiscoveryArtifact?.metadata.repair_raw_result_count).toBe("0");
+    expect(primaryDiscoveryArtifact?.metadata.repair_discovery_error_count).toBe("2");
+    expect(primaryDiscoveryArtifact?.metadata.repair_discovery_errors).toBe(
+      "http_status_202,search_results_unavailable"
+    );
     expect(primaryDiscoveryArtifact?.metadata.repair_fallback_attempted).toBe("true");
     expect(primaryDiscoveryArtifact?.metadata.repair_fallback_source).toBe("community_search_json");
     expect(primaryDiscoveryArtifact?.metadata.repair_fallback_candidate_count).toBe("2");

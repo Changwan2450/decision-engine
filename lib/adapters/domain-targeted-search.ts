@@ -70,12 +70,24 @@ export async function discoverDomainTargetedCandidates(
       }
     });
 
+    const html = await response.text();
+    const result = parseDomainTargetedSearchHtml(query, html, opts?.limit);
+    const errors = [...result.errors];
+
+    if (response.status === 202) {
+      errors.push("http_status_202");
+    }
+    if (!response.ok || response.status === 202 || isSearchResultsUnavailableHtml(html)) {
+      errors.push("search_results_unavailable");
+    }
     if (!response.ok) {
-      return emptyResult(query, [`http_${response.status}`]);
+      errors.push(`http_status_${response.status}`);
     }
 
-    const html = await response.text();
-    return parseDomainTargetedSearchHtml(query, html, opts?.limit);
+    return {
+      ...result,
+      errors: uniqueErrors(errors)
+    };
   } catch {
     return emptyResult(query, ["fetch_failed"]);
   }
@@ -116,6 +128,9 @@ export function parseDomainTargetedSearchHtml(
   if (rawResultCount === 0) {
     errors.push("no_result_links_found");
   }
+  if (candidates.length === 0 && isSearchResultsUnavailableHtml(html)) {
+    errors.push("search_results_unavailable");
+  }
 
   return {
     query,
@@ -125,6 +140,25 @@ export function parseDomainTargetedSearchHtml(
     allowedResultCount: candidates.length,
     errors
   };
+}
+
+function uniqueErrors(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+function isSearchResultsUnavailableHtml(html: string): boolean {
+  const lower = html.toLowerCase();
+  const hasDuckDuckGoShell =
+    lower.includes("<title> duckduckgo </title>") ||
+    lower.includes('class="header"') ||
+    lower.includes('id="lite_wrapper"');
+  const hasResultLinks =
+    lower.includes("result__a") ||
+    lower.includes("result-link") ||
+    lower.includes("result__url") ||
+    lower.includes("web-result");
+
+  return hasDuckDuckGoShell && !hasResultLinks;
 }
 
 function emptyResult(query: string, errors: string[]): DomainTargetedDiscoveryResult {
