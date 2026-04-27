@@ -112,4 +112,4 @@ The output is a reusable packet, not just a narrative answer.
 | Source Coverage Repair | PASS / CLOSED | Finds direct official/primary evidence when discovery succeeds. |
 | Counterevidence Repair v0 | PASS / CLOSED | Bounded pass with honest failed-discovery visibility. |
 | Operator Brief v0 | PASS / CLOSED | Export-only handoff layer in JSON and Markdown. |
-| GitHub Alpha Packaging | In progress | Docs and sanitized examples only. |
+| GitHub Alpha Packaging | Ready | Docs and sanitized examples only. |
