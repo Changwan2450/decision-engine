@@ -45,6 +45,7 @@ const baseInput: OperatorBriefInput = {
         id: "search-page",
         title: "Search Page",
         url: "https://html.duckduckgo.com/html/?q=research",
+        adapter: "domain-targeted-search",
         sourcePriority: "analysis",
         sourceTier: "aggregator",
         trustHint: "low",
@@ -204,6 +205,109 @@ describe("buildOperatorBrief", () => {
     );
     expect(brief.strongestEvidence).not.toContainEqual(
       expect.objectContaining({ artifactId: "failed-source" })
+    );
+  });
+
+  it("excludes known discovery and search endpoints from strongest evidence", () => {
+    const brief = buildOperatorBrief({
+      ...baseInput,
+      evidenceReplay: {
+        ...baseInput.evidenceReplay,
+        topCitations: [
+          ...baseInput.evidenceReplay.topCitations,
+          {
+            artifactId: "reddit-search",
+            title: "Reddit Search",
+            url: "https://www.reddit.com/search.json?q=counterevidence&limit=25",
+            priority: "community",
+            sourceTier: "community",
+            trustTier: "low"
+          },
+          {
+            artifactId: "hn-search",
+            title: "HN Search",
+            url: "https://hn.algolia.com/api/v1/search?query=counterevidence",
+            priority: "community",
+            sourceTier: "community",
+            trustTier: "low"
+          },
+          {
+            artifactId: "jina-mirror",
+            title: "Jina Search Mirror",
+            url: "https://r.jina.ai/http://example.com/search",
+            priority: "analysis",
+            sourceTier: "aggregator",
+            trustTier: "low"
+          },
+          {
+            artifactId: "reddit-post",
+            title: "Direct Reddit Post",
+            url: "https://reddit.com/r/research/comments/abc123/direct_discussion/",
+            priority: "community",
+            sourceTier: "community",
+            trustTier: "low"
+          }
+        ],
+        topArtifacts: [
+          ...baseInput.evidenceReplay.topArtifacts,
+          {
+            id: "reddit-search",
+            adapter: "community-search-json",
+            title: "Reddit Search",
+            url: "https://www.reddit.com/search.json?q=counterevidence&limit=25",
+            sourcePriority: "community",
+            sourceTier: "community",
+            trustHint: "low",
+            fetchStatus: "success"
+          },
+          {
+            id: "hn-search",
+            adapter: "community-search-json",
+            title: "HN Search",
+            url: "https://hn.algolia.com/api/v1/search?query=counterevidence",
+            sourcePriority: "community",
+            sourceTier: "community",
+            trustHint: "low",
+            fetchStatus: "success"
+          },
+          {
+            id: "jina-mirror",
+            adapter: "scrapling",
+            title: "Jina Search Mirror",
+            url: "https://r.jina.ai/http://example.com/search",
+            sourcePriority: "analysis",
+            sourceTier: "aggregator",
+            trustHint: "low",
+            fetchStatus: "success"
+          },
+          {
+            id: "reddit-post",
+            adapter: "scrapling",
+            title: "Direct Reddit Post",
+            url: "https://reddit.com/r/research/comments/abc123/direct_discussion/",
+            sourcePriority: "community",
+            sourceTier: "community",
+            trustHint: "low",
+            fetchStatus: "success"
+          }
+        ]
+      }
+    });
+
+    expect(brief.strongestEvidence).toContainEqual(
+      expect.objectContaining({ artifactId: "official-citation" })
+    );
+    expect(brief.strongestEvidence).toContainEqual(
+      expect.objectContaining({ artifactId: "reddit-post" })
+    );
+    expect(brief.strongestEvidence).not.toContainEqual(
+      expect.objectContaining({ artifactId: "reddit-search" })
+    );
+    expect(brief.strongestEvidence).not.toContainEqual(
+      expect.objectContaining({ artifactId: "hn-search" })
+    );
+    expect(brief.strongestEvidence).not.toContainEqual(
+      expect.objectContaining({ artifactId: "jina-mirror" })
     );
   });
 

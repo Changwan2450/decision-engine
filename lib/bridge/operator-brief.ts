@@ -63,6 +63,7 @@ type EvidenceReplayInput = {
   }>;
   topArtifacts: Array<{
     id: string;
+    adapter?: string;
     title?: string;
     url?: string;
     sourcePriority?: string;
@@ -158,9 +159,14 @@ const FAILED_FETCH_STATUSES = new Set(["blocked", "timeout", "error", "failed"])
 const SEARCH_HOST_PATTERNS = [
   "duckduckgo.com",
   "html.duckduckgo.com",
+  "lite.duckduckgo.com",
   "google.com/search",
   "bing.com/search",
-  "s.jina.ai"
+  "reddit.com/search.json",
+  "www.reddit.com/search.json",
+  "hn.algolia.com",
+  "s.jina.ai",
+  "r.jina.ai"
 ];
 
 function truncateText(value: string | undefined, maxLength = 220): string {
@@ -186,6 +192,12 @@ function rankTier(value: string | undefined): number {
 function isSearchPage(url: string | undefined): boolean {
   const normalized = (url ?? "").toLowerCase();
   return SEARCH_HOST_PATTERNS.some((pattern) => normalized.includes(pattern));
+}
+
+function isDiscoveryArtifact(artifact: EvidenceReplayInput["topArtifacts"][number] | undefined): boolean {
+  if (!artifact) return false;
+  if (isSearchPage(artifact.url)) return true;
+  return artifact.adapter === "community-search-json" && isSearchPage(artifact.url);
 }
 
 function isUsableUrl(url: string | undefined, fetchStatus?: string): boolean {
@@ -258,7 +270,9 @@ function buildStrongestEvidence(params: {
   const add = (item: OperatorBrief["strongestEvidence"][number]) => {
     if (!item.artifactId || seen.has(item.artifactId) || evidence.length >= 5) return;
     if (failedRepairArtifactIds.has(item.artifactId)) return;
-    if (!isUsableUrl(item.url)) return;
+    const replayArtifact = byArtifactId.get(item.artifactId);
+    if (isDiscoveryArtifact(replayArtifact)) return;
+    if (!isUsableUrl(item.url, replayArtifact?.fetchStatus)) return;
     seen.add(item.artifactId);
     evidence.push({
       artifactId: item.artifactId,
@@ -292,6 +306,7 @@ function buildStrongestEvidence(params: {
     if (!citation.artifactId) continue;
     const replayArtifact = byArtifactId.get(citation.artifactId);
     if (FAILED_FETCH_STATUSES.has(replayArtifact?.fetchStatus ?? "")) continue;
+    if (isDiscoveryArtifact(replayArtifact) || isSearchPage(citation.url)) continue;
     add({
       artifactId: citation.artifactId,
       title: citation.title,
@@ -313,6 +328,7 @@ function buildStrongestEvidence(params: {
   });
   for (const artifact of rankedArtifacts) {
     if (FAILED_FETCH_STATUSES.has(artifact.fetchStatus ?? "")) continue;
+    if (isDiscoveryArtifact(artifact)) continue;
     add({
       artifactId: artifact.id,
       title: artifact.title,
