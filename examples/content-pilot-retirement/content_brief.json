@@ -1,0 +1,228 @@
+{
+  "topic": "50대가 은퇴를 못 하는 진짜 이유",
+  "target_audience": "Korean middle-aged and senior viewers, roughly 45-65",
+  "platform": "YouTube longform",
+  "video_length": "8-12 minutes",
+  "viewer_anxiety": [
+    "I thought I would slow down by now, but I still need income.",
+    "Retirement savings, pension, housing, and family costs do not line up.",
+    "Supporting adult children and aging parents can overlap.",
+    "I do not know whether this is my personal failure or a structural problem."
+  ],
+  "core_emotion": "quiet pressure, fatigue, and a need to be understood without being blamed",
+  "content_angle": "Explain why many people in their 50s cannot retire as a personal, family, and structural squeeze rather than a simple failure to save.",
+  "why_now": "This is a draft angle for a Korean longform YouTube pilot. Current retirement, pension, welfare, housing, and labor-market facts still need manual verification before final script writing.",
+  "core_conflict": "The viewer wants dignity and rest, but income needs, family responsibility, housing costs, and uncertainty about pension/welfare support keep pushing retirement away.",
+  "video_promise": "By the end, viewers should be able to name the pressures keeping them at work and separate realistic next steps from shame or blame.",
+  "key_claims": [
+    {
+      "claim": "Many people in their 50s experience retirement as a staged transition rather than a clean stop from work.",
+      "content_use": "context",
+      "evidence_status": "needs_verification",
+      "confidence": "low",
+      "source_notes": [
+        "Verify with current Korean labor participation, retirement age, and reemployment data."
+      ],
+      "overclaim_warning": "Do not claim a national average or trend without current official data."
+    },
+    {
+      "claim": "Retirement pressure is often created by several costs arriving at once: housing, children, parents, health, and income replacement.",
+      "content_use": "turning_point",
+      "evidence_status": "illustrative",
+      "confidence": "low",
+      "source_notes": [
+        "Use as a story structure until backed by household finance and welfare data."
+      ],
+      "overclaim_warning": "Do not imply every household has the same burden."
+    },
+    {
+      "claim": "Pension and welfare expectations should be handled carefully because rules and benefit amounts change.",
+      "content_use": "risk",
+      "evidence_status": "needs_verification",
+      "confidence": "low",
+      "source_notes": [
+        "Verify pension, welfare, and eligibility facts against current official sources before recording."
+      ],
+      "overclaim_warning": "Do not give pension planning advice or imply guaranteed benefits."
+    },
+    {
+      "claim": "The strongest video angle is not panic, but recognition: many viewers need language for why retirement feels delayed.",
+      "content_use": "opening",
+      "evidence_status": "illustrative",
+      "confidence": "medium",
+      "source_notes": [
+        "This is a content angle, not a verified factual claim."
+      ],
+      "overclaim_warning": "Do not present audience psychology as survey data."
+    }
+  ],
+  "evidence_status": {
+    "source_mode": "draft",
+    "imported_unverified": true,
+    "has_official_or_primary_evidence": false,
+    "counterevidence_checked": false,
+    "false_convergence_risk": "unknown",
+    "overall_confidence": "low",
+    "notes": [
+      "This pilot packet is a draft content-production example, not a completed evidence run.",
+      "No verified citations are included in this example.",
+      "Before final script writing, verify labor, pension, welfare, housing, and household finance claims."
+    ]
+  },
+  "title_candidates": [
+    {
+      "title": "50대가 은퇴를 못 하는 진짜 이유",
+      "angle": "reality_check",
+      "risk": "low",
+      "note": "Clear main title; avoids unsupported numeric claims."
+    },
+    {
+      "title": "쉰 살이 넘었는데 왜 아직도 일을 놓지 못할까",
+      "angle": "anxiety",
+      "risk": "low",
+      "note": "Emotion-first title for identification."
+    },
+    {
+      "title": "은퇴가 늦어지는 건 게을러서가 아닙니다",
+      "angle": "social_structure",
+      "risk": "medium",
+      "note": "Needs careful evidence support to avoid overgeneralization."
+    }
+  ],
+  "hook_candidates": [
+    {
+      "hook": "분명 젊을 때는 쉰 넘으면 조금 쉬어도 될 줄 알았습니다. 그런데 현실은 반대인 분들이 많습니다.",
+      "style": "viewer_address",
+      "risk": "low",
+      "note": "Empathy-first opening."
+    },
+    {
+      "hook": "은퇴를 못 하는 이유를 저축 부족 하나로만 보면, 정작 중요한 압박을 놓치게 됩니다.",
+      "style": "myth_bust",
+      "risk": "medium",
+      "note": "Must be backed by verified examples later."
+    }
+  ],
+  "story_structure": [
+    {
+      "section": "opening",
+      "target_duration": "0:00-0:45",
+      "purpose": "Create recognition without fearmongering.",
+      "beats": [
+        "Address viewers who expected life to ease after 50.",
+        "State that the episode is about pressures, not blame."
+      ]
+    },
+    {
+      "section": "problem_setup",
+      "target_duration": "0:45-2:00",
+      "purpose": "Frame retirement delay as a layered pressure.",
+      "beats": [
+        "Income does not stop needing to exist just because age changes.",
+        "Savings, pension timing, work availability, and family costs collide."
+      ]
+    },
+    {
+      "section": "reality_examples",
+      "target_duration": "2:00-4:00",
+      "purpose": "Give realistic scenes that viewers recognize.",
+      "beats": [
+        "Adult child support or wedding/housing help.",
+        "Aging parent care or medical costs.",
+        "Mortgage, rent, or housing insecurity.",
+        "Reemployment that pays less but still becomes necessary."
+      ]
+    },
+    {
+      "section": "structural_explanation",
+      "target_duration": "4:00-6:30",
+      "purpose": "Separate personal shame from structural pressure.",
+      "beats": [
+        "Explain that retirement readiness depends on income, assets, family burden, health, and policy rules.",
+        "Mark all pension/welfare specifics as requiring official verification."
+      ]
+    },
+    {
+      "section": "conflict_tension",
+      "target_duration": "6:30-8:30",
+      "purpose": "Surface the emotional conflict without blaming generations.",
+      "beats": [
+        "Parents may feel responsible for children.",
+        "Children may feel the older generation had more chances.",
+        "Both frames can be incomplete."
+      ]
+    },
+    {
+      "section": "viewer_takeaway",
+      "target_duration": "8:30-10:30",
+      "purpose": "Give practical but non-advisory next steps.",
+      "beats": [
+        "List what to verify personally: pension timing, fixed costs, family support expectations, health/work capacity.",
+        "Encourage preparing questions before making financial decisions."
+      ]
+    },
+    {
+      "section": "closing",
+      "target_duration": "10:30-12:00",
+      "purpose": "Close with dignity and a follow-up path.",
+      "beats": [
+        "Restate that delayed retirement is not just a character flaw.",
+        "Tease follow-up on what to check before leaving work."
+      ]
+    }
+  ],
+  "risk_flags": [
+    {
+      "risk": "political_overclaim",
+      "severity": "medium",
+      "mitigation": "Avoid blaming one administration, party, or generation unless supported by verified evidence."
+    },
+    {
+      "risk": "financial_advice",
+      "severity": "high",
+      "mitigation": "Use general information only; tell viewers to verify their own pension, debt, and income situation."
+    },
+    {
+      "risk": "pension_welfare_update",
+      "severity": "high",
+      "mitigation": "Check current official pension and welfare sources before final script."
+    },
+    {
+      "risk": "generation_conflict_tone",
+      "severity": "medium",
+      "mitigation": "Avoid parent-vs-child blame framing; present overlapping pressures."
+    },
+    {
+      "risk": "fearmongering",
+      "severity": "medium",
+      "mitigation": "Avoid absolute claims such as 'most people cannot retire' unless verified."
+    }
+  ],
+  "follow_up_videos": [
+    "퇴직 전에 반드시 확인해야 할 5가지",
+    "국민연금만으로 생활이 가능한가",
+    "자녀 지원은 어디까지 해야 할까",
+    "50대 재취업이 어려운 이유"
+  ],
+  "source_notes": [
+    "Need current official labor statistics.",
+    "Need current pension and welfare eligibility data.",
+    "Need household finance or debt data.",
+    "Need housing-cost context.",
+    "Need counterevidence: cases where retirement is delayed by choice rather than pressure."
+  ],
+  "overclaim_warnings": [
+    "Do not claim that all people in their 50s cannot retire.",
+    "Do not give pension or investment advice.",
+    "Do not cite pension, welfare, or housing details without current verification.",
+    "Do not blame adult children, parents, employers, or government as the sole cause.",
+    "Do not present persona reactions as survey evidence."
+  ],
+  "production_next_actions": [
+    "Run or import research focused on Korean labor participation, retirement age, pension, welfare, housing, and household finance.",
+    "Verify all current pension/welfare details against official sources.",
+    "Create Persona Engine TopicCard from this brief and run reaction testing with the money playbook.",
+    "Choose 3-5 title candidates for persona testing.",
+    "Draft a final script only after risk flags and source notes are resolved."
+  ]
+}
