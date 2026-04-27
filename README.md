@@ -1,4 +1,115 @@
-# Decision Engine
+# AI-first headless research engine for evidence-state research packets
+
+Decision Engine is a local CLI/MCP research engine that turns a research topic into a project-ready evidence packet: diagnostics, source repair, counterevidence checks, and an operator brief.
+
+It does not just summarize sources. It tracks artifacts, claims, citations, contradictions, evidence diagnostics, repair attempts, and exports an Operator Brief that a human operator or downstream AI agent can act on without reading raw run internals.
+
+## Why This Exists
+
+Most research tools optimize for a polished answer. This engine optimizes for reusable evidence state.
+
+The goal is to make a research run inspectable enough that another AI can safely continue from it:
+
+- What did the run conclude?
+- How strong is the evidence?
+- Which sources were actually usable?
+- Which repair passes ran?
+- Which discovery/follow attempts failed?
+- What should an operator or next AI check before using the result?
+
+## What It Produces
+
+Each exported research packet includes:
+
+- `operatorBrief`: project-ready headline, confidence status, strongest evidence, gaps, next actions, and overclaim warnings.
+- `evidenceDiagnostics`: decisiveness score, false convergence risk, source coverage status, counterevidence state, and warnings.
+- `repairAttempts`: Source Coverage Repair and Counterevidence Repair summaries, including failed follow attempts separated from usable evidence.
+- `evidenceReplay`: compact artifacts, claims, citations, contradictions, retrieval failures, and unresolved evidence gaps.
+- `bundle.md`: a concise Markdown handoff for humans or AI agents.
+- `bundle.json`: structured state for automation.
+
+## Core Demo
+
+The primary alpha demo asks:
+
+> How should research agents prevent false convergence and source over-reliance?
+
+The successful sample shows Source Coverage Repair finding direct official/primary evidence:
+
+- `sourceCoverage.outcome: followed_evidence`
+- `candidateCount: 17`
+- `allowedUrlCount: 5`
+- `followedEvidenceCount: 3`
+- `hasOfficialOrPrimaryEvidence: true`
+- `falseConvergenceRisk: false`
+- `operatorBrief.confidenceStatus: usable_with_caution`
+
+See:
+
+- `docs/GITHUB_ALPHA.md` for the product overview and architecture.
+- `docs/DEMO.md` for a walkthrough.
+- `examples/operator-brief-source-coverage/bundle.md` for the successful sample.
+- `examples/operator-brief-counterevidence-failed/bundle.md` for an honest failed-discovery sample.
+
+## Key Capabilities
+
+- CLI + MCP-first local research runs.
+- Bounded retrieval adapters with fallback and budget control.
+- Evidence-state output: artifacts, claims, citations, contradictions, diagnostics.
+- Source Coverage Repair for missing official/primary evidence.
+- Counterevidence Repair v0 for bounded limitation/risk/failure-case checks.
+- `followedEvidence` / `failedFollowAttempts` split so timeouts and blocked fetches do not become usable evidence.
+- Operator Brief export for project handoff.
+- Sanitized bundle export: no raw HTML, raw JSON payloads, raw artifact pointers, full artifact content, or raw adapter error fields.
+
+## What This Is Not
+
+- Not a search engine.
+- Not a browser UI.
+- Not a generic summarizer.
+- Not a Deep Research clone.
+- Not a broad crawler.
+- Not recursive autonomous repair.
+
+## Current Limitations
+
+- No-key live search can return interstitial/no-result pages; these failures are exposed in the bundle.
+- Counterevidence Repair v0 is bounded and inspectable, not a full debate or contradiction engine.
+- Limitations and risks are not treated as contradictions unless contradiction records exist.
+- Human review is still needed for high-stakes decisions.
+- Current alpha examples are sanitized exports copied from local workspace runs.
+
+## Quick Start
+
+```bash
+pnpm install
+pnpm test
+pnpm cli --help
+pnpm mcp
+```
+
+Export an existing run bundle:
+
+```bash
+pnpm cli export-run-bundle --project <projectId> --run <runId>
+```
+
+The output directory contains:
+
+```text
+workspace/{projectId}/runs/{runId}/bridge/bundle.json
+workspace/{projectId}/runs/{runId}/bridge/bundle.md
+```
+
+## Docs
+
+- `docs/GITHUB_ALPHA.md` — GitHub alpha overview, architecture, positioning, and limitations.
+- `docs/DEMO.md` — demo walkthrough and sample bundle guide.
+- `docs/CLI_SPEC.md` — CLI and MCP surface.
+- `docs/SCHEMA.md` — persisted file contract.
+- `docs/WATCH_LAYER.md` — watch automation boundary.
+
+## Legacy Project Notes
 
 Decision Engine은 AI가 더 효율적으로 리서치하도록 돕는 로컬 중심 헤드리스 리서치 엔진이다.
 입력과 URL을 근거가 남는 research run으로 바꾸고, 필요할 때만 Watch / Memory 레이어를 통해 추적과 축적을 붙인다. 현재 제품 표면은 웹앱이 아니라 `CLI + MCP`이며, workspace 아래 파일이 source of truth다.
@@ -81,7 +192,7 @@ Research run 하나를 돌리면 남는 것:
 
 - fallback behavior가 포함된 routed URL handling
 - raw payload와 normalized markdown
-- fetch metadata와 `rawRef`가 들어 있는 source artifacts
+- fetch metadata와 raw payload reference가 들어 있는 source artifacts
 - 하나의 run record 안에 모인 claims, citations, contradictions, evidence summary
 
 ### Watch 흐름
@@ -194,7 +305,7 @@ node -v
 `node -v`는 Node 22.x여야 한다. 그런 다음 새 MCP process를 시작한다.
 
 ```bash
-pnpm --dir "/Users/changwan2450/Antigravity WorkSpace/research" run mcp
+pnpm --dir "<repo>" run mcp
 ```
 
 run을 만들고 `export_bundle`을 실행한 뒤에는 export provenance를 확인한다.

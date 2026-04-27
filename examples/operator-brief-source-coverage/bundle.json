@@ -1,0 +1,174 @@
+{
+  "project": {
+    "name": "Decision Engine Demo",
+    "description": "Sanitized GitHub alpha sample"
+  },
+  "latestRun": {
+    "id": "29e9ffc3-6632-43d9-bc72-76361dc1f69d",
+    "decision": "go",
+    "confidence": "high",
+    "why": "The run found enough usable evidence for practical safeguards against false convergence and source over-reliance.",
+    "blockingUnknowns": []
+  },
+  "operatorBrief": {
+    "version": "v0",
+    "headline": "go / usable_with_caution: practical safeguards are supported, but counterevidence was not checked in this run.",
+    "decisionSummary": "go (high): direct official/primary evidence supports using source diversity, repair passes, and explicit caveats.",
+    "confidenceStatus": "usable_with_caution",
+    "evidenceStatus": {
+      "decision": "go",
+      "confidence": "high",
+      "decisiveEvidenceScore": 1,
+      "falseConvergenceRisk": false,
+      "hasOfficialOrPrimaryEvidence": true,
+      "counterevidenceChecked": false,
+      "weakEvidence": false
+    },
+    "keyFindings": [
+      "Research agents should avoid support-only convergence.",
+      "Direct official or primary sources should be preferred over search result pages.",
+      "Repair attempts and unresolved gaps should remain visible in the handoff."
+    ],
+    "strongestEvidence": [
+      {
+        "artifactId": "opendataloader-pdf-0",
+        "title": "arxiv.org/2604.20544v1",
+        "url": "https://arxiv.org/pdf/2604.20544v1",
+        "sourcePriority": "primary_data",
+        "sourceTier": "primary",
+        "trustTier": "high"
+      },
+      {
+        "artifactId": "scrapling-dd66559f",
+        "title": "dlnext.acm.org/384283.801117",
+        "url": "https://dlnext.acm.org/doi/pdf/10.1145/384283.801117",
+        "sourcePriority": "primary_data",
+        "sourceTier": "primary",
+        "trustTier": "high"
+      },
+      {
+        "artifactId": "scrapling-270c90d1",
+        "title": "Anthropic engineering note",
+        "url": "https://www.anthropic.com/news/enabling-claude-code-to-work-more-autonomously",
+        "sourcePriority": "official",
+        "sourceTier": "official",
+        "trustTier": "high"
+      }
+    ],
+    "repairSummary": {
+      "sourceCoverageOutcome": "followed_evidence",
+      "counterevidenceOutcome": "not_attempted",
+      "sourceCoverageFollowedCount": 3,
+      "counterevidenceFollowedCount": 0,
+      "failedFollowAttemptCount": 0
+    },
+    "unresolvedGaps": [
+      "support_only_evidence",
+      "counterevidence_not_checked",
+      "counterevidence_not_attempted"
+    ],
+    "operatorNextActions": [
+      "Retry counterevidence check or use a different discovery source.",
+      "Use this brief as project input, but preserve listed gaps and citations."
+    ],
+    "aiHandoffInstructions": [
+      "Inspect Operator Brief first, then Evidence Diagnostics, Repair Attempts, and Evidence Replay.",
+      "Use strongestEvidence and citations; do not use failedFollowAttempts as evidence."
+    ],
+    "doNotOverclaim": [
+      "Do not claim counterevidence was checked if counterevidenceChecked is false or repair failed.",
+      "Do not treat limitations/risks as contradictions unless contradiction records exist."
+    ]
+  },
+  "evidenceDiagnostics": {
+    "decisiveEvidenceScore": 1,
+    "falseConvergenceRisk": false,
+    "counterevidenceChecked": false,
+    "supportOnlyEvidence": true,
+    "weakEvidence": false,
+    "hasOfficialOrPrimaryEvidence": true,
+    "sourceCoverageWarnings": []
+  },
+  "repairAttempts": {
+    "version": "v0",
+    "sourceCoverage": {
+      "attempted": true,
+      "reason": "no_official_or_primary_evidence",
+      "discoverySource": "domain_targeted_search",
+      "candidateCount": 17,
+      "allowedUrlCount": 5,
+      "rawResultCount": 17,
+      "discoveryErrorCount": 0,
+      "discoveryErrors": [],
+      "followedEvidence": {
+        "count": 3,
+        "urls": [
+          "https://arxiv.org/pdf/2604.20544v1",
+          "https://dlnext.acm.org/doi/pdf/10.1145/384283.801117",
+          "https://www.anthropic.com/news/enabling-claude-code-to-work-more-autonomously"
+        ]
+      },
+      "failedFollowAttempts": {
+        "count": 0,
+        "artifacts": []
+      },
+      "outcome": "followed_evidence"
+    },
+    "counterevidence": {
+      "version": "v0",
+      "attempted": false,
+      "queryCount": 0,
+      "followedEvidence": {
+        "count": 0,
+        "artifacts": []
+      },
+      "failedFollowAttempts": {
+        "count": 0,
+        "artifacts": []
+      },
+      "discoveryErrors": [],
+      "outcome": "not_attempted"
+    }
+  },
+  "evidenceReplay": {
+    "version": "v0",
+    "sourceQualitySummary": {
+      "artifactCount": 19,
+      "claimCount": 19,
+      "citationCount": 19,
+      "contradictionCount": 0,
+      "retrievalFailureCount": 0,
+      "hasOfficialOrPrimaryEvidence": true,
+      "weakEvidence": false,
+      "falseConvergenceRisk": false
+    },
+    "topCitations": [
+      {
+        "artifactId": "scrapling-270c90d1",
+        "title": "Anthropic engineering note",
+        "url": "https://www.anthropic.com/news/enabling-claude-code-to-work-more-autonomously",
+        "priority": "official",
+        "sourceTier": "official"
+      },
+      {
+        "artifactId": "opendataloader-pdf-0",
+        "title": "arxiv.org/2604.20544v1",
+        "url": "https://arxiv.org/pdf/2604.20544v1",
+        "priority": "primary_data",
+        "sourceTier": "primary"
+      }
+    ],
+    "unresolvedEvidenceGaps": [
+      "support_only_evidence",
+      "counterevidence_not_checked"
+    ]
+  },
+  "runtimeProvenance": {
+    "gitHead": "df63bc0",
+    "nodeVersion": "v22.22.0",
+    "entrypoint": "<repo>/lib/mcp/server.ts"
+  },
+  "bridge": {
+    "schemaVersion": "cli-bridge-v1"
+  }
+}

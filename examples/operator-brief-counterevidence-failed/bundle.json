@@ -1,0 +1,187 @@
+{
+  "project": {
+    "name": "Decision Engine Demo",
+    "description": "Sanitized GitHub alpha sample"
+  },
+  "latestRun": {
+    "id": "320640aa-3b8b-4b96-84ec-9d2995121d1c",
+    "decision": "unclear",
+    "confidence": "low",
+    "why": "The run could not settle the conclusion because official/primary evidence and counterevidence checks remained weak.",
+    "blockingUnknowns": [
+      "High-priority source evidence is missing."
+    ]
+  },
+  "operatorBrief": {
+    "version": "v0",
+    "headline": "unclear / not_ready: the result is not ready because counterevidence discovery failed and official/primary evidence is missing.",
+    "decisionSummary": "unclear (low): evidence gaps remain.",
+    "confidenceStatus": "not_ready",
+    "evidenceStatus": {
+      "decision": "unclear",
+      "confidence": "low",
+      "decisiveEvidenceScore": 0.5,
+      "falseConvergenceRisk": true,
+      "hasOfficialOrPrimaryEvidence": false,
+      "counterevidenceChecked": false,
+      "weakEvidence": true
+    },
+    "keyFindings": [
+      "The run did not find enough official or primary evidence.",
+      "Counterevidence discovery failed due to a no-key search endpoint response.",
+      "The conclusion should not be treated as settled."
+    ],
+    "strongestEvidence": [
+      {
+        "artifactId": "kb-preread-wiki",
+        "title": "KB Wiki Prior",
+        "url": "https://kb.local/wiki/demo-counterevidence-failed",
+        "sourcePriority": "analysis",
+        "sourceTier": "internal",
+        "trustTier": "high"
+      },
+      {
+        "artifactId": "kb-preread-decisions",
+        "title": "Decision History Prior",
+        "url": "https://kb.local/decision-history/demo-counterevidence-failed",
+        "sourcePriority": "analysis",
+        "sourceTier": "internal",
+        "trustTier": "high"
+      }
+    ],
+    "repairSummary": {
+      "sourceCoverageOutcome": "no_candidates",
+      "counterevidenceOutcome": "failed_discovery",
+      "sourceCoverageFollowedCount": 0,
+      "counterevidenceFollowedCount": 0,
+      "failedFollowAttemptCount": 0
+    },
+    "unresolvedGaps": [
+      "no_official_or_primary_evidence",
+      "support_only_evidence",
+      "counterevidence_not_checked",
+      "weak_evidence",
+      "false_convergence_risk",
+      "source_coverage_no_candidates",
+      "counterevidence_failed_discovery"
+    ],
+    "operatorNextActions": [
+      "Collect or repair official/primary evidence before using this result.",
+      "Do not treat the conclusion as settled; rerun with stronger counterevidence/source coverage.",
+      "Retry counterevidence check or use a different discovery source.",
+      "Retry source coverage discovery or provide seed official sources."
+    ],
+    "aiHandoffInstructions": [
+      "Inspect Operator Brief first, then Evidence Diagnostics, Repair Attempts, and Evidence Replay.",
+      "Use strongestEvidence and citations; do not use failedFollowAttempts as evidence."
+    ],
+    "doNotOverclaim": [
+      "Do not claim the conclusion is settled while falseConvergenceRisk is true.",
+      "Do not claim counterevidence was checked if counterevidenceChecked is false or repair failed.",
+      "Do not treat limitations/risks as contradictions unless contradiction records exist."
+    ]
+  },
+  "evidenceDiagnostics": {
+    "decisiveEvidenceScore": 0.5,
+    "falseConvergenceRisk": true,
+    "counterevidenceChecked": false,
+    "supportOnlyEvidence": true,
+    "weakEvidence": true,
+    "hasOfficialOrPrimaryEvidence": false,
+    "sourceCoverageWarnings": [
+      "no_official_or_primary_evidence"
+    ]
+  },
+  "repairAttempts": {
+    "version": "v0",
+    "sourceCoverage": {
+      "attempted": true,
+      "reason": "no_official_or_primary_evidence",
+      "discoverySource": "domain_targeted_search",
+      "candidateCount": 1,
+      "allowedUrlCount": 0,
+      "rawResultCount": 1,
+      "discoveryErrorCount": 2,
+      "discoveryErrors": [
+        "search_results_unavailable",
+        "http_status_202"
+      ],
+      "followedEvidence": {
+        "count": 0,
+        "urls": []
+      },
+      "failedFollowAttempts": {
+        "count": 0,
+        "artifacts": []
+      },
+      "outcome": "no_candidates"
+    },
+    "counterevidence": {
+      "version": "v0",
+      "attempted": true,
+      "reason": "false_convergence_risk",
+      "queryCount": 2,
+      "candidateCount": 0,
+      "allowedUrlCount": 0,
+      "followedEvidence": {
+        "count": 0,
+        "artifacts": []
+      },
+      "failedFollowAttempts": {
+        "count": 0,
+        "artifacts": []
+      },
+      "discoveryErrors": [
+        "search_results_unavailable",
+        "http_status_202"
+      ],
+      "outcome": "failed_discovery"
+    }
+  },
+  "evidenceReplay": {
+    "version": "v0",
+    "sourceQualitySummary": {
+      "artifactCount": 14,
+      "claimCount": 18,
+      "citationCount": 12,
+      "contradictionCount": 0,
+      "retrievalFailureCount": 5,
+      "hasOfficialOrPrimaryEvidence": false,
+      "weakEvidence": true,
+      "falseConvergenceRisk": true
+    },
+    "topCitations": [
+      {
+        "artifactId": "kb-preread-wiki",
+        "title": "KB Wiki Prior",
+        "url": "https://kb.local/wiki/demo-counterevidence-failed",
+        "priority": "analysis",
+        "sourceTier": "internal"
+      }
+    ],
+    "retrievalFailures": [
+      {
+        "artifactId": "scrapling-search-mirror",
+        "title": "Search mirror",
+        "url": "https://s.jina.ai/?q=demo",
+        "adapter": "scrapling",
+        "fetchStatus": "blocked",
+        "blockReason": "login"
+      }
+    ],
+    "unresolvedEvidenceGaps": [
+      "no_official_or_primary_evidence",
+      "counterevidence_not_checked",
+      "weak_evidence",
+      "false_convergence_risk"
+    ]
+  },
+  "runtimeProvenance": {
+    "gitHead": "cd1fcae",
+    "nodeVersion": "v22.22.0",
+    "entrypoint": "<repo>/lib/mcp/server.ts"
+  },
+  "bridge": {
+    "schemaVersion": "cli-bridge-v1"
+  }
+}
