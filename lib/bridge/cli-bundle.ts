@@ -70,6 +70,53 @@ type RepairAttempts = {
       | "followed_evidence"
       | "no_improvement";
   };
+  counterevidence: {
+    version: "v0";
+    attempted: boolean;
+    reason?: string;
+    reasons: string[];
+    queryCount: number;
+    queries: string[];
+    candidateCount?: number;
+    allowedUrlCount?: number;
+    followedEvidence: {
+      count: number;
+      artifacts: Array<{
+        artifactId: string;
+        url?: string;
+        sourcePriority?: string;
+        sourceTier?: string;
+        repairStage?: string;
+        repairCounterevidenceKind?: string;
+        repairFollowRank?: string;
+        fetchStatus?: string;
+      }>;
+    };
+    failedFollowAttempts: {
+      count: number;
+      artifacts: Array<{
+        artifactId: string;
+        url?: string;
+        fetchStatus?: string;
+        sourcePriority?: string;
+        sourceTier?: string;
+        repairStage?: string;
+        repairCounterevidenceKind?: string;
+        repairFollowRank?: string;
+      }>;
+    };
+    counterevidenceKinds: string[];
+    discoveryErrors: string[];
+    outcome:
+      | "not_attempted"
+      | "planned"
+      | "checked_no_candidates"
+      | "checked_no_counterevidence"
+      | "found_limitations"
+      | "found_contradiction"
+      | "failed_discovery"
+      | "no_improvement";
+  };
 };
 
 type EvidenceDiagnostics = {
@@ -575,6 +622,100 @@ function toFailedFollowAttempt(artifact: RunRecord["artifacts"][number]) {
   };
 }
 
+function toCounterevidenceArtifact(artifact: RunRecord["artifacts"][number]) {
+  return {
+    artifactId: artifact.id,
+    url: truncateText(artifact.url),
+    sourcePriority: artifact.sourcePriority,
+    sourceTier: artifact.sourceTier ?? "unknown",
+    repairStage: artifact.metadata.repair_stage,
+    repairCounterevidenceKind: artifact.metadata.repair_counterevidence_kind,
+    repairFollowRank: artifact.metadata.repair_follow_rank,
+    fetchStatus: artifact.metadata.fetch_status
+  };
+}
+
+function buildCounterevidenceRepairAttempt(
+  run: RunRecord
+): RepairAttempts["counterevidence"] {
+  const repairArtifacts = (run.artifacts ?? []).filter(
+    (artifact) => artifact.metadata.repair_pass === "counterevidence_v0"
+  );
+  const discoveryArtifacts = repairArtifacts.filter(
+    (artifact) => artifact.metadata.repair_stage === "discovery"
+  );
+  const evidenceArtifacts = repairArtifacts.filter(
+    (artifact) => artifact.metadata.repair_stage === "evidence"
+  );
+  const explicitFailedFollowArtifacts = repairArtifacts.filter(
+    (artifact) => artifact.metadata.repair_stage === "failed_follow"
+  );
+  const usableEvidenceArtifacts = evidenceArtifacts.filter(isUsableFollowArtifact);
+  const failedFollowArtifacts = [
+    ...evidenceArtifacts.filter((artifact) => !isUsableFollowArtifact(artifact)),
+    ...explicitFailedFollowArtifacts
+  ];
+  const attempted = repairArtifacts.length > 0;
+  const reasons = uniqueStrings(repairArtifacts.map((artifact) => artifact.metadata.repair_reason));
+  const queries = uniqueStrings(
+    discoveryArtifacts.map((artifact) => artifact.metadata.repair_query)
+  );
+  const candidateCount = discoveryArtifacts
+    .map((artifact) => parseMetadataInt(artifact.metadata.repair_candidate_count))
+    .find((value): value is number => typeof value === "number");
+  const allowedUrlCount = discoveryArtifacts
+    .map((artifact) => parseMetadataInt(artifact.metadata.repair_allowed_url_count))
+    .find((value): value is number => typeof value === "number");
+  const discoveryErrorCount = discoveryArtifacts
+    .map((artifact) => parseMetadataInt(artifact.metadata.repair_discovery_error_count))
+    .find((value): value is number => typeof value === "number");
+  const discoveryErrors = uniqueStrings(
+    discoveryArtifacts.flatMap((artifact) => parseMetadataList(artifact.metadata.repair_discovery_errors))
+  );
+  const counterevidenceKinds = uniqueStrings(
+    usableEvidenceArtifacts.map((artifact) => artifact.metadata.repair_counterevidence_kind)
+  );
+
+  let outcome: RepairAttempts["counterevidence"]["outcome"] = "not_attempted";
+  if (attempted) {
+    if (counterevidenceKinds.includes("contradiction")) {
+      outcome = "found_contradiction";
+    } else if (usableEvidenceArtifacts.length > 0) {
+      outcome = "found_limitations";
+    } else if ((discoveryErrorCount ?? discoveryErrors.length) > 0 && candidateCount === 0) {
+      outcome = "failed_discovery";
+    } else if (candidateCount === 0 || allowedUrlCount === 0) {
+      outcome = "checked_no_candidates";
+    } else if (evidenceArtifacts.length > 0 || explicitFailedFollowArtifacts.length > 0) {
+      outcome = "checked_no_counterevidence";
+    } else {
+      outcome = "planned";
+    }
+  }
+
+  return {
+    version: "v0",
+    attempted,
+    reason: reasons[0],
+    reasons,
+    queryCount: queries.length,
+    queries,
+    candidateCount,
+    allowedUrlCount,
+    followedEvidence: {
+      count: usableEvidenceArtifacts.length,
+      artifacts: usableEvidenceArtifacts.map(toCounterevidenceArtifact)
+    },
+    failedFollowAttempts: {
+      count: failedFollowArtifacts.length,
+      artifacts: failedFollowArtifacts.map(toCounterevidenceArtifact)
+    },
+    counterevidenceKinds,
+    discoveryErrors,
+    outcome
+  };
+}
+
 function buildRepairAttempts(
   run: RunRecord,
   diagnostics: EvidenceDiagnostics
@@ -697,7 +838,8 @@ function buildRepairAttempts(
         artifacts: failedFollowArtifacts.map(toFailedFollowAttempt)
       },
       outcome
-    }
+    },
+    counterevidence: buildCounterevidenceRepairAttempt(run)
   };
 }
 
@@ -931,6 +1073,7 @@ function renderRetrievalAttemptGaps(gaps: RetrievalAttemptGaps): string {
 
 function renderRepairAttempts(repairAttempts: RepairAttempts): string {
   const sourceCoverage = repairAttempts.sourceCoverage;
+  const counterevidence = repairAttempts.counterevidence;
   const primaryStatus = !sourceCoverage.primaryDiscovery.attempted
     ? "not attempted"
     : sourceCoverage.primaryDiscovery.blocked
@@ -977,8 +1120,29 @@ function renderRepairAttempts(repairAttempts: RepairAttempts): string {
           })
           .join("\n")
       : "- none";
+  const counterevidenceFollowed =
+    counterevidence.followedEvidence.artifacts.length > 0
+      ? counterevidence.followedEvidence.artifacts
+          .map(
+            (artifact) =>
+              `- ${artifact.artifactId}${artifact.url ? ` — ${artifact.url}` : ""}\n` +
+              `  - kind: ${artifact.repairCounterevidenceKind ?? "unknown"}; priority: ${artifact.sourcePriority ?? "unknown"}; tier: ${artifact.sourceTier ?? "unknown"}; stage: ${artifact.repairStage ?? "unknown"}; followRank: ${artifact.repairFollowRank ?? "unknown"}`
+          )
+          .join("\n")
+      : "- none";
+  const counterevidenceFailed =
+    counterevidence.failedFollowAttempts.artifacts.length > 0
+      ? counterevidence.failedFollowAttempts.artifacts
+          .map(
+            (artifact) =>
+              `- ${artifact.artifactId}${artifact.url ? ` — ${artifact.url}` : ""}\n` +
+              `  - fetchStatus: ${artifact.fetchStatus ?? "unknown"}; kind: ${artifact.repairCounterevidenceKind ?? "unknown"}; priority: ${artifact.sourcePriority ?? "unknown"}; tier: ${artifact.sourceTier ?? "unknown"}; followRank: ${artifact.repairFollowRank ?? "unknown"}`
+          )
+          .join("\n")
+      : "- none";
 
   return [
+    "### Source Coverage Repair",
     `- Source coverage repair attempted: ${sourceCoverage.attempted ? "yes" : "no"}`,
     `- Reason: ${sourceCoverage.reason ?? "none"}`,
     `- Discovery source: ${sourceCoverage.discoverySource ?? "none"}`,
@@ -1023,7 +1187,34 @@ function renderRepairAttempts(repairAttempts: RepairAttempts): string {
     followedEvidence,
     "",
     "### Failed Follow Attempts",
-    failedFollowAttempts
+    failedFollowAttempts,
+    "",
+    "### Counterevidence Repair",
+    `- Attempted: ${counterevidence.attempted ? "yes" : "no"}`,
+    `- Outcome: ${counterevidence.outcome}`,
+    `- Reasons: ${counterevidence.reasons.join(", ") || "none"}`,
+    `- Query count: ${counterevidence.queryCount}`,
+    counterevidence.queries.length > 0
+      ? `- Queries: ${counterevidence.queries.join(" / ")}`
+      : null,
+    counterevidence.candidateCount !== undefined
+      ? `- Candidate count: ${counterevidence.candidateCount}`
+      : null,
+    counterevidence.allowedUrlCount !== undefined
+      ? `- Allowed URL count: ${counterevidence.allowedUrlCount}`
+      : null,
+    `- Followed evidence count: ${counterevidence.followedEvidence.count}`,
+    `- Failed follow attempts: ${counterevidence.failedFollowAttempts.count}`,
+    `- Counterevidence kinds: ${counterevidence.counterevidenceKinds.join(", ") || "none"}`,
+    counterevidence.discoveryErrors.length > 0
+      ? `- Discovery errors: ${counterevidence.discoveryErrors.join(", ")}`
+      : null,
+    "",
+    "### Counterevidence Followed Evidence",
+    counterevidenceFollowed,
+    "",
+    "### Counterevidence Failed Follow Attempts",
+    counterevidenceFailed
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");

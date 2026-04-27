@@ -584,6 +584,115 @@ const repairFailedFollowOnlyRun: RunRecord = {
   }
 };
 
+const counterevidenceRepairRun: RunRecord = {
+  ...diagnosticRun,
+  artifacts: [
+    {
+      id: "artifact-counter-discovery",
+      adapter: "domain-targeted-search",
+      sourceType: "web",
+      title: "Counterevidence Discovery",
+      url: "https://html.duckduckgo.com/html/?q=counterevidence",
+      snippet: "counterevidence discovery summary",
+      content: "COUNTER_DISCOVERY_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "analysis",
+      sourceTier: "aggregator",
+      retrievedAt: "2026-04-25T08:00:00.000Z",
+      rawRef: "project/run/raw/counter-discovery.html",
+      metadata: {
+        repair_pass: "counterevidence_v0",
+        repair_stage: "discovery",
+        repair_reason: "counterevidence_not_checked",
+        repair_query: "research agents limitations risks failure cases",
+        repair_candidate_count: "4",
+        repair_allowed_url_count: "2",
+        repair_discovery_error_count: "1",
+        repair_discovery_errors: "no_result_links_found",
+        error: "COUNTER_DISCOVERY_ERROR_SHOULD_NOT_EXPORT"
+      }
+    },
+    {
+      id: "artifact-counter-limitation",
+      adapter: "scrapling",
+      sourceType: "web",
+      title: "Counterevidence Limitation",
+      url: "https://example.com/limitations",
+      snippet: "limitation summary",
+      content: "COUNTER_LIMITATION_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "analysis",
+      sourceTier: "unknown",
+      retrievedAt: "2026-04-25T08:01:00.000Z",
+      rawRef: "project/run/raw/counter-limitation.html",
+      metadata: {
+        repair_pass: "counterevidence_v0",
+        repair_stage: "evidence",
+        repair_reason: "counterevidence_not_checked",
+        repair_follow_rank: "0",
+        repair_counterevidence_kind: "limitation",
+        fetch_status: "success",
+        error: "COUNTER_LIMITATION_ERROR_SHOULD_NOT_EXPORT"
+      }
+    },
+    {
+      id: "artifact-counter-timeout",
+      adapter: "scrapling",
+      sourceType: "web",
+      title: "Counterevidence Timeout",
+      url: "https://example.com/risks",
+      snippet: "timeout summary",
+      content: "COUNTER_TIMEOUT_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "analysis",
+      sourceTier: "unknown",
+      retrievedAt: "2026-04-25T08:02:00.000Z",
+      rawRef: "project/run/raw/counter-timeout.html",
+      metadata: {
+        repair_pass: "counterevidence_v0",
+        repair_stage: "evidence",
+        repair_reason: "counterevidence_not_checked",
+        repair_follow_rank: "1",
+        repair_counterevidence_kind: "risk",
+        fetch_status: "timeout",
+        error: "COUNTER_TIMEOUT_ERROR_SHOULD_NOT_EXPORT"
+      }
+    }
+  ],
+  contradictions: [],
+  evidenceSummary: {
+    ...diagnosticRun.evidenceSummary!,
+    counterevidenceChecked: false,
+    supportOnlyEvidence: true,
+    falseConvergenceRisk: false,
+    contradictionCount: 0
+  }
+};
+
+const counterevidenceDiscoveryOnlyRun: RunRecord = {
+  ...diagnosticRun,
+  artifacts: [
+    {
+      id: "artifact-counter-discovery-only",
+      adapter: "domain-targeted-search",
+      sourceType: "web",
+      title: "Counterevidence Discovery",
+      url: "https://html.duckduckgo.com/html/?q=counterevidence",
+      snippet: "counterevidence discovery summary",
+      content: "COUNTER_DISCOVERY_ONLY_FULL_CONTENT_SHOULD_NOT_EXPORT",
+      sourcePriority: "analysis",
+      sourceTier: "aggregator",
+      retrievedAt: "2026-04-25T08:00:00.000Z",
+      metadata: {
+        repair_pass: "counterevidence_v0",
+        repair_stage: "discovery",
+        repair_reason: "support_only_evidence",
+        repair_query: "research agents evaluation limitations benchmark disagreement known issues",
+        repair_candidate_count: "4",
+        repair_allowed_url_count: "2",
+        repair_discovery_error_count: "0"
+      }
+    }
+  ]
+};
+
 const insights = {
   repeatedProblems: ["차별화가 어렵다"],
   repeatedPatterns: ["짧은 루프가 유지율을 높인다"],
@@ -686,6 +795,16 @@ describe("cli bundle", () => {
     expect(bundle.runtimeProvenance).toBeNull();
     expect(bundle.repairAttempts.sourceCoverage.attempted).toBe(false);
     expect(bundle.repairAttempts.sourceCoverage.outcome).toBe("not_attempted");
+    expect(bundle.repairAttempts.counterevidence).toMatchObject({
+      version: "v0",
+      attempted: false,
+      reasons: [],
+      queryCount: 0,
+      queries: [],
+      counterevidenceKinds: [],
+      discoveryErrors: [],
+      outcome: "not_attempted"
+    });
     expect(bundle.decisionHistory).toHaveLength(1);
     expect(bundle.kb.promotionCandidates).toHaveLength(1);
     expect(bundle.kb.relatedRuns).toEqual(relatedRuns);
@@ -729,6 +848,7 @@ describe("cli bundle", () => {
     expect(markdown).toContain("## Evidence Replay");
     expect(markdown).toContain("## Retrieval Attempt Gaps");
     expect(markdown).toContain("## Repair Attempts");
+    expect(markdown).toContain("### Counterevidence Repair");
     expect(markdown).toContain("## Runtime Provenance");
     expect(markdown).toContain("## Decision History");
     expect(markdown).toContain("## KB Context");
@@ -979,9 +1099,118 @@ describe("cli bundle", () => {
       "## Runtime Provenance\n- not available"
     );
     expect(renderCliBundleMarkdown(bundle)).toContain(
-      "## Repair Attempts\n- Source coverage repair attempted: no"
+      "### Source Coverage Repair\n- Source coverage repair attempted: no"
     );
+    expect(renderCliBundleMarkdown(bundle)).toContain("- Outcome: not_attempted");
     expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
+  });
+
+  it("exports counterevidence repair discovery as planned visibility", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: counterevidenceDiscoveryOnlyRun,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    expect(bundle.repairAttempts.counterevidence).toMatchObject({
+      version: "v0",
+      attempted: true,
+      reason: "support_only_evidence",
+      reasons: ["support_only_evidence"],
+      queryCount: 1,
+      queries: ["research agents evaluation limitations benchmark disagreement known issues"],
+      candidateCount: 4,
+      allowedUrlCount: 2,
+      counterevidenceKinds: [],
+      discoveryErrors: [],
+      outcome: "planned"
+    });
+    expect(bundle.repairAttempts.counterevidence.followedEvidence.count).toBe(0);
+    expect(bundle.repairAttempts.counterevidence.failedFollowAttempts.count).toBe(0);
+  });
+
+  it("splits counterevidence followed evidence from failed attempts without inventing contradictions", () => {
+    const bundle = buildCliBundle({
+      project,
+      latestRun: counterevidenceRepairRun,
+      insights,
+      decisionHistory,
+      bridgeConfig: {
+        provider: "codex",
+        mode: "prompt_only"
+      },
+      now: "2026-04-09T12:00:00.000Z"
+    });
+
+    expect(bundle.repairAttempts.counterevidence.attempted).toBe(true);
+    expect(bundle.repairAttempts.counterevidence.outcome).toBe("found_limitations");
+    expect(bundle.repairAttempts.counterevidence.queryCount).toBe(1);
+    expect(bundle.repairAttempts.counterevidence.candidateCount).toBe(4);
+    expect(bundle.repairAttempts.counterevidence.allowedUrlCount).toBe(2);
+    expect(bundle.repairAttempts.counterevidence.discoveryErrors).toEqual([
+      "no_result_links_found"
+    ]);
+    expect(bundle.repairAttempts.counterevidence.counterevidenceKinds).toEqual(["limitation"]);
+    expect(bundle.repairAttempts.counterevidence.followedEvidence).toEqual({
+      count: 1,
+      artifacts: [
+        {
+          artifactId: "artifact-counter-limitation",
+          url: "https://example.com/limitations",
+          sourcePriority: "analysis",
+          sourceTier: "unknown",
+          repairStage: "evidence",
+          repairCounterevidenceKind: "limitation",
+          repairFollowRank: "0",
+          fetchStatus: "success"
+        }
+      ]
+    });
+    expect(bundle.repairAttempts.counterevidence.failedFollowAttempts).toEqual({
+      count: 1,
+      artifacts: [
+        {
+          artifactId: "artifact-counter-timeout",
+          url: "https://example.com/risks",
+          fetchStatus: "timeout",
+          sourcePriority: "analysis",
+          sourceTier: "unknown",
+          repairStage: "evidence",
+          repairCounterevidenceKind: "risk",
+          repairFollowRank: "1"
+        }
+      ]
+    });
+    expect(bundle.evidenceReplay.contradictions).toEqual([]);
+    expect(bundle.bridge.schemaVersion).toBe("cli-bridge-v1");
+
+    const markdown = renderCliBundleMarkdown(bundle);
+    expect(markdown).toContain("### Counterevidence Repair");
+    expect(markdown).toContain("- Attempted: yes");
+    expect(markdown).toContain("- Outcome: found_limitations");
+    expect(markdown).toContain("- Query count: 1");
+    expect(markdown).toContain("- Followed evidence count: 1");
+    expect(markdown).toContain("- Failed follow attempts: 1");
+    expect(markdown).toContain("- Counterevidence kinds: limitation");
+    expect(markdown).toContain("- Discovery errors: no_result_links_found");
+    expect(markdown).toContain("artifact-counter-limitation");
+    expect(markdown).toContain("artifact-counter-timeout");
+
+    const serialized = JSON.stringify(bundle);
+    const combined = `${serialized}\n${markdown}`;
+    expect(combined).not.toContain("COUNTER_DISCOVERY_FULL_CONTENT_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("COUNTER_LIMITATION_FULL_CONTENT_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("COUNTER_TIMEOUT_FULL_CONTENT_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("project/run/raw");
+    expect(combined).not.toContain("COUNTER_DISCOVERY_ERROR_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("COUNTER_LIMITATION_ERROR_SHOULD_NOT_EXPORT");
+    expect(combined).not.toContain("COUNTER_TIMEOUT_ERROR_SHOULD_NOT_EXPORT");
   });
 
   it("includes repair attempts with blocked primary discovery in JSON and markdown", () => {
