@@ -22,7 +22,26 @@ Before final script writing, verify:
 
 ## Persona Test
 
-Use Persona Engine to check:
+Persona Engine dogfood completed once with:
+
+```bash
+python3 -m persona_engine react --topic ../research/examples/content-pilot-retirement/persona_topic.json --n 24 --seed 42 --playbook money_conflict
+```
+
+Generated artifacts:
+
+- `persona_topic.json`
+- `persona_test.json`
+
+Observed from `persona_test.json`:
+
+- Baseline title remains `50대가 은퇴를 못 하는 진짜 이유`.
+- Best usable hook is the question-style hook, but it needs longform rewriting.
+- Generic viral hooks scored highly but should be rejected for this channel position.
+- Main conflict axis came back as `현실주의 vs 자기만족`, which is useful but too narrow for the final story.
+- Persona feedback exposed a retention risk: the outline needs concrete family burden, housing, and reemployment scenes early.
+
+Next persona checks:
 
 - Which title feels respectful but clickable.
 - Whether hooks create recognition or panic.
@@ -58,7 +77,8 @@ Suggested `TopicCard` direction:
 ## Before Final Script
 
 1. Replace all unverified claims with checked facts or remove them.
-2. Choose one title and one opening hook after persona testing.
-3. Keep the video promise narrow: explain pressure, do not solve retirement.
-4. Preserve the overclaim warnings in the script notes.
-5. Draft the 8-12 minute script from the outline only after research and persona checks are complete.
+2. Use the current baseline title unless another top-3 title wins in a second persona check.
+3. Rewrite the selected hook into longform tone and avoid generic controversy phrasing.
+4. Keep the video promise narrow: explain pressure, do not solve retirement.
+5. Preserve the overclaim warnings in the script notes.
+6. Draft the 8-12 minute script from the outline only after research and persona checks are complete.

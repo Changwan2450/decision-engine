@@ -4,6 +4,16 @@ Pilot topic: `50대가 은퇴를 못 하는 진짜 이유`
 
 Target length: 8-12 minutes.
 
+## Persona Feedback Applied
+
+Source: `persona_test.json`
+
+- Keep the opening calm and recognition-first.
+- Do not use `논란 종결`, `난리난 사연`, or `역대급 사건` framing.
+- Move concrete family burden, housing, and reemployment scenes early; the persona run showed the current playbook can collapse the topic into a generic `현실주의 vs 자기만족` conflict.
+- Explicitly acknowledge the planning objection: some viewers will say delayed retirement is the result of weak preparation.
+- Keep pension, welfare, housing, and labor claims blocked until manually verified.
+
 ## 1. Opening Hook (0:00-0:45)
 
 Goal: Make the viewer feel recognized without panic.
@@ -13,6 +23,7 @@ Draft direction:
 - “쉰 넘으면 조금 쉬어도 될 줄 알았는데, 현실은 다르다.”
 - State that this is not about blaming people for poor planning.
 - Promise to separate personal shame from practical pressure.
+- Retention note: avoid a report-style opening. Start with one recognizable scene before explaining the thesis.
 
 ## 2. Problem Setup (0:45-2:00)
 
@@ -35,10 +46,12 @@ Examples:
 - A household with housing costs that make income interruption difficult.
 - A family managing aging parent care or medical costs.
 - A worker who leaves a main job but still needs smaller jobs to cover expenses.
+- A viewer who thinks, “내가 준비를 못 한 건가?” and needs the video to separate personal planning from structural pressure.
 
 Guardrail:
 
 - Present these as realistic patterns to verify, not universal facts.
+- Do not imply these scenes describe all 50대 households.
 
 ## 4. Structural Explanation (4:00-6:30)
 
@@ -50,6 +63,7 @@ Beats:
 - Pension and welfare specifics change and must be verified.
 - Reemployment may solve income but create fatigue and dignity concerns.
 - Housing can turn retirement from a date into a negotiation.
+- Address the likely objection: personal preparation still matters, but it does not explain every delayed-retirement case.
 
 ## 5. Conflict / Tension (6:30-8:30)
 
@@ -67,6 +81,7 @@ Tone:
 - Avoid parent-vs-child blame.
 - Avoid political certainty without evidence.
 - Keep the viewer’s dignity intact.
+- Use the persona trigger `현실주의 vs 자기만족` only as one tension, not the whole explanation.
 
 ## 6. Practical Viewer Takeaway (8:30-10:30)
 

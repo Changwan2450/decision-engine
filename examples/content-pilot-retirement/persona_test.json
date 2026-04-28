@@ -1,0 +1,169 @@
+{
+  "source_report_path": "Persona-Engine/output/reaction_report.json",
+  "source_command": "python3 -m persona_engine react --topic ../research/examples/content-pilot-retirement/persona_topic.json --n 24 --seed 42 --playbook money_conflict",
+  "best_title": "50대가 은퇴를 못 하는 진짜 이유",
+  "title_scores": [
+    {
+      "title": "50대가 은퇴를 못 하는 진짜 이유",
+      "click_strength": null,
+      "trust_risk": "low",
+      "comment_potential": 71,
+      "reason": "Persona Engine returned this as the primary title candidate. It avoids the generic controversy suffix."
+    },
+    {
+      "title": "50대가 은퇴를 못 하는 진짜 이유 논란",
+      "click_strength": null,
+      "trust_risk": "medium",
+      "comment_potential": 71,
+      "reason": "Persona Engine returned this as a second title candidate, but the controversy suffix increases overclaim and tone risk."
+    }
+  ],
+  "hook_score": {
+    "best_hook": "50대가 은퇴를 못 하는 진짜 이유, 이 상황 여러분이라면?",
+    "score": 93,
+    "reason": "Selected from Persona Engine hook_ab_tests because it tied the strongest content-specific safe hook score and is shorter than the long situation hook."
+  },
+  "retention_risks": [
+    "Persona Engine's highest scored raw hook was generic community-style phrasing, which should not be used for this longform topic.",
+    "The money_conflict playbook maps the topic to '현실주의 vs 자기만족', which may underspecify retirement anxiety, family burden, and structural pressure.",
+    "The previewed persona comments are generic and do not yet surface pension, welfare, housing, or family-care specificity.",
+    "A longform script may lose retention if it stays abstract instead of using concrete retirement-pressure scenes early."
+  ],
+  "comment_triggers": [
+    "현실주의 vs 자기만족",
+    "본인이 행복하면 된 거지.",
+    "나중에 진짜 고생할 듯.",
+    "은퇴를 늦추는 것이 개인 선택인지 구조적 압박인지",
+    "자녀 지원과 부모 돌봄을 어디까지 책임져야 하는지"
+  ],
+  "tone_recommendation": "Use calm recognition rather than panic. Keep the viewer's dignity intact and avoid framing the topic as a simple controversy.",
+  "persona_specific_objections": [
+    {
+      "persona_segment": "supportive / personal-choice frame",
+      "objection": "Some viewers may hear the topic as judging their choices or lifestyle.",
+      "recommended_edit": "State early that the video is about pressure and conditions, not blaming individual choices."
+    },
+    {
+      "persona_segment": "opposing / realism frame",
+      "objection": "Some viewers may react that delayed retirement is the predictable result of weak planning.",
+      "recommended_edit": "Acknowledge planning matters, then show why family burden, housing, pension timing, and work conditions also matter."
+    },
+    {
+      "persona_segment": "older worker preview",
+      "objection": "The topic may feel too abstract unless it reflects work fatigue, dignity, and family responsibility.",
+      "recommended_edit": "Add concrete scenes around reemployment, physical fatigue, and supporting family without using unverifiable statistics."
+    }
+  ],
+  "overclaim_sensitivity": [
+    "Do not present persona output as public opinion polling.",
+    "Do not use the generic '논란 종결', '난리난 사연', or '역대급 사건' framing for this pilot.",
+    "Do not claim pension, welfare, housing, or labor facts without separate source verification.",
+    "Do not blame adult children, parents, employers, or government as a single cause."
+  ],
+  "recommended_edits": [
+    "Keep the primary title as the baseline and test softer anxiety/reality-check alternatives against it.",
+    "Use the question-style hook as a candidate, but rewrite it in a less Shorts-like longform tone.",
+    "Move concrete family burden and housing scenes earlier in the outline to reduce abstraction.",
+    "Add a retention note before the structural explanation: do not spend too long on general framing before examples.",
+    "Keep final script production blocked until pension, welfare, housing, labor, and household finance claims are manually verified."
+  ],
+  "raw_persona_fields_used": {
+    "title_candidates": [
+      "50대가 은퇴를 못 하는 진짜 이유",
+      "50대가 은퇴를 못 하는 진짜 이유 논란"
+    ],
+    "best_hooks": [
+      "50대 시청자가 은퇴를 생각하지만 생활비, 자녀 지원, 부모 돌봄, 주거비, 연금과 복지의 불확실성 때문에 일을 계속해야 하는 상황을 다룬다.",
+      "50대가 은퇴를 못 하는 진짜 이유, 이 상황 여러분이라면?",
+      "50대가 은퇴를 못 하는 진짜 이유 때문에 난리난 사연"
+    ],
+    "hook_ab_tests": [
+      {
+        "hook": "50대 시청자가 은퇴를 생각하지만 생활비, 자녀 지원, 부모 돌봄, 주거비, 연금과 복지의 불확실성 때문에 일을 계속해야 하는 상황을 다룬다.",
+        "predicted_click_strength": 93,
+        "public_safe": true,
+        "reason": "상황 밀착형",
+        "topic_fit_score": 100
+      },
+      {
+        "hook": "50대가 은퇴를 못 하는 진짜 이유, 이 상황 여러분이라면?",
+        "predicted_click_strength": 93,
+        "public_safe": true,
+        "reason": "상황 밀착형",
+        "topic_fit_score": 100
+      },
+      {
+        "hook": "50대가 은퇴를 못 하는 진짜 이유 때문에 난리난 사연",
+        "predicted_click_strength": 78,
+        "public_safe": true,
+        "reason": "상황 밀착형",
+        "topic_fit_score": 100
+      },
+      {
+        "hook": "50대가 은퇴를 못 하는 진짜 이유 논란 종결",
+        "predicted_click_strength": 86,
+        "public_safe": true,
+        "reason": "자극적 소구",
+        "topic_fit_score": 100
+      },
+      {
+        "hook": "커뮤니티 뒤집어놓은 역대급 사건",
+        "predicted_click_strength": 94,
+        "public_safe": true,
+        "reason": "자극적 소구",
+        "topic_fit_score": 100
+      }
+    ],
+    "conflict_clusters": [
+      {
+        "count": 7,
+        "name": "옹호/긍정",
+        "summary": "개인의 권리 중시"
+      },
+      {
+        "count": 7,
+        "name": "비판/부정",
+        "summary": "사회적 통념 중시"
+      },
+      {
+        "count": 10,
+        "name": "중립/기타",
+        "summary": "관망 또는 예외 상황"
+      }
+    ],
+    "main_conflict_axis": "현실주의 vs 자기만족",
+    "persona_reactions_preview": [
+      {
+        "comment": "본인이 행복하면 된 거지.",
+        "comment_intent": 5,
+        "emotion": "공감",
+        "persona_summary": "20대 서울 거주 여성 그 외 미용 관련 서비스 종사원. 화려한 네일 아트와 디저트에.",
+        "stance": "supportive",
+        "trigger_point": "현실주의 vs 자기만족"
+      },
+      {
+        "comment": "나중에 진짜 고생할 듯.",
+        "comment_intent": 8,
+        "emotion": "비판적",
+        "persona_summary": "60대 충청남 거주 남성 전기 용접원. 서산 공단의 용접공이자.",
+        "stance": "opposing",
+        "trigger_point": "현실주의 vs 자기만족"
+      }
+    ],
+    "risk_notes": [
+      "빈부격차 자극 위험",
+      "경제적 비하 발언 가능성"
+    ],
+    "heuristic_score": 85,
+    "simulated_reaction_score": 86,
+    "estimated_comment_war_potential": 71,
+    "quality_gate_passed": true,
+    "quality_issues": [],
+    "disclaimer": "This is a synthetic persona simulation, not a real public opinion poll or guaranteed view prediction."
+  },
+  "limitations": [
+    "Persona Engine does not export title click scores directly; title_scores use null click_strength where no direct score exists.",
+    "Only preview persona reactions are copied here; full reaction distribution is preserved in the source report.",
+    "The current money_conflict playbook is a close fit but not retirement-specific."
+  ]
+}
