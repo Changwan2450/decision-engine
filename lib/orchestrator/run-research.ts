@@ -701,34 +701,14 @@ function mergeDecisionLedger(
   right: NonNullable<ProjectRecord["memory"]>["decisionLedger"],
   now: string
 ): NonNullable<ProjectRecord["memory"]>["decisionLedger"] {
-  const retained = [...left, ...right].filter((entry) => isGovernedEntryRetainable(entry, now));
-  const byRunId = new Map<string, ProjectRecord["memory"]["decisionLedger"][number]>();
-  for (const entry of retained) {
-    byRunId.set(entry.runId, { ...entry });
-  }
-  const values = Array.from(byRunId.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const activeByKey = new Map<string, ProjectRecord["memory"]["decisionLedger"][number]>();
-  const governedValues = values.map((entry) => {
-    const key = decisionMemoryKey(entry);
-    const newer = activeByKey.get(key);
-    if (!newer) {
-      const activeEntry = { ...entry, status: "active" as const, supersededByRunId: null };
-      activeByKey.set(key, activeEntry);
-      return activeEntry;
-    }
-    return {
-      ...entry,
-      status: entry.decision === newer.decision ? "superseded" as const : "conflict" as const,
-      supersededByRunId: newer.runId
-    };
-  });
+  const retained = [...left, ...right].filter((entry) => isGovernedEntryActive(entry, now));
+  const merged = new Map<string, ProjectRecord["memory"]["decisionLedger"][number]>(
+    retained.map((entry) => [entry.runId, entry])
+  );
+  const values = Array.from(merged.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const byRunType = new Map<string, number>();
-  const limited: typeof governedValues = [];
-  for (const entry of governedValues) {
-    if (entry.status !== "active") {
-      limited.push(entry);
-      continue;
-    }
+  const limited: typeof values = [];
+  for (const entry of values) {
     const runType = entry.runType ?? "unknown";
     const count = byRunType.get(runType) ?? 0;
     if (count >= RETENTION_ELIGIBILITY_SCHEMA.budgets.maxAdaptiveEntriesPerRunType) {
@@ -746,7 +726,9 @@ function mergeTopicLedger(
   now: string
 ): NonNullable<ProjectRecord["memory"]>["topicLedger"] {
   const retained = [...left, ...right].filter((entry) => isGovernedEntryActive(entry, now));
-  const merged = new Map<string, ProjectRecord["memory"]["topicLedger"][number]>();
+  const merged = new Map<string, ProjectRecord["memory"]["topicLedger"][number]>(
+    retained.map((entry) => [entry.topicKey, { ...entry }])
+  );
   for (const entry of retained) {
     const current = merged.get(entry.topicKey);
     if (!current) {
@@ -760,13 +742,7 @@ function mergeTopicLedger(
       lastSeenAt: entry.lastSeenAt > current.lastSeenAt ? entry.lastSeenAt : current.lastSeenAt,
       contractVersion: RESEARCH_QUALITY_CONTRACT_VERSION,
       retainedAt: entry.retainedAt ?? current.retainedAt,
-      expiresAt: laterIso(entry.expiresAt, current.expiresAt),
-      status: "active",
-      provenance: {
-        sourceRunIds: mergeUnique(current.provenance.sourceRunIds, entry.provenance.sourceRunIds),
-        claimIds: mergeUnique(current.provenance.claimIds, entry.provenance.claimIds),
-        citationIds: mergeUnique(current.provenance.citationIds, entry.provenance.citationIds)
-      }
+      expiresAt: laterIso(entry.expiresAt, current.expiresAt)
     });
   }
   return Array.from(merged.values())
@@ -780,7 +756,9 @@ function mergeContradictionLedger(
   now: string
 ): NonNullable<ProjectRecord["memory"]>["contradictionLedger"] {
   const retained = [...left, ...right].filter((entry) => isGovernedEntryActive(entry, now));
-  const merged = new Map<string, ProjectRecord["memory"]["contradictionLedger"][number]>();
+  const merged = new Map<string, ProjectRecord["memory"]["contradictionLedger"][number]>(
+    retained.map((entry) => [entry.topicKey, { ...entry }])
+  );
   for (const entry of retained) {
     const current = merged.get(entry.topicKey);
     if (!current) {
@@ -793,16 +771,7 @@ function mergeContradictionLedger(
       lastSeenAt: entry.lastSeenAt > current.lastSeenAt ? entry.lastSeenAt : current.lastSeenAt,
       contractVersion: RESEARCH_QUALITY_CONTRACT_VERSION,
       retainedAt: entry.retainedAt ?? current.retainedAt,
-      expiresAt: laterIso(entry.expiresAt, current.expiresAt),
-      status: "active",
-      provenance: {
-        sourceRunIds: mergeUnique(current.provenance.sourceRunIds, entry.provenance.sourceRunIds),
-        claimIds: mergeUnique(current.provenance.claimIds, entry.provenance.claimIds),
-        contradictionIds: mergeUnique(
-          current.provenance.contradictionIds,
-          entry.provenance.contradictionIds
-        )
-      }
+      expiresAt: laterIso(entry.expiresAt, current.expiresAt)
     });
   }
   return Array.from(merged.values())
@@ -811,41 +780,14 @@ function mergeContradictionLedger(
 }
 
 function isGovernedEntryActive(
-  entry: {
-    contractVersion: string;
-    expiresAt: string | null;
-    status?: string;
-    provenance?: { sourceRunIds?: string[] };
-  },
-  now: string
-): boolean {
-  return (
-    isGovernedEntryRetainable(entry, now) &&
-    (entry.status ?? "active") === "active"
-  );
-}
-
-function isGovernedEntryRetainable(
-  entry: {
-    contractVersion: string;
-    expiresAt: string | null;
-    provenance?: { sourceRunIds?: string[] };
-  },
+  entry: { contractVersion: string; expiresAt: string | null },
   now: string
 ): boolean {
   return (
     entry.contractVersion === RESEARCH_QUALITY_CONTRACT_VERSION &&
     typeof entry.expiresAt === "string" &&
-    entry.expiresAt > now &&
-    (entry.provenance?.sourceRunIds?.length ?? 0) > 0
+    entry.expiresAt > now
   );
-}
-
-function decisionMemoryKey(entry: ProjectRecord["memory"]["decisionLedger"][number]): string {
-  return [
-    entry.contextClass ?? "unknown",
-    entry.comparisonAxis?.trim() || entry.title.trim()
-  ].join("::");
 }
 
 function laterIso(left: string | null, right: string | null): string | null {

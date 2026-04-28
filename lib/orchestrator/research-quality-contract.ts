@@ -311,25 +311,6 @@ export const STATE_CLASSIFICATION_RULES = {
   promotionRule: "only validated reusable outcomes may enter promoted_knowledge"
 } as const;
 
-export const MEMORY_GOVERNANCE_RULE = {
-  recordRequirements: [
-    "contract_version_required",
-    "ttl_required",
-    "status_required",
-    "provenance_source_run_required"
-  ],
-  activeRetrievalRule:
-    "only active, unexpired, current-contract records with source-run provenance may enter runtime context",
-  supersessionRule:
-    "newer decision memory for the same context key supersedes older active decision memory",
-  conflictRule:
-    "same-context decision disagreement must be retained as conflict or superseded state, never silently merged as active",
-  deprecatedRetrievalRule:
-    "deprecated, superseded, conflict, expired, legacy, or provenance-free memory is not active context",
-  promptBudgetRule:
-    "retrieval is selective and capped; project memory must not be dumped wholesale into prompts"
-} as const;
-
 export function classifyRunState(status: ResearchRunType | "draft" | "awaiting_clarification" | "collecting" | "synthesizing" | "decided" | "failed"): StateClassification {
   if (
     status === "draft" ||

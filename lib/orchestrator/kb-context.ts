@@ -435,20 +435,13 @@ export async function buildKnowledgeContext(params: {
 }
 
 function isActiveGovernedMemoryEntry(
-  entry: {
-    contractVersion: string;
-    expiresAt: string | null;
-    status?: string;
-    provenance?: { sourceRunIds?: string[] };
-  },
+  entry: { contractVersion: string; expiresAt: string | null },
   now: string
 ): boolean {
   return (
     entry.contractVersion === RESEARCH_QUALITY_CONTRACT_VERSION &&
     typeof entry.expiresAt === "string" &&
-    entry.expiresAt > now &&
-    (entry.status ?? "active") === "active" &&
-    (entry.provenance?.sourceRunIds?.length ?? 0) > 0
+    entry.expiresAt > now
   );
 }
 
