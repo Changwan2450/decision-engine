@@ -95,7 +95,20 @@ export const projectMemoryDecisionSchema = z.object({
   contextClass: z.string().min(1).nullable().default(null),
   contractVersion: z.string().min(1).default("legacy"),
   retainedAt: z.string().datetime().nullable().default(null),
-  expiresAt: z.string().datetime().nullable().default(null)
+  expiresAt: z.string().datetime().nullable().default(null),
+  status: z.enum(["active", "deprecated", "superseded", "conflict"]).default("active"),
+  supersededByRunId: z.string().min(1).nullable().default(null),
+  provenance: z.object({
+    sourceRunIds: z.array(z.string().min(1)).default([]),
+    claimIds: z.array(z.string().min(1)).default([]),
+    citationIds: z.array(z.string().min(1)).default([]),
+    contradictionIds: z.array(z.string().min(1)).default([])
+  }).default({
+    sourceRunIds: [],
+    claimIds: [],
+    citationIds: [],
+    contradictionIds: []
+  })
 });
 
 export const projectMemoryTopicSchema = z.object({
@@ -105,7 +118,17 @@ export const projectMemoryTopicSchema = z.object({
   lastSeenAt: z.string().datetime(),
   contractVersion: z.string().min(1).default("legacy"),
   retainedAt: z.string().datetime().nullable().default(null),
-  expiresAt: z.string().datetime().nullable().default(null)
+  expiresAt: z.string().datetime().nullable().default(null),
+  status: z.enum(["active", "deprecated"]).default("active"),
+  provenance: z.object({
+    sourceRunIds: z.array(z.string().min(1)).default([]),
+    claimIds: z.array(z.string().min(1)).default([]),
+    citationIds: z.array(z.string().min(1)).default([])
+  }).default({
+    sourceRunIds: [],
+    claimIds: [],
+    citationIds: []
+  })
 });
 
 export const projectMemoryContradictionSchema = z.object({
@@ -114,7 +137,17 @@ export const projectMemoryContradictionSchema = z.object({
   lastSeenAt: z.string().datetime(),
   contractVersion: z.string().min(1).default("legacy"),
   retainedAt: z.string().datetime().nullable().default(null),
-  expiresAt: z.string().datetime().nullable().default(null)
+  expiresAt: z.string().datetime().nullable().default(null),
+  status: z.enum(["active", "deprecated"]).default("active"),
+  provenance: z.object({
+    sourceRunIds: z.array(z.string().min(1)).default([]),
+    claimIds: z.array(z.string().min(1)).default([]),
+    contradictionIds: z.array(z.string().min(1)).default([])
+  }).default({
+    sourceRunIds: [],
+    claimIds: [],
+    contradictionIds: []
+  })
 });
 
 export const projectMemorySchema = z.object({

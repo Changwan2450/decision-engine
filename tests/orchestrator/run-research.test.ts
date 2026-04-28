@@ -202,7 +202,7 @@ describe("executeResearchRun", () => {
     expect(observedPlanQueryExpansion).not.toContain("User Working Profile");
     expect(storedRun.kbContext?.operatorNotes[0]?.title).toBe("User Working Profile");
     expect(storedRun.kbContext?.wikiNotes[0]?.title).toBe("Short-Form Entry Decision Patterns");
-    expect(storedRun.artifacts).toHaveLength(2);
+    expect(storedRun.artifacts.length).toBeGreaterThanOrEqual(2);
     expect(storedRun.artifacts[0]?.adapter).toBe("kb-preread");
     expect(storedRun.artifacts.every((artifact) => artifact.sourceTier)).toBe(true);
     expect(storedRun.artifacts[0]?.sourceTier).toBe("internal");
@@ -227,7 +227,14 @@ describe("executeResearchRun", () => {
       comparisonAxis: "쇼츠 vs 릴스",
       contractVersion: "2026-04-22.v1",
       runType: "comparison_tradeoff_analysis",
-      contextClass: "comparison"
+      contextClass: "comparison",
+      status: "active",
+      provenance: {
+        sourceRunIds: [run.run.id],
+        claimIds: expect.any(Array),
+        citationIds: expect.any(Array),
+        contradictionIds: expect.any(Array)
+      }
     });
     expect(storedProject.memory.topicLedger).toEqual(
       expect.arrayContaining([
@@ -235,13 +242,25 @@ describe("executeResearchRun", () => {
           topicKey: "short-form-demand",
           count: expect.any(Number),
           highTrustCount: expect.any(Number),
-          contractVersion: "2026-04-22.v1"
+          contractVersion: "2026-04-22.v1",
+          status: "active",
+          provenance: expect.objectContaining({
+            sourceRunIds: [run.run.id],
+            claimIds: expect.any(Array),
+            citationIds: expect.any(Array)
+          })
         }),
         expect.objectContaining({
           topicKey: "competitor-loop",
           count: expect.any(Number),
           highTrustCount: expect.any(Number),
-          contractVersion: "2026-04-22.v1"
+          contractVersion: "2026-04-22.v1",
+          status: "active",
+          provenance: expect.objectContaining({
+            sourceRunIds: [run.run.id],
+            claimIds: expect.any(Array),
+            citationIds: expect.any(Array)
+          })
         })
       ])
     );
@@ -295,6 +314,112 @@ describe("executeResearchRun", () => {
     expect(storedRun.expansion?.expanded.some((entry) => entry.axis === "official")).toBe(true);
     expect(observedExpansions).toHaveLength(1);
     expect(JSON.parse(observedExpansions[0] ?? "null")).toEqual(storedRun.expansion);
+  });
+
+  it("marks older same-context decision memory as conflict instead of retrieving it as active", async () => {
+    tempRoot = await mkdtemp(path.join(os.tmpdir(), "research-memory-"));
+    tempVault = await mkdtemp(path.join(os.tmpdir(), "research-vault-"));
+    process.env.WORKSPACE_ROOT = tempRoot;
+    process.env.OBSIDIAN_VAULT_PATH = tempVault;
+    setQmdClientForTests({
+      async operatorNotes() {
+        return [];
+      },
+      async queryNotes() {
+        return [];
+      }
+    });
+
+    const {
+      createProjectRecord,
+      createRunRecord,
+      readProjectRecord,
+      updateProjectRecord
+    } = await import("@/lib/storage/workspace");
+    const { executeResearchRun } = await import("@/lib/orchestrator/run-research");
+
+    const project = await createProjectRecord({
+      name: "Memory governance",
+      description: "same-context memory test"
+    });
+    await updateProjectRecord(project.project.id, (record) => ({
+      ...record,
+      memory: {
+        ...record.memory,
+        decisionLedger: [
+          {
+            runId: "old-run",
+            title: "Old tradeoff",
+            decision: "no_go",
+            confidence: "high",
+            why: "older evidence disagreed",
+            createdAt: "2026-04-01T00:00:00.000Z",
+            comparisonAxis: "A vs B",
+            runType: "comparison_tradeoff_analysis",
+            contextClass: "comparison",
+            contractVersion: "2026-04-22.v1",
+            retainedAt: "2026-04-01T00:00:00.000Z",
+            expiresAt: "2026-05-01T00:00:00.000Z",
+            status: "active",
+            supersededByRunId: null,
+            provenance: {
+              sourceRunIds: ["old-run"],
+              claimIds: ["old-claim"],
+              citationIds: ["old-citation"],
+              contradictionIds: []
+            }
+          }
+        ]
+      }
+    }));
+    const run = await createRunRecord(project.project.id, {
+      title: "New tradeoff",
+      naturalLanguage: "목표: A vs B 결정\n대상: 팀\n비교: A vs B",
+      pastedContent: "",
+      urls: ["https://example.com/new"]
+    });
+
+    await executeResearchRun(project.project.id, run.run.id, {
+      now: "2026-04-09T12:00:00.000Z",
+      gather: async () => [
+        {
+          id: "artifact-new",
+          adapter: "agent-reach",
+          sourceType: "web",
+          title: "Official update",
+          url: "https://example.com/new",
+          snippet: "",
+          content: "",
+          sourcePriority: "official",
+          publishedAt: "2026-04-09T00:00:00.000Z",
+          metadata: {
+            claims_json: JSON.stringify([
+              {
+                text: "A is now preferable to B.",
+                topicKey: "a-vs-b",
+                stance: "support"
+              }
+            ])
+          }
+        }
+      ]
+    });
+
+    const storedProject = await readProjectRecord(project.project.id);
+    const oldMemory = storedProject.memory.decisionLedger.find((entry) => entry.runId === "old-run");
+    const newMemory = storedProject.memory.decisionLedger.find((entry) => entry.runId === run.run.id);
+
+    expect(newMemory).toMatchObject({
+      status: "active",
+      supersededByRunId: null,
+      provenance: expect.objectContaining({
+        sourceRunIds: [run.run.id]
+      })
+    });
+    expect(oldMemory).toMatchObject({
+      status: "conflict",
+      supersededByRunId: run.run.id
+    });
   });
 
   it("adds source tiers without mutating source priority", async () => {

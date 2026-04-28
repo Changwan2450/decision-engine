@@ -64,6 +64,14 @@ export type ProjectMemoryPatch = {
     contractVersion: string;
     retainedAt: string | null;
     expiresAt: string | null;
+    status: "active" | "deprecated" | "superseded" | "conflict";
+    supersededByRunId: string | null;
+    provenance: {
+      sourceRunIds: string[];
+      claimIds: string[];
+      citationIds: string[];
+      contradictionIds: string[];
+    };
   }>;
   topicLedger: Array<{
     topicKey: string;
@@ -73,6 +81,12 @@ export type ProjectMemoryPatch = {
     contractVersion: string;
     retainedAt: string | null;
     expiresAt: string | null;
+    status: "active" | "deprecated";
+    provenance: {
+      sourceRunIds: string[];
+      claimIds: string[];
+      citationIds: string[];
+    };
   }>;
   contradictionLedger: Array<{
     topicKey: string;
@@ -81,6 +95,12 @@ export type ProjectMemoryPatch = {
     contractVersion: string;
     retainedAt: string | null;
     expiresAt: string | null;
+    status: "active" | "deprecated";
+    provenance: {
+      sourceRunIds: string[];
+      claimIds: string[];
+      contradictionIds: string[];
+    };
   }>;
 };
 
@@ -649,6 +669,8 @@ export function deriveProjectMemoryPatch(params: {
       count: number;
       highTrustCount: number;
       lastSeenAt: string;
+      claimIds: Set<string>;
+      citationIds: Set<string>;
     }
   >();
   for (const claim of params.synthesis.claims) {
@@ -656,18 +678,32 @@ export function deriveProjectMemoryPatch(params: {
     const current = topicCounts.get(claim.topicKey) ?? {
       count: 0,
       highTrustCount: 0,
-      lastSeenAt: params.now
+      lastSeenAt: params.now,
+      claimIds: new Set<string>(),
+      citationIds: new Set<string>()
     };
     current.count += 1;
     if (claim.trustTier === "high") {
       current.highTrustCount += 1;
     }
     current.lastSeenAt = params.now;
+    current.claimIds.add(claim.id);
+    for (const citationId of claim.citationIds) {
+      current.citationIds.add(citationId);
+    }
     topicCounts.set(claim.topicKey, current);
   }
 
   const claimById = new Map(params.synthesis.claims.map((claim) => [claim.id, claim]));
-  const contradictionCounts = new Map<string, { count: number; lastSeenAt: string }>();
+  const contradictionCounts = new Map<
+    string,
+    {
+      count: number;
+      lastSeenAt: string;
+      claimIds: Set<string>;
+      contradictionIds: Set<string>;
+    }
+  >();
   for (const contradiction of params.synthesis.contradictions) {
     const topics = contradiction.claimIds
       .map((claimId) => claimById.get(claimId)?.topicKey)
@@ -675,13 +711,20 @@ export function deriveProjectMemoryPatch(params: {
     for (const topicKey of new Set(topics)) {
       const current = contradictionCounts.get(topicKey) ?? {
         count: 0,
-        lastSeenAt: params.now
+        lastSeenAt: params.now,
+        claimIds: new Set<string>(),
+        contradictionIds: new Set<string>()
       };
       current.count += 1;
       current.lastSeenAt = params.now;
+      for (const claimId of contradiction.claimIds) {
+        current.claimIds.add(claimId);
+      }
+      current.contradictionIds.add(contradiction.id);
       contradictionCounts.set(topicKey, current);
     }
   }
+  const sourceRunIds = [params.record.run.id];
 
   return {
     decisionLedger: [
@@ -697,7 +740,15 @@ export function deriveProjectMemoryPatch(params: {
         contextClass,
         contractVersion: RESEARCH_QUALITY_CONTRACT_VERSION,
         retainedAt: params.now,
-        expiresAt: decisionExpiry
+        expiresAt: decisionExpiry,
+        status: "active",
+        supersededByRunId: null,
+        provenance: {
+          sourceRunIds,
+          claimIds: params.synthesis.claims.map((claim) => claim.id),
+          citationIds: params.synthesis.citations.map((citation) => citation.id),
+          contradictionIds: params.synthesis.contradictions.map((contradiction) => contradiction.id)
+        }
       }
     ],
     topicLedger: Array.from(topicCounts.entries()).map(([topicKey, value]) => ({
@@ -707,7 +758,13 @@ export function deriveProjectMemoryPatch(params: {
       lastSeenAt: value.lastSeenAt,
       contractVersion: RESEARCH_QUALITY_CONTRACT_VERSION,
       retainedAt: params.now,
-      expiresAt: signalExpiry
+      expiresAt: signalExpiry,
+      status: "active",
+      provenance: {
+        sourceRunIds,
+        claimIds: Array.from(value.claimIds),
+        citationIds: Array.from(value.citationIds)
+      }
     })),
     contradictionLedger: Array.from(contradictionCounts.entries()).map(([topicKey, value]) => ({
       topicKey,
@@ -715,7 +772,13 @@ export function deriveProjectMemoryPatch(params: {
       lastSeenAt: value.lastSeenAt,
       contractVersion: RESEARCH_QUALITY_CONTRACT_VERSION,
       retainedAt: params.now,
-      expiresAt: signalExpiry
+      expiresAt: signalExpiry,
+      status: "active",
+      provenance: {
+        sourceRunIds,
+        claimIds: Array.from(value.claimIds),
+        contradictionIds: Array.from(value.contradictionIds)
+      }
     }))
   };
 }

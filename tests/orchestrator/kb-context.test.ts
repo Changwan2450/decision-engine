@@ -6,6 +6,25 @@ import {
   setQmdRunnerForTests
 } from "@/lib/orchestrator/kb-context";
 
+const decisionProvenance = {
+  sourceRunIds: ["run-1"],
+  claimIds: ["claim-1"],
+  citationIds: ["citation-1"],
+  contradictionIds: []
+};
+
+const topicProvenance = {
+  sourceRunIds: ["run-1"],
+  claimIds: ["claim-1"],
+  citationIds: ["citation-1"]
+};
+
+const contradictionProvenance = {
+  sourceRunIds: ["run-1"],
+  claimIds: ["claim-1", "claim-2"],
+  contradictionIds: ["contradiction-1"]
+};
+
 describe("kb-context qmd fallback", () => {
   afterEach(() => {
     setQmdClientForTests(null);
@@ -193,7 +212,10 @@ describe("kb-context qmd fallback", () => {
               contextClass: "comparison",
               contractVersion: "2026-04-22.v1",
               retainedAt: "2026-04-20T00:00:00.000Z",
-              expiresAt: "2026-05-20T00:00:00.000Z"
+              expiresAt: "2026-05-20T00:00:00.000Z",
+              status: "active",
+              supersededByRunId: null,
+              provenance: decisionProvenance
             }
           ],
           topicLedger: [
@@ -204,7 +226,9 @@ describe("kb-context qmd fallback", () => {
               lastSeenAt: "2026-04-20T00:00:00.000Z",
               contractVersion: "2026-04-22.v1",
               retainedAt: "2026-04-20T00:00:00.000Z",
-              expiresAt: "2026-05-11T00:00:00.000Z"
+              expiresAt: "2026-05-11T00:00:00.000Z",
+              status: "active",
+              provenance: topicProvenance
             }
           ],
           contradictionLedger: [
@@ -214,7 +238,9 @@ describe("kb-context qmd fallback", () => {
               lastSeenAt: "2026-04-20T00:00:00.000Z",
               contractVersion: "2026-04-22.v1",
               retainedAt: "2026-04-20T00:00:00.000Z",
-              expiresAt: "2026-05-11T00:00:00.000Z"
+              expiresAt: "2026-05-11T00:00:00.000Z",
+              status: "active",
+              provenance: contradictionProvenance
             }
           ]
         },
@@ -330,7 +356,54 @@ describe("kb-context qmd fallback", () => {
               contextClass: null,
               contractVersion: "legacy",
               retainedAt: null,
-              expiresAt: null
+              expiresAt: null,
+              status: "active",
+              supersededByRunId: null,
+              provenance: {
+                sourceRunIds: [],
+                claimIds: [],
+                citationIds: [],
+                contradictionIds: []
+              }
+            },
+            {
+              runId: "deprecated-run",
+              title: "Deprecated decision",
+              decision: "no_go",
+              confidence: "high",
+              why: "replaced by newer evidence",
+              createdAt: "2026-04-19T00:00:00.000Z",
+              comparisonAxis: "장단점",
+              runType: "comparison_tradeoff_analysis",
+              contextClass: "comparison",
+              contractVersion: "2026-04-22.v1",
+              retainedAt: "2026-04-19T00:00:00.000Z",
+              expiresAt: "2026-05-19T00:00:00.000Z",
+              status: "deprecated",
+              supersededByRunId: null,
+              provenance: decisionProvenance
+            },
+            {
+              runId: "provenance-free-run",
+              title: "Provenance-free decision",
+              decision: "go",
+              confidence: "high",
+              why: "missing source run",
+              createdAt: "2026-04-19T00:00:00.000Z",
+              comparisonAxis: "장단점",
+              runType: "comparison_tradeoff_analysis",
+              contextClass: "comparison",
+              contractVersion: "2026-04-22.v1",
+              retainedAt: "2026-04-19T00:00:00.000Z",
+              expiresAt: "2026-05-19T00:00:00.000Z",
+              status: "active",
+              supersededByRunId: null,
+              provenance: {
+                sourceRunIds: [],
+                claimIds: ["claim-x"],
+                citationIds: ["citation-x"],
+                contradictionIds: []
+              }
             }
           ],
           topicLedger: [
@@ -341,7 +414,35 @@ describe("kb-context qmd fallback", () => {
               lastSeenAt: "2026-04-10T00:00:00.000Z",
               contractVersion: "2026-04-22.v1",
               retainedAt: "2026-04-10T00:00:00.000Z",
-              expiresAt: "2026-04-15T00:00:00.000Z"
+              expiresAt: "2026-04-15T00:00:00.000Z",
+              status: "active",
+              provenance: topicProvenance
+            },
+            {
+              topicKey: "deprecated-topic",
+              count: 4,
+              highTrustCount: 2,
+              lastSeenAt: "2026-04-20T00:00:00.000Z",
+              contractVersion: "2026-04-22.v1",
+              retainedAt: "2026-04-20T00:00:00.000Z",
+              expiresAt: "2026-05-11T00:00:00.000Z",
+              status: "deprecated",
+              provenance: topicProvenance
+            },
+            {
+              topicKey: "provenance-free-topic",
+              count: 4,
+              highTrustCount: 2,
+              lastSeenAt: "2026-04-20T00:00:00.000Z",
+              contractVersion: "2026-04-22.v1",
+              retainedAt: "2026-04-20T00:00:00.000Z",
+              expiresAt: "2026-05-11T00:00:00.000Z",
+              status: "active",
+              provenance: {
+                sourceRunIds: [],
+                claimIds: ["claim-x"],
+                citationIds: ["citation-x"]
+              }
             }
           ],
           contradictionLedger: []
@@ -353,6 +454,8 @@ describe("kb-context qmd fallback", () => {
 
     expect(context.priorDecisions).toEqual([]);
     expect(context.queryExpansion).not.toContain("expired-topic (2)");
+    expect(context.queryExpansion).not.toContain("deprecated-topic (4)");
+    expect(context.queryExpansion).not.toContain("provenance-free-topic (4)");
     expect(context.adaptivePolicy).toEqual({
       mode: "fresh",
       contextClass: "comparison",
@@ -442,7 +545,10 @@ describe("kb-context qmd fallback", () => {
               contextClass: "comparison",
               contractVersion: "2026-04-22.v1",
               retainedAt: "2026-04-20T00:00:00.000Z",
-              expiresAt: "2026-05-20T00:00:00.000Z"
+              expiresAt: "2026-05-20T00:00:00.000Z",
+              status: "active",
+              supersededByRunId: null,
+              provenance: decisionProvenance
             }
           ],
           topicLedger: [
@@ -453,7 +559,9 @@ describe("kb-context qmd fallback", () => {
               lastSeenAt: "2026-04-20T00:00:00.000Z",
               contractVersion: "2026-04-22.v1",
               retainedAt: "2026-04-20T00:00:00.000Z",
-              expiresAt: "2026-05-11T00:00:00.000Z"
+              expiresAt: "2026-05-11T00:00:00.000Z",
+              status: "active",
+              provenance: topicProvenance
             }
           ],
           contradictionLedger: [
@@ -463,7 +571,9 @@ describe("kb-context qmd fallback", () => {
               lastSeenAt: "2026-04-20T00:00:00.000Z",
               contractVersion: "2026-04-22.v1",
               retainedAt: "2026-04-20T00:00:00.000Z",
-              expiresAt: "2026-05-11T00:00:00.000Z"
+              expiresAt: "2026-05-11T00:00:00.000Z",
+              status: "active",
+              provenance: contradictionProvenance
             }
           ]
         },

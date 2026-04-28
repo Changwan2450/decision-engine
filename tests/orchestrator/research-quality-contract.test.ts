@@ -4,6 +4,7 @@ import {
   classifyRunState,
   CONTEXT_BOUNDARY_SPEC,
   CONTRACT_VERSIONING_AND_STATE_MIGRATION_RULE,
+  MEMORY_GOVERNANCE_RULE,
   NON_COMPENSATORY_SHIP_BLOCKERS,
   NON_SIGNAL_PROXY_BAN_LIST,
   RETENTION_ELIGIBILITY_SCHEMA,
@@ -90,6 +91,27 @@ describe("research-quality-contract", () => {
       failRule:
         "any non-compensatory blocker breach fails regardless of packaging/helpfulness gains",
       rollbackTrigger: "adaptive policy loses to fresh_no_memory on guarded metrics"
+    });
+  });
+
+  it("pins retained memory to provenance, supersession, deprecation, and selective retrieval", () => {
+    expect(MEMORY_GOVERNANCE_RULE).toEqual({
+      recordRequirements: [
+        "contract_version_required",
+        "ttl_required",
+        "status_required",
+        "provenance_source_run_required"
+      ],
+      activeRetrievalRule:
+        "only active, unexpired, current-contract records with source-run provenance may enter runtime context",
+      supersessionRule:
+        "newer decision memory for the same context key supersedes older active decision memory",
+      conflictRule:
+        "same-context decision disagreement must be retained as conflict or superseded state, never silently merged as active",
+      deprecatedRetrievalRule:
+        "deprecated, superseded, conflict, expired, legacy, or provenance-free memory is not active context",
+      promptBudgetRule:
+        "retrieval is selective and capped; project memory must not be dumped wholesale into prompts"
     });
   });
 
