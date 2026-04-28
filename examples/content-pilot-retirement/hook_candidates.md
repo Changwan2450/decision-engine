@@ -4,30 +4,6 @@ Pilot topic: `50대가 은퇴를 못 하는 진짜 이유`
 
 These are first 5-15 second opening candidates. They avoid unsupported statistics and fearmongering.
 
-## Persona Test Result
-
-Source: `persona_test.json`
-
-Top 3 for the next draft:
-
-1. **50대가 은퇴를 못 하는 진짜 이유, 이 상황 여러분이라면?**
-   - Persona Engine selected a question-style hook at score 93.
-   - Rewrite for longform so it does not feel like Shorts copy.
-2. **분명 젊을 때는 쉰 넘으면 조금 쉬어도 될 줄 알았습니다. 그런데 현실은 그렇게 단순하지 않습니다.**
-   - Best emotional-recognition opener from the existing packet.
-   - Keeps dignity and avoids panic.
-3. **은퇴를 못 하는 이유를 저축 부족 하나로만 보면, 정작 중요한 압박을 놓치게 됩니다.**
-   - Strong myth-bust opener.
-   - Must be followed by concrete scenes, not abstract explanation.
-
-Avoid:
-
-- `커뮤니티 뒤집어놓은 역대급 사건`
-- `논란 종결`
-- `난리난 사연`
-
-Reason: Persona Engine scored a generic viral hook highly, but the roadmap position rejects controversy-first framing for this pilot.
-
 1. 분명 젊을 때는 쉰 넘으면 조금 쉬어도 될 줄 알았습니다. 그런데 현실은 그렇게 단순하지 않습니다.
 
 2. 은퇴를 못 하는 이유를 저축 부족 하나로만 보면, 정작 중요한 압박을 놓치게 됩니다.
