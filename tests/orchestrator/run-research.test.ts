@@ -202,11 +202,43 @@ describe("executeResearchRun", () => {
     expect(observedPlanQueryExpansion).not.toContain("User Working Profile");
     expect(storedRun.kbContext?.operatorNotes[0]?.title).toBe("User Working Profile");
     expect(storedRun.kbContext?.wikiNotes[0]?.title).toBe("Short-Form Entry Decision Patterns");
-    expect(storedRun.artifacts).toHaveLength(2);
     expect(storedRun.artifacts[0]?.adapter).toBe("kb-preread");
     expect(storedRun.artifacts.every((artifact) => artifact.sourceTier)).toBe(true);
     expect(storedRun.artifacts[0]?.sourceTier).toBe("internal");
     expect(storedRun.artifacts[1]?.sourceTier).toBe("unknown");
+    expect(storedRun.artifacts[1]).toMatchObject({
+      id: "artifact-0",
+      adapter: "agent-reach",
+      title: "Official market note"
+    });
+    expect(
+      storedRun.artifacts.filter((artifact) => artifact.id.startsWith("counterevidence-discovery-"))
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "counterevidence-discovery-0",
+          adapter: "domain-targeted-search",
+          title: "Counterevidence repair discovery",
+          metadata: expect.objectContaining({
+            repair_pass: "counterevidence_v0",
+            repair_stage: "discovery",
+            repair_reason: "support_only_evidence",
+            repair_counterevidence_kind: "limitation"
+          })
+        }),
+        expect.objectContaining({
+          id: "counterevidence-discovery-1",
+          adapter: "domain-targeted-search",
+          title: "Counterevidence repair discovery",
+          metadata: expect.objectContaining({
+            repair_pass: "counterevidence_v0",
+            repair_stage: "discovery",
+            repair_reason: "support_only_evidence",
+            repair_counterevidence_kind: "benchmark_disagreement"
+          })
+        })
+      ])
+    );
     expect(storedRun.claims.some((claim) => claim.artifactId.startsWith("kb-preread-"))).toBe(true);
     expect(storedRun.decision?.value).toBe("go");
     expect(storedRun.prdSeed?.targetUser).toBe("20대 크리에이터");
